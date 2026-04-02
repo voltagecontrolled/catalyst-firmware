@@ -250,6 +250,22 @@ private:
 				continue;
 			}
 
+			// Apply sub-step mask
+			// Ratchets: sub-step index from phase within step
+			// Repeats (i==0 only): sub-step index from repeat tick counter
+			uint32_t mask_sub_step_idx;
+			uint32_t mask_count;
+			if (s.IsRepeat() && i == 0) {
+				mask_count = s.ReadRatchetRepeatCount() + 1u;
+				mask_sub_step_idx = s.ReadRatchetRepeatCount() - p.GetRepeatTicksRemaining(chan);
+			} else {
+				mask_count = retrig_count;
+				mask_sub_step_idx = static_cast<uint32_t>(retrig_countf * s_phase) % retrig_count;
+			}
+			if (mask_count > 1 && !(s.ReadSubStepMask() & (1u << mask_sub_step_idx))) {
+				continue;
+			}
+
 			auto gate_width_phase = s.ReadGate(random_amount_setting * amount_to_change_step);
 			if (gate_width_phase <= 0.f) {
 				continue;

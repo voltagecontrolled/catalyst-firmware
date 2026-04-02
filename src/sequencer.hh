@@ -65,7 +65,7 @@ struct Slot {
 struct Data {
 	// Increment current_tag whenever sizeof(Step) or any other persistent field layout changes.
 	// validate() checks this tag so WearLevel rejects incompatible flash data gracefully.
-	static constexpr uint32_t current_tag = 1u;
+	static constexpr uint32_t current_tag = 2u;
 	uint32_t SettingsVersionTag = 0;
 
 	std::array<Slot, Model::Sequencer::NumSlots> slot;
@@ -355,10 +355,17 @@ public:
 			slot.channel[cur_channel][step].IncMorph(inc);
 		}
 	}
-void IncStepProbability(uint8_t step, int32_t inc) {
+	void IncStepProbability(uint8_t step, int32_t inc) {
 		show_playhead = false;
 		step = StepOnPageToStep(step);
 		slot.channel[cur_channel][step].IncProbability(inc);
+	}
+	uint8_t GetRepeatTicksRemaining(uint8_t chan) const {
+		return repeat_ticks_remaining[chan];
+	}
+	void ToggleSubStepMask(uint8_t step_on_page, uint8_t sub_step) {
+		show_playhead = false;
+		slot.channel[cur_channel][StepOnPageToStep(step_on_page)].ToggleSubStepMask(sub_step);
 	}
 
 	Step GetRelativeStep(uint8_t chan, int8_t relative_pos) {

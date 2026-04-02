@@ -4,7 +4,7 @@ All changes relative to upstream 4ms-company/catalyst-firmware v1.3.
 
 **v1.4.1** — Phase Scrub Lock only (stable, hardware verified)
 **v1.4.2** — Ratchet expansion, Repeat mode + startup fixes (hardware verified)
-**v1.4.3** — Sub-step mask edit mode: user-editable per-step bitmasks via Page buttons (**in progress**)
+**v1.4.3** — Sub-step mask edit mode: user-editable per-step bitmasks via Page buttons (**testing, not yet committed**)
 
 ---
 
@@ -49,8 +49,7 @@ Phase scrub lock, ratchet, and repeat are fully verified on hardware.
 v1.4.2 bricked the module twice during development. Root causes identified and fixed:
 - Startup crash on struct layout mismatch: `Sequencer::Data::SettingsVersionTag` added, `validate()` now rejects incompatible flash data, `ui.hh` resets to defaults on mismatch.
 - `IncRatchetRepeat()` CCW from neutral entered ratchet mode instead of repeat mode.
-- `GatePattern::Get()` had no bounds check — out-of-range `gate_pattern` values would walk off the table.
-- `Step::Validate()` did not check `gate_pattern` range.
+- `Load()` stack overflow from large struct temporaries — fixed with placement new.
 
 ---
 
@@ -83,35 +82,22 @@ Player would need a per-channel cycle counter to track position within the n-ste
 
 ---
 
-### Future — Mask pattern table redesign
-Current 6 patterns include Mute (all off) which is redundant with setting gate width to 0. Proposed replacement set focused on musical utility:
 
-| # | Name | 4x example | Notes |
-|---|------|-----------|-------|
-| 0 | All on | `xxxx` | default, unchanged |
-| 1 | All tied | `x---` | one long gate |
-| 2 | First on | `xooo` | accent first sub-step |
-| 3 | Last on | `ooox` | accent last sub-step |
-| 4 | Alternating | `xoxo` | even sub-steps only |
-| 5 | Alternating tied | `x-x-` | pairs of tied sub-steps |
+### v1.4.3 — Sub-step mask edit mode (testing)
 
-Drops Mute (index 5) in favor of Last on (new). **Requires `Sequencer::Data::current_tag` increment** — stored pattern index 5 currently means Mute; after the change it means Alternating tied, so existing saved patterns would be misread.
+Replaces the v1.4.2 preset mask pattern system with user-editable per-step bitmasks. Each step stores an 8-bit bitmask where each bit controls whether that sub-step fires or is silent.
 
----
+**Entry/exit:** Glide + Tap Tempo enters the mode. Tap Tempo alone exits. Play/Reset also exits. No need to hold Glide while editing.
 
-### v1.4.3 — Sub-step mask edit mode (in progress)
+**Editing:** Touching a step encoder focuses it (encoder blinks yellow when idle). Page buttons 1–8 show the sub-step mask for the focused step — lit = fires, unlit = silent. Press any Page button to toggle that sub-step. Sub-step 0 (Button 1) is always forced on. Only buttons up to the current ratchet/repeat count are active.
 
-Replaces the v1.4.2 preset mask pattern system with user-editable per-step bitmasks. The preset GatePattern table and RatchetMask UI are removed; each step stores an 8-bit bitmask where each bit controls whether that sub-step fires or is silent.
+**Count adjustment:** Turning the encoder within 300ms of first touch adjusts ratchet (CW) or repeat (CCW) count. During the window, masked-off buttons within the active count range blink to show the count boundary. After 300ms idle, next turn re-focuses without changing count.
 
-**Entry/exit:** Glide + Tap Tempo toggles the mode (changed from momentary to toggle). Play/Reset also exits.
+**Mask storage:** `uint8_t sub_step_mask` added to `Step` struct (8 bits, 26 bits were free). Default `0xFF` (all sub-steps fire) preserves existing behavior on unedited steps. `sizeof(Step)` unchanged at 8 bytes; `current_tag` bumped to `2u` to force clean reset on first boot.
 
-**Editing:** Touching a step encoder focuses it. Page buttons 1–8 show the sub-step mask for the focused step — lit = fires, unlit = silent. Press any Page button to toggle that sub-step. Sub-step 0 (Button 1) is always forced on. Only buttons up to the current ratchet/repeat count are active.
+**Applies to:** Ratchets and repeats. Repeat sub-step index derived from `ratchet_repeat_count - repeat_ticks_remaining[chan]`.
 
-**Count adjustment:** Continuing to turn the encoder within 300ms of touching it adjusts ratchet (CW) or repeat (CCW) count using existing behavior and feedback. After 300ms idle the encoder is locked to focus-only.
-
-**Mask storage:** `uint8_t sub_step_mask` added to `Step` struct (8 bits, 26 bits were free). Default `0xFF` (all sub-steps fire) preserves existing behavior on unedited steps. `sizeof(Step)` unchanged at 8 bytes; `current_tag` bumped to `2u` to force clean reset (old flash would read mask bits as 0x00 = all silent).
-
-**Scope:** Ratchet sub-steps only. Repeat step mask application is a separate future item (see below).
+**Known UX issue:** The ~23Hz blink on masked-off buttons during count adjustment is visually noisy. May need a less distracting approach — under review.
 
 ---
 
@@ -119,11 +105,3 @@ Replaces the v1.4.2 preset mask pattern system with user-editable per-step bitma
 
 In mask edit mode, encoders currently only adjust ratchet/repeat count. A future enhancement could allow encoder turns to cycle a sub-step through states: silent → fire → tied (gate held open from previous sub-step). Tied sub-steps were prototyped in v1.4.2 (`SubStepState::Tied`, `GatePattern` table) but removed in v1.4.3. Re-introducing them as a per-sub-step state requires expanding the mask from 1 bit per sub-step to 2 bits — growing `sub_step_mask` from `uint8_t` to `uint16_t` (16 bits). At 46 bits currently used in the Step struct after v1.4.3, that's 18 bits remaining in the 8-byte struct: a 16-bit mask fits without changing `sizeof(Step)`, but would require another `current_tag` bump.
 
----
-
-### Future — Repeat step mask application
-Currently mask has no effect on repeat steps. Fix requires using the repeat tick index as the sub-step index when `s.IsRepeat()`.
-
-Files to change:
-- `src/sequencer.hh` — add `GetRepeatTicksRemaining(uint8_t chan) const` getter
-- `src/app.hh` — in `Gate()`, branch on `s.IsRepeat()` and use `s.ReadRatchetRepeatCount() - p.GetRepeatTicksRemaining(chan)` as the sub-step index
