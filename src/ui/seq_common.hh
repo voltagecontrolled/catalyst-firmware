@@ -66,11 +66,53 @@ public:
 			p.Trig();
 		}
 
-		const auto phase = (c.ReadSlider() + c.ReadCv()) / 4096.f;
+		if (c.button.fine.is_high() && c.button.morph.just_went_high()) {
+			if (!phase_locked && !picking_up) {
+				phase_locked = true;
+				locked_raw = c.ReadSlider();
+				locked_phase = (locked_raw + c.ReadCv()) / 4096.f;
+			} else {
+				phase_locked = false;
+				picking_up = true;
+			}
+			lock_toggle_time = Controls::TimeNow();
+		}
+
+		if (picking_up) {
+			if (std::abs((int32_t)c.ReadSlider() - (int32_t)locked_raw) <= pickup_threshold) {
+				picking_up = false;
+			}
+		}
+
+		const auto phase = (phase_locked || picking_up)
+							  ? locked_phase
+							  : (c.ReadSlider() + c.ReadCv()) / 4096.f;
 		p.Update(phase);
 	}
 
 protected:
+	bool phase_locked = false;
+	bool picking_up = false;
+	float locked_phase = 0.f;
+	uint32_t lock_toggle_time = 0;
+	uint16_t locked_raw = 0;
+
+	static constexpr uint32_t toggle_feedback_ticks = Clock::MsToTicks(600);
+	static constexpr int32_t wiggle_threshold = 80;
+	static constexpr int32_t pickup_threshold = 80;
+	static constexpr uint8_t phase_lock_encoder = 7;
+
+	void PaintPhaseLockIndicator() {
+		const auto t = Controls::TimeNow();
+		const bool just_toggled = (t - lock_toggle_time) < toggle_feedback_ticks;
+		const auto diff = (int32_t)c.ReadSlider() - (int32_t)locked_raw;
+		const bool wiggling = phase_locked && std::abs(diff) > wiggle_threshold;
+
+		if (just_toggled || wiggling || picking_up) {
+			c.SetEncoderLed(phase_lock_encoder, ((t >> 7) & 1) ? Palette::red : Palette::off);
+		}
+	}
+
 	void PaintStepValues(uint8_t page) {
 		const auto chan = p.GetSelectedChannel();
 		const auto step_offset = Catalyst2::Sequencer::SeqPageToStep(page);

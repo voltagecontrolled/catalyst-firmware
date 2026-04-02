@@ -185,4 +185,14 @@ struct Buttons {
 
 // using DebugPin = mdrivlib::FPin<GPIO::A, PinNum::_2, PinMode::Output>;
 
+// Stub for diagnostic builds that use Board::PlayLed directly
+struct PlayLed {
+	void set(bool) {
+	}
+};
+
 } // namespace Catalyst2::Board
+
+// Stub for HAL_Delay used in diagnostic code
+inline void HAL_Delay(uint32_t) {
+}

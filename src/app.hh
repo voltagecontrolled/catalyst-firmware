@@ -237,9 +237,9 @@ private:
 				continue;
 			}
 
-			auto retrig_phase = s.ReadRetrig() + 1.f;
-
-			const auto gate_period_ms = channel_period_ms / retrig_phase;
+			const auto retrig_count = s.ReadRetrig() + 1u;
+			const auto retrig_countf = static_cast<float>(retrig_count);
+			const auto gate_period_ms = channel_period_ms / retrig_countf;
 
 			auto random_amount_setting = p.slot.settings.GetRandomOrGlobal(chan); // 0..1, in steps of semitones
 			auto amount_to_change_step = p.player.randomvalue.ReadRelative(chan, i, s.ReadProbability());
@@ -260,10 +260,11 @@ private:
 			if (gate_width_ms < 1.f)
 				gate_width_phase = 1.f / gate_period_ms;
 
-			retrig_phase *= s_phase;
-			retrig_phase -= static_cast<uint32_t>(retrig_phase);
+			auto sub_step_phase = retrig_countf * s_phase;
+			sub_step_phase -= static_cast<uint32_t>(sub_step_phase);
 
-			const auto temp = gate_width_phase >= retrig_phase;
+			const bool temp = gate_width_phase >= sub_step_phase;
+
 			if constexpr (BuildOptions::seq_gate_overrides_prev_step) {
 				out = temp;
 			} else {

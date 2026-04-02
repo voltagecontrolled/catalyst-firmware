@@ -4,6 +4,88 @@
 
 using namespace Catalyst2;
 
+TEST_CASE("IncRatchetRepeat - CW from neutral enters ratchet mode") {
+	Sequencer::Step s;
+	CHECK(s.ReadRatchetRepeatCount() == 0);
+	CHECK(s.IsRepeat() == false);
+	s.IncRatchetRepeat(1);
+	CHECK(s.IsRepeat() == false);
+	CHECK(s.ReadRatchetRepeatCount() == 1);
+	s.IncRatchetRepeat(1);
+	CHECK(s.ReadRatchetRepeatCount() == 2);
+}
+
+TEST_CASE("IncRatchetRepeat - CCW from neutral enters repeat mode") {
+	Sequencer::Step s;
+	s.IncRatchetRepeat(-1);
+	CHECK(s.IsRepeat() == true);
+	CHECK(s.ReadRatchetRepeatCount() == 1);
+	s.IncRatchetRepeat(-1);
+	CHECK(s.IsRepeat() == true);
+	CHECK(s.ReadRatchetRepeatCount() == 2);
+}
+
+TEST_CASE("IncRatchetRepeat - CW from repeat passes through neutral") {
+	Sequencer::Step s;
+	s.IncRatchetRepeat(-1); // enter repeat x1
+	CHECK(s.IsRepeat() == true);
+	s.IncRatchetRepeat(1); // back to neutral
+	CHECK(s.IsRepeat() == false);
+	CHECK(s.ReadRatchetRepeatCount() == 0);
+	s.IncRatchetRepeat(1); // now enter ratchet x1
+	CHECK(s.IsRepeat() == false);
+	CHECK(s.ReadRatchetRepeatCount() == 1);
+}
+
+TEST_CASE("IncRatchetRepeat - CCW from ratchet passes through neutral") {
+	Sequencer::Step s;
+	s.IncRatchetRepeat(1); // enter ratchet x1
+	CHECK(s.IsRepeat() == false);
+	s.IncRatchetRepeat(-1); // back to neutral
+	CHECK(s.IsRepeat() == false);
+	CHECK(s.ReadRatchetRepeatCount() == 0);
+	s.IncRatchetRepeat(-1); // now enter repeat x1
+	CHECK(s.IsRepeat() == true);
+	CHECK(s.ReadRatchetRepeatCount() == 1);
+}
+
+TEST_CASE("IncRatchetRepeat - clamps at max in both modes") {
+	Sequencer::Step s;
+	for (auto i = 0; i < 20; i++) s.IncRatchetRepeat(1);
+	CHECK(s.ReadRatchetRepeatCount() == 7);
+	for (auto i = 0; i < 20; i++) s.IncRatchetRepeat(-1);
+	CHECK(s.IsRepeat() == true);
+	CHECK(s.ReadRatchetRepeatCount() == 7);
+}
+
+TEST_CASE("IncRatchetRepeat - ReadRetrig returns 0 in repeat mode") {
+	Sequencer::Step s;
+	s.IncRatchetRepeat(-1);
+	s.IncRatchetRepeat(-1); // repeat x2
+	CHECK(s.IsRepeat() == true);
+	CHECK(s.ReadRatchetRepeatCount() == 2);
+	CHECK(s.ReadRetrig() == 0); // repeat mode: retrig returns 0
+}
+
+
+TEST_CASE("Sequencer::Data::validate - version tag is a required condition") {
+	Sequencer::Data data;
+	// Default-constructed tag is 0 — always fails regardless of other fields.
+	CHECK(data.validate() == false);
+
+	// Correct tag is necessary but slot data must also be valid.
+	// Confirm: wrong tag always returns false even if we flip it back and forth.
+	data.SettingsVersionTag = Sequencer::Data::current_tag;
+	const auto valid_with_correct_tag = data.validate();
+	data.SettingsVersionTag = 0;
+	CHECK(data.validate() == false);
+	data.SettingsVersionTag = 99;
+	CHECK(data.validate() == false);
+	// Restoring correct tag returns to whatever the slot data validates as.
+	data.SettingsVersionTag = Sequencer::Data::current_tag;
+	CHECK(data.validate() == valid_with_correct_tag);
+}
+
 TEST_CASE("Rotate steps") {
 
 	Shared::Data shared_data;

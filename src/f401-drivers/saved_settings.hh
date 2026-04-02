@@ -26,7 +26,8 @@ public:
 		return seq_settings_flash.read(data);
 	}
 
-	bool write(SeqModeData const &data) {
+	bool write(SeqModeData &data) {
+		data.SettingsVersionTag = SeqModeData::current_tag;
 		return seq_settings_flash.write(data);
 	}
 

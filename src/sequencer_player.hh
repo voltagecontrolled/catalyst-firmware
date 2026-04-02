@@ -43,12 +43,12 @@ public:
 	bool pause = false;
 	float phase = 0.f;
 
-	void Update(float phase, float internal_clock_phase, bool do_step) {
+	void Update(float phase, float internal_clock_phase, const std::array<bool, Model::NumChans> &do_step) {
 		for (auto chan = 0u; chan < Model::NumChans; chan++) {
 			const auto l = settings.GetLengthOrGlobal(chan);
 			const auto pm = settings.GetPlayModeOrGlobal(chan);
 			const auto actual_length = ActualLength(l, pm);
-			if (do_step) {
+			if (do_step[chan]) {
 				if (phaser.Step(chan, actual_length)) {
 					if (!songmode.IsActive()) {
 						if (songmode.IsQueued(chan)) {
