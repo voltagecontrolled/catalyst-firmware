@@ -80,7 +80,7 @@ Each ratcheted or repeated step stores an 8-bit sub-step mask. Bits control whic
 
 **Teal -- Gate clock, step only (added v1.4.5):** The CV track advances once per gate step, ignoring ratchets and repeats entirely. Useful when the gate track drives rhythm but you want the CV track to move at the step rate only.
 
-**Lavender -- CV replace (added v1.4.5):** The source CV track's current value replaces this track's step value entirely. Unlike Blue (add), no offset calculation is performed -- the target track outputs exactly what the source track outputs. Encoded in `transpose_source` as values `NumChans+1..2*NumChans` to avoid a struct layout change.
+**Lavender -- CV replace (added v1.4.5):** On steps where both this track and the source track advance simultaneously (intersection), the source track's programmed pitch replaces this track's own step value. Source steps at 0V act as pass-through, leaving this track's own pitch intact. No replacement occurs on steps where only one track advances. Encoded in `transpose_source` as values `NumChans+1..2*NumChans` to avoid a struct layout change. Replacement value is read directly from the source step at the intersection boundary (not from the `last_cv_stepval` cache) to avoid a one-step phase offset caused by channel processing order.
 
 In all three gate clock modes, the first tick of every gate step always advances the CV track regardless of ratchet/repeat settings. Sub-steps silenced via sub-step mask do not produce an advance. A muted gate track produces no advances. Multiple CV tracks may follow the same gate track with different modes independently. CV transpose follow and gate clock follow are independent per-channel settings and can be active simultaneously.
 

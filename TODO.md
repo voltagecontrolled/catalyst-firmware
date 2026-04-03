@@ -4,7 +4,7 @@ Items are grouped by target version where known, then backlog.
 
 ---
 
-## v1.4.5
+## v1.4.6
 
 ### Sub-step page navigation
 
@@ -17,6 +17,8 @@ Sequences longer than 8 steps span multiple pages. There is currently no way to 
 ---
 
 ### Conditional auto-reset on firmware upgrade
+
+
 
 **Area:** `src/sequencer.hh` `Sequencer::Data::validate()`, `src/f401-drivers/saved_settings.hh`
 
@@ -41,6 +43,23 @@ Requires a `CurrentSharedSettingsVersionTag` bump in `saved_settings.hh`, which 
 ---
 
 ## Backlog
+
+### Per-track reset settings (SHIFT+PLAY mode)
+
+**Area:** `src/ui/seq.hh`, `src/sequencer.hh`, `src/sequencer_settings.hh` (or `src/sequencer_player.hh`)
+
+SHIFT+PLAY currently fires an immediate reset and exits. Repurposing it as a **persistent toggle mode** would expose 8 unused step encoders and 8 unused page buttons as a natural per-track reset configuration surface -- without adding a new entry combo.
+
+**Proposed UX:**
+- First SHIFT+PLAY enters the mode (no immediate reset); second SHIFT+PLAY exits. Play/Reset alone still plays/pauses as normal while inside the mode.
+- **Page buttons (1 per track):** toggle whether that track auto-resets when the sequence is paused. Lit = resets on pause; unlit = holds position. Allows mixing: e.g. tracks 1-4 restart clean, tracks 5-8 continue from where they left off.
+- **Step encoders (1 per track):** configure the reset source/mode for that track (exact values TBD, e.g. master reset, follow track N loop point, never). This maps to the `reset_mode` / `reset_source` fields from the existing "Per-track reset behavior" backlog item below -- these two items should be implemented together.
+
+**Storage:** `reset_on_pause` bool + `reset_mode` enum per channel in `Settings::Channel`. Requires `current_tag` bump (coordinate with conditional auto-reset TODO in v1.4.6).
+
+**Note:** This resolves the ergonomic pain of needing two button presses (pause + manual reset) every time the sequence is stopped.
+
+---
 
 ### Gate probability iterative mode
 

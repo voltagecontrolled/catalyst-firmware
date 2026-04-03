@@ -19,7 +19,7 @@ See the [New Features wiki](https://github.com/voltagecontrolled/catalyst-firmwa
 Two new follow modes have been added:
 
 - **Teal -- Gate clock, step only:** the CV track advances once per gate step, ignoring ratchets and repeats. Useful when a ratcheted gate track drives rhythm but you want steady one-pitch-per-step CV movement.
-- **Lavender -- CV replace:** the source CV track's current value replaces this track's step value entirely, rather than offsetting it. Use when you want hard pitch control from another sequence rather than transposition.
+- **Lavender -- CV replace:** replaces this track's step with the source track's pitch whenever both tracks step simultaneously (intersection) and the source step is non-zero. Steps at 0V on the source are treated as pass-through, leaving the target's own programmed pitch intact. Use this for hard pitch coupling at step intersections, or combine with random playback on the source track and a curated set of non-zero pitches to add structured randomness to a sequence.
 
 The page button quirk when switching between gate clock follow modes has also been fixed. Previously the button for an assigned track would remain lit when switching modes, and pressing it would not correctly deactivate the old assignment. Page buttons now only light in the mode where the assignment was made, and pressing a lit button correctly unlinks.
 

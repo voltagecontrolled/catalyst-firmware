@@ -117,6 +117,7 @@ class Interface {
 	std::array<uint8_t, Model::NumChans> repeat_ticks_remaining{};
 	std::array<bool, Model::NumChans> gate_repeat_fired{};    // set after repeat tick fires; consumed next 3kHz tick
 	std::array<uint8_t, Model::NumChans> gate_substep_idx{}; // last seen ratchet sub-step index per gate channel
+	std::array<bool, Model::NumChans> step_fired{};           // true on the tick a channel's step advances
 
 public:
 	Slot slot;
@@ -237,6 +238,11 @@ public:
 
 		player.Update(phase, seqclock.GetPhase(), per_chan_step);
 
+		// Record which channels advanced a step this tick (used by lavender CV replace intersection logic)
+		for (auto chan = 0u; chan < Model::NumChans; chan++) {
+			step_fired[chan] = per_chan_step[chan] > 0;
+		}
+
 		if (clock_ticked) {
 			for (auto chan = 0u; chan < Model::NumChans; chan++) {
 				if (per_chan_step[chan] && slot.settings.GetChannelMode(chan).IsGate()) {
@@ -334,6 +340,7 @@ public:
 		repeat_ticks_remaining.fill(0);
 		gate_repeat_fired.fill(false);
 		gate_substep_idx.fill(0);
+		step_fired.fill(false);
 
 		// blocks next trig for a short period of time after reset
 		time_last_reset = Controls::TimeNow();
@@ -456,6 +463,9 @@ public:
 	}
 	bool IsTransposeReplace(uint8_t chan) const {
 		return slot.settings.IsTransposeReplace(chan);
+	}
+	bool StepFired(uint8_t chan) const {
+		return step_fired[chan];
 	}
 	void SetTransposeSourceReplace(uint8_t chan, uint8_t source) {
 		slot.settings.SetTransposeSourceReplace(chan, source);

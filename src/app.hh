@@ -174,11 +174,13 @@ namespace Sequencer
 class App {
 	Interface &p;
 	std::array<Channel::Cv::type, Model::NumChans> last_cv_stepval;
+	std::array<Channel::Cv::type, Model::NumChans> replace_latch; // lavender: 0=inactive, else=latched pitch
 
 public:
 	App(Interface &p)
 		: p{p} {
 		last_cv_stepval.fill(Channel::Cv::zero);
+		replace_latch.fill(Channel::Cv::zero);
 	}
 	Model::Output::Buffer Update() {
 		Model::Output::Buffer buf;
@@ -312,8 +314,25 @@ private:
 		const auto follow_source = p.slot.settings.GetTransposeSource(chan);
 		if (follow_source > 0 && follow_source <= Model::NumChans) {
 			if (p.slot.settings.IsTransposeReplace(chan)) {
-				// Replace mode: output source track's value directly
-				stepval = last_cv_stepval[follow_source - 1];
+				// Lavender: at the step boundary, decide whether to replace for this step.
+				// Read source's current step value directly — avoids the one-tick cache delay
+				// that would otherwise shift the intersection detection by one step.
+				if (p.StepFired(chan)) {
+					if (p.StepFired(follow_source - 1)) {
+						const auto src = follow_source - 1u;
+						const auto src_random = p.slot.settings.GetRandomOrGlobal(src);
+						const auto &src_step = p.GetRelativeStep(src, 0);
+						const auto src_rnd = p.player.randomvalue.ReadRelative(src, 0, src_step.ReadProbability());
+						const auto src_cv = Quantizer::Process(p.GetScale(src),
+						                                        src_step.ReadCv(src_rnd * src_random));
+						replace_latch[chan] = src_cv; // Channel::Cv::zero → pass through
+					} else {
+						replace_latch[chan] = Channel::Cv::zero; // source didn't step, clear
+					}
+				}
+				if (replace_latch[chan] != Channel::Cv::zero) {
+					stepval = replace_latch[chan];
+				}
 			} else {
 				// Add mode: offset by source track's value relative to 0V
 				const int32_t offset = static_cast<int32_t>(last_cv_stepval[follow_source - 1]) -
