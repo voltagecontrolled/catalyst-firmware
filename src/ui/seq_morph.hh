@@ -7,8 +7,14 @@
 namespace Catalyst2::Ui::Sequencer
 {
 class Morph : public Usual {
+	Abstract *substep_ui = nullptr;
+
 public:
 	using Usual::Usual;
+
+	void set_substep_ui(Abstract &ui) {
+		substep_ui = &ui;
+	}
 
 	void Init() override {
 		if (!p.IsChannelSelected()) {
@@ -23,6 +29,11 @@ public:
 		if (!c.button.morph.is_high() || c.button.shift.is_high() || c.button.fine.is_high()) {
 			SwitchUiMode(main_ui);
 			return;
+		}
+
+		if (substep_ui && c.button.add.just_went_high() &&
+		    p.slot.settings.GetChannelMode(p.GetSelectedChannel()).IsGate()) {
+			SwitchUiMode(*substep_ui);
 		}
 	}
 

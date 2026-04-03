@@ -8,6 +8,7 @@
 #include "seq_common.hh"
 #include "seq_morph.hh"
 #include "seq_page_params.hh"
+#include "seq_substep_mask.hh"
 #include "seq_prob.hh"
 #include "seq_settings.hh"
 #include "seq_settings_global.hh"
@@ -21,6 +22,7 @@ namespace Catalyst2::Ui::Sequencer
 class Main : public Usual {
 	Bank bank{p, c, *this};
 	Morph morph{p, c, *this};
+	SubStepMask substep_mask{p, c, morph, *this};
 	Probability probability{p, c, *this};
 	Settings::Global global_settings{p, c, *this};
 	Settings::Channel channel_settings{p, c, *this};
@@ -30,6 +32,7 @@ class Main : public Usual {
 public:
 	Main(Catalyst2::Sequencer::Interface &p, Controls &c, Abstract &macro)
 		: Usual{p, c, macro} {
+		morph.set_substep_ui(substep_mask);
 	}
 	//	using Usual::Usual;
 	void Init() override {

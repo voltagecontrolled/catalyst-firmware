@@ -68,6 +68,32 @@ TEST_CASE("IncRatchetRepeat - ReadRetrig returns 0 in repeat mode") {
 }
 
 
+TEST_CASE("Step::ToggleSubStepMask - basic toggling") {
+	Sequencer::Step s;
+	CHECK(s.ReadSubStepMask() == 0xFF); // default: all on
+
+	// Toggle off a sub-step
+	s.ToggleSubStepMask(3);
+	CHECK((s.ReadSubStepMask() & (1u << 3)) == 0);
+	CHECK((s.ReadSubStepMask() & 1u) != 0); // bit 0 always set
+
+	// Toggle it back on
+	s.ToggleSubStepMask(3);
+	CHECK((s.ReadSubStepMask() & (1u << 3)) != 0);
+
+	// Sub-step 0 cannot be toggled off
+	s.ToggleSubStepMask(0);
+	CHECK((s.ReadSubStepMask() & 1u) != 0);
+
+	// All sub-steps except 0 can be toggled
+	for (uint8_t i = 1; i < 8; i++) {
+		s.ToggleSubStepMask(i);
+	}
+	CHECK(s.ReadSubStepMask() == 0x01); // only bit 0 set
+
+	CHECK(s.Validate() == true);
+}
+
 TEST_CASE("Sequencer::Data::validate - version tag is a required condition") {
 	Sequencer::Data data;
 	// Default-constructed tag is 0 — always fails regardless of other fields.
