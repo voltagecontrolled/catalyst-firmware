@@ -64,7 +64,6 @@ public:
 			const auto count = SubStepCount(step);
 
 			ForEachSceneButtonJustPressed(c, [this, count](uint8_t button) {
-				if (button == 0) return;          // sub-step 0 always on
 				if (count > 1 && button < count) {
 					p.ToggleSubStepMask(focused_step, button);
 				}

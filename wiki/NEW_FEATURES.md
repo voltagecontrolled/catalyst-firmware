@@ -56,8 +56,8 @@ A per-step mask editor for gate tracks. Lets you turn individual sub-steps withi
 
 ### Editing Sub-Steps
 - Press any **Page button** to toggle that sub-step on or off.
-- **Sub-step 1 (Button 1) always fires** and cannot be toggled off.
 - Only Page buttons up to the current ratchet/repeat count are active. Remaining buttons are unlit and non-interactive.
+- All sub-steps can be silenced, including the first. A step with all sub-steps off produces no output for that step's duration -- useful for microtiming (e.g. a 2x ratchet with only sub-step 2 active fires on the second subdivision, offsetting the hit by half a step).
 
 ### Adjusting Ratchet/Repeat Count in Edit Mode
 - After focusing a step, **continue turning the encoder within 300ms** to adjust its ratchet or repeat count:

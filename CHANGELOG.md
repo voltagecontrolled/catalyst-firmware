@@ -51,7 +51,7 @@ CW from any repeat value passes back through neutral (no ratchet, no repeat) bef
 
 **Exit:** Tap Tempo alone, or Play/Reset.
 
-Each ratcheted or repeated step stores an 8-bit sub-step mask. Bits control which sub-steps fire and which are silenced. Sub-step 0 (the first) cannot be silenced.
+Each ratcheted or repeated step stores an 8-bit sub-step mask. Bits control which sub-steps fire and which are silenced. All sub-steps including the first can be silenced (changed in v1.4.5).
 
 **Editing:**
 - Touch any step encoder to focus it (blinks yellow while idle).

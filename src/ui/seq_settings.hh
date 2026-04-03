@@ -10,6 +10,7 @@ namespace Catalyst2::Ui::Sequencer::Settings
 {
 class Channel : public Usual {
 	Abstract *follow_assign_ui = nullptr;
+	bool glide_armed = false;
 
 public:
 	using Usual::Usual;
@@ -20,6 +21,7 @@ public:
 			p.SelectChannel();
 		}
 		p.shared.modeswitcher.SetAlarm();
+		glide_armed = false;
 	}
 	void Update() override {
 		ForEachEncoderInc(c, [this](uint8_t encoder, int32_t inc) { OnEncoderInc(encoder, inc); });
@@ -29,7 +31,10 @@ public:
 			p.shared.modeswitcher.SetAlarm();
 		}
 
-		if (c.button.morph.just_went_high() && follow_assign_ui != nullptr) {
+		if (!c.button.morph.is_high())
+			glide_armed = true;
+
+		if (glide_armed && c.button.morph.just_went_high() && follow_assign_ui != nullptr) {
 			if (p.GetSelectedChannel() < Model::NumChans) {
 				SwitchUiMode(*follow_assign_ui);
 				return;

@@ -13,3 +13,8 @@ Sequences longer than 8 steps can now be edited in sub-step mask edit mode witho
 Presets are no longer wiped on every firmware upgrade -- only on upgrades that change the underlying data layout. Upgrading within the 1.4.x series will preserve saved patterns.
 
 See the [New Features wiki](https://github.com/voltagecontrolled/catalyst-firmware/wiki/New-Features) for full usage.
+
+## Bugfixes and small changes (v1.4.5)
+
+- Fixed an issue where entering Channel Settings (SHIFT + Chan.) would sometimes immediately jump to Follow Assign mode without requiring a Glide tap. Caused by Glide button bounce or overlap during the entry combo.
+- Sub-step 1 can now be silenced in the sub-step mask editor. Previously it was forced on. Silencing all sub-steps on a step produces no output for that step's duration, enabling microtiming effects (e.g. a 2x ratchet with only sub-step 2 active fires halfway through the step).
