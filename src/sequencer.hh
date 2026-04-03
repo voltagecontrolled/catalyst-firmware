@@ -63,8 +63,13 @@ struct Slot {
 };
 
 struct Data {
+	// Increment current_tag whenever sizeof(Step) or any other persistent field layout changes.
+	// validate() checks this tag so WearLevel rejects incompatible flash data gracefully.
+	static constexpr uint32_t current_tag = 1u;
+	uint32_t SettingsVersionTag = 0;
+
 	std::array<Slot, Model::Sequencer::NumSlots> slot;
-	uint8_t startup_slot;
+	uint8_t startup_slot = 0;
 
 	void PreSave() {
 		for (auto &s : slot) {
@@ -78,6 +83,8 @@ struct Data {
 	}
 
 	bool validate() const {
+		if (SettingsVersionTag != current_tag)
+			return false;
 		auto ret = true;
 		for (auto &s : slot) {
 			ret &= s.validate();
@@ -107,6 +114,7 @@ class Interface {
 	uint8_t last_playhead_pos = Model::Sequencer::NumPages;
 	bool show_playhead = true;
 	bool gates_blocked = true;
+	std::array<uint8_t, Model::NumChans> repeat_ticks_remaining{};
 
 public:
 	Slot slot;
@@ -146,8 +154,31 @@ public:
 		return data.startup_slot;
 	}
 	void Update(float phase) {
-		const auto step = seqclock.Update();
-		player.Update(phase, seqclock.GetPhase(), step);
+		const auto clock_ticked = seqclock.Update();
+
+		std::array<bool, Model::NumChans> per_chan_step{};
+		for (auto chan = 0u; chan < Model::NumChans; chan++) {
+			if (!clock_ticked) {
+				per_chan_step[chan] = false;
+			} else if (repeat_ticks_remaining[chan] > 0) {
+				repeat_ticks_remaining[chan]--;
+				per_chan_step[chan] = false;
+			} else {
+				per_chan_step[chan] = true;
+			}
+		}
+
+		player.Update(phase, seqclock.GetPhase(), per_chan_step);
+
+		if (clock_ticked) {
+			for (auto chan = 0u; chan < Model::NumChans; chan++) {
+				if (per_chan_step[chan] && slot.settings.GetChannelMode(chan).IsGate()) {
+					const auto cur_step = player.GetRelativeStep(chan, 0);
+					const auto &s = slot.channel[chan][cur_step];
+					repeat_ticks_remaining[chan] = s.IsRepeat() ? s.ReadRatchetRepeatCount() : 0u;
+				}
+			}
+		}
 		playhead_page = player.GetPlayheadPage(cur_channel);
 		playhead_pos = player.GetPlayheadStepOnPage(cur_channel);
 
@@ -217,6 +248,7 @@ public:
 		player.Reset();
 		seqclock.Reset();
 		gates_blocked = false;
+		repeat_ticks_remaining.fill(0);
 
 		// blocks next trig for a short period of time after reset
 		time_last_reset = Controls::TimeNow();
@@ -318,12 +350,12 @@ public:
 		show_playhead = false;
 		step = StepOnPageToStep(step);
 		if (slot.settings.GetChannelMode(cur_channel).IsGate()) {
-			slot.channel[cur_channel][step].IncRetrig(inc);
+			slot.channel[cur_channel][step].IncRatchetRepeat(inc);
 		} else {
 			slot.channel[cur_channel][step].IncMorph(inc);
 		}
 	}
-	void IncStepProbability(uint8_t step, int32_t inc) {
+void IncStepProbability(uint8_t step, int32_t inc) {
 		show_playhead = false;
 		step = StepOnPageToStep(step);
 		slot.channel[cur_channel][step].IncProbability(inc);

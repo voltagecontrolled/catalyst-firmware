@@ -1,5 +1,7 @@
 #pragma once
 
+#include <new>
+
 #include "conf/board_conf.hh"
 #include "conf/model.hh"
 #include "controls.hh"
@@ -119,13 +121,13 @@ private:
 
 	void Load() {
 		if (!settings.read(params.data.shared)) {
-			params.data.shared = Catalyst2::Shared::Data{};
+			new (&params.data.shared) Catalyst2::Shared::Data{};
 		}
 		if (!settings.read(params.data.sequencer)) {
-			params.data.sequencer = Catalyst2::Sequencer::Data{};
+			new (&params.data.sequencer) Catalyst2::Sequencer::Data{};
 		}
 		if (!settings.read(params.data.macro)) {
-			params.data.macro = Catalyst2::Macro::Data{};
+			new (&params.data.macro) Catalyst2::Macro::Data{};
 		}
 		params.data.sequencer.PostLoad();
 		params.data.macro.PostLoad();

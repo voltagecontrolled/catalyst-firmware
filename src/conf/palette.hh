@@ -142,6 +142,22 @@ inline constexpr Color color(float phase) {
 }
 } // namespace Morph
 
+namespace Ratchet
+{
+// Colors for gate channel display in Glide (Ratchet) mode.
+// Ratchet (subdivide): dim salmon -> bright red with increasing count.
+// Repeat (extend): dim teal -> blue with increasing count.
+inline Color color(uint8_t count, bool is_repeat) {
+	if (count == 0)
+		return off;
+	const float t = count / 7.f;
+	return is_repeat
+		? off.blend(teal, t).blend(blue, t * t)
+		: off.blend(salmon, t).blend(bright_red, t * t);
+}
+} // namespace Ratchet
+
+
 namespace Probability
 {
 inline constexpr Color color(Catalyst2::Sequencer::Probability::type p) {

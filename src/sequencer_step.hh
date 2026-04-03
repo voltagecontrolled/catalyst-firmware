@@ -13,14 +13,6 @@ struct TrigDelay {
 	static constexpr type max = 31;
 	static constexpr type bits = std::bit_width(static_cast<uint32_t>(max - min));
 };
-struct MorphRetrig {
-	using type = uint8_t;
-	static constexpr type min = 0u;
-	static constexpr type morph_max = 15u;
-	static constexpr type retrig_max = 3u;
-	static constexpr type bits = std::bit_width(morph_max > retrig_max ? morph_max : retrig_max);
-	static constexpr type retrig_shift = std::bit_width(morph_max <= retrig_max ? morph_max : retrig_max);
-};
 struct Probability {
 	using type = uint8_t;
 	static constexpr type min = 0u;
@@ -30,11 +22,14 @@ struct Probability {
 		return p / static_cast<float>(max);
 	}
 };
+
 struct Step {
 	uint32_t cv : Channel::Cv::bits = Channel::Cv::zero;
 	int32_t trig_delay : TrigDelay::bits = 0;
 	uint32_t gate : Channel::Gate::bits = 0;
-	uint32_t morph_retrig : MorphRetrig::bits = 0;
+	uint32_t morph : 4 = 0;                         // CV channels: shape 0-15
+	uint32_t ratchet_repeat_count : 3 = 0;          // Gate channels: 0-7 = 1x-8x (ratchets or repeats)
+	uint32_t is_repeat : 1 = 0;                     // Gate channels: 0 = ratchet, 1 = repeat
 	uint32_t probability : Probability::bits = 0;
 
 public:
@@ -80,18 +75,37 @@ public:
 		trig_delay = std::clamp<int32_t>(trig_delay + inc, TrigDelay::min, TrigDelay::max);
 	}
 	float ReadMorph() const {
-		return morph_retrig / static_cast<float>(MorphRetrig::morph_max);
-	}
-	MorphRetrig::type ReadRetrig() const {
-		return morph_retrig >> MorphRetrig::retrig_shift;
+		return morph / static_cast<float>(15u);
 	}
 	void IncMorph(int32_t inc) {
-		morph_retrig = std::clamp<int32_t>(morph_retrig + inc, MorphRetrig::min, MorphRetrig::morph_max);
+		morph = std::clamp<int32_t>(morph + inc, 0, 15);
 	}
-	void IncRetrig(int32_t inc) {
-		auto temp = ReadRetrig();
-		temp = std::clamp<int>(temp + inc, MorphRetrig::min, MorphRetrig::retrig_max);
-		morph_retrig = temp << MorphRetrig::retrig_shift;
+	uint8_t ReadRatchetRepeatCount() const {
+		return ratchet_repeat_count;
+	}
+	bool IsRepeat() const {
+		return is_repeat;
+	}
+	// Legacy accessor for playback — returns ratchet count when in ratchet mode, 0 when in repeat mode
+	uint8_t ReadRetrig() const {
+		return is_repeat ? 0u : ratchet_repeat_count;
+	}
+	// Called by UI: CW increments ratchet count, CCW increments repeat count.
+	// State modelled as a signed position: positive = ratchet, negative = repeat, zero = neutral.
+	// Crossing zero passes through neutral rather than jumping directly between modes.
+	void IncRatchetRepeat(int32_t inc) {
+		int32_t pos = is_repeat ? -(int32_t)ratchet_repeat_count : (int32_t)ratchet_repeat_count;
+		pos = std::clamp<int32_t>(pos + inc, -7, 7);
+		if (pos > 0) {
+			is_repeat = 0;
+			ratchet_repeat_count = pos;
+		} else if (pos < 0) {
+			is_repeat = 1;
+			ratchet_repeat_count = -pos;
+		} else {
+			is_repeat = 0;
+			ratchet_repeat_count = 0;
+		}
 	}
 	Probability::type ReadProbability() const {
 		return probability;
@@ -103,11 +117,10 @@ public:
 		auto ret = true;
 		ret &= Channel::Cv::Validate(cv);
 		ret &= Channel::Gate::Validate(gate);
-		// the rest will always be true
 		return ret;
 	}
 };
 
-static_assert(sizeof(Step) <= 4);
+static_assert(sizeof(Step) <= 8);
 
 } // namespace Catalyst2::Sequencer

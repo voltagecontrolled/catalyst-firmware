@@ -156,6 +156,7 @@ public:
 		}
 
 		PaintStepValues(page);
+		PaintPhaseLockIndicator();
 	}
 
 	void ManualColorTestMode(uint8_t page) {
