@@ -84,26 +84,4 @@ In all three gate clock modes, the first tick of every gate step always advances
 
 ## Planned
 
-### Gate probability iterative mode
-
-CCW encoder positions would replace random percentage probability with a deterministic cycle. CW (1-15) = percentage probability, current behavior. CCW (1-14) = iterative: fires p out of every n steps in rotation (1/2, 2/2, 1/3... up to 5/5).
-
-Requires 1 extra bit in the probability field to fit a signed 5-bit range. Likely candidate: repurpose gate-channel morph bits (morph is currently unused on gate channels and already partially repurposed for ratchet/repeat display). Player would need a per-channel cycle counter analogous to `repeat_ticks_remaining`.
-
----
-
-### Phase Scrub Settings
-
-Extends Phase Scrub Lock with two additional options. Spec: `planned/PHASESCRUB_SETTINGS.md`.
-
-**Quantized mode (global):** Phase Scrub offset only takes effect at step boundaries instead of applying continuously.
-
-**Per-track ignore (per-track):** Individual tracks can be excluded from Phase Scrub entirely.
-
-**Entry:** COPY + GLIDE held 3 seconds.
-
----
-
-### Sub-step tie/slew in mask edit mode
-
-Extends mask edit mode with a third per-sub-step state: tied. A tied sub-step holds the gate open from the previous sub-step rather than retriggering. Would require expanding the sub-step mask from 1 bit per sub-step (current `uint8_t`) to 2 bits per sub-step (`uint16_t`). Fits within the current Step struct (18 bits available) with a `current_tag` bump.
+See `TODO.md` for the full backlog with implementation notes.
