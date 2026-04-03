@@ -56,9 +56,7 @@ A CV track can designate a gate track as its clock source. The CV track advances
 
 ## Planned Features
 
-- **Gate probability iterative mode:** CCW positions replace random percentage probability with a deterministic cycle (1/2, 2/2, 1/3... up to 5/5).
-- **Phase Scrub Settings:** Quantized mode (offset snaps at step boundaries) and per-track Phase Scrub ignore.
-- **Sub-step tie/slew:** Extend mask edit mode with a tied state that holds the gate open across sub-steps.
+See [TODO.md](TODO.md) for the full backlog with implementation notes.
 
 ---
 
