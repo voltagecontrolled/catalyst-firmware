@@ -7,3 +7,4 @@ start_gdb.sh
 start_openocd.sh
 scripts/STM32F401.svd
 CLAUDE.md
+*.pdf
