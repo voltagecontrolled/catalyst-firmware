@@ -31,7 +31,7 @@ struct Step {
 	uint32_t ratchet_repeat_count : 3 = 0;           // Gate channels: 0-7 = 1x-8x (ratchets or repeats)
 	uint32_t is_repeat : 1 = 0;                      // Gate channels: 0 = ratchet, 1 = repeat
 	uint32_t probability : Probability::bits = 0;
-	uint32_t sub_step_mask : 8 = 0xFF;               // Gate channels: bitmask of active sub-steps; bit 0 always set
+	uint32_t sub_step_mask : 8 = 0xFF;               // Gate channels: bitmask of active sub-steps (all bits freely toggleable)
 
 public:
 	Channel::Cv::type ReadCv(float random = 0.f) const {
@@ -119,16 +119,13 @@ public:
 	}
 	// Toggle sub-step N on/off. Sub-step 0 is always on and cannot be toggled.
 	void ToggleSubStepMask(uint8_t sub_step) {
-		if (sub_step == 0) return;
 		sub_step_mask ^= (1u << sub_step);
-		sub_step_mask |= 1u; // bit 0 always set
 	}
 	bool Validate() const {
 		auto ret = true;
 		ret &= Channel::Cv::Validate(cv);
 		ret &= Channel::Gate::Validate(gate);
-		ret &= (sub_step_mask & 1u) != 0u; // bit 0 must always be set
-		return ret;
+return ret;
 	}
 };
 

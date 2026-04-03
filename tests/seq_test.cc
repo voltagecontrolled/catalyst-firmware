@@ -81,15 +81,15 @@ TEST_CASE("Step::ToggleSubStepMask - basic toggling") {
 	s.ToggleSubStepMask(3);
 	CHECK((s.ReadSubStepMask() & (1u << 3)) != 0);
 
-	// Sub-step 0 cannot be toggled off
+	// Sub-step 0 can be toggled off
 	s.ToggleSubStepMask(0);
-	CHECK((s.ReadSubStepMask() & 1u) != 0);
+	CHECK((s.ReadSubStepMask() & 1u) == 0);
 
-	// All sub-steps except 0 can be toggled
+	// Toggle all sub-steps off
 	for (uint8_t i = 1; i < 8; i++) {
 		s.ToggleSubStepMask(i);
 	}
-	CHECK(s.ReadSubStepMask() == 0x01); // only bit 0 set
+	CHECK(s.ReadSubStepMask() == 0x00); // all sub-steps silenced
 
 	CHECK(s.Validate() == true);
 }
