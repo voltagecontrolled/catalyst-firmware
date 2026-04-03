@@ -28,6 +28,18 @@ May require splitting `current_tag` into two values: `layout_tag` (increment onl
 
 ---
 
+### Phase Scrub lock persistence
+
+**Area:** `src/shared.hh` `Shared::Data`, `src/ui/seq_common.hh`, `src/f401-drivers/saved_settings.hh`
+
+Phase Scrub lock state is lost on reboot. Add `bool phase_locked` and `uint16_t locked_raw` (4 bytes padded) to `Shared::Data` so the lock state and locked slider position survive power cycles.
+
+On boot with lock restored, `locked_phase` is recomputed from `locked_raw + current CV` (same formula used when locking live). The slider automatically enters pickup mode since its physical position will have drifted. Save `Shared::Data` (via the existing `do_save_shared` flag) whenever lock state toggles.
+
+Requires a `CurrentSharedSettingsVersionTag` bump in `saved_settings.hh`, which triggers the existing migration path -- new fields fill with defaults (unlocked), no preset loss.
+
+---
+
 ## Backlog
 
 ### Gate probability iterative mode
