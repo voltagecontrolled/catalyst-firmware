@@ -96,3 +96,46 @@ Each parameter independently sourceable: unassigned (fixed default), CV track (p
 When a gate track is assigned as clock source under one mode (e.g. Orange) and the user presses FINE to switch to a different mode (e.g. Yellow), the page button for the previously assigned track remains lit. The stored assignment is the Orange-mode one -- it is not automatically re-applied under the new mode.
 
 **Fix:** when FINE cycles to a new clock-follow mode and a clock source is already assigned, carry the source assignment forward to the new mode (call `SetClockFollowMode` and re-apply) and clear it from the previous mode. Documented as a known quirk in `wiki/NEW_FEATURES.md`.
+
+---
+
+### Rename Follow Assign to Advanced Track Settings
+
+**Area:** `src/ui/seq_follow_assign.hh`, `src/ui/seq_settings.hh`, `src/ui/seq.hh`, `wiki/NEW_FEATURES.md`
+
+The Follow Assign menu currently uses 4 of 9 available FINE sub-mode colors for CV tracks (blue = CV transpose, orange/yellow/salmon = gate clock follow modes). Gate tracks have no advanced settings menu yet. Both channel types have pending features that need per-track configuration pages (gate envelope, step preview, reset behavior).
+
+Rename and expand to a general Advanced Track Settings menu. Entry combo and persistent-mode behavior unchanged. FINE still cycles sub-modes; with 9 colors available there is room to add pages for both CV and gate tracks without navigation changes.
+
+Planned page layout (subject to revision as features are added):
+- CV tracks: blue = CV transpose follow, orange/yellow/salmon = gate clock follow (existing), remaining colors for new settings
+- Gate tracks: blue/orange/yellow/salmon = envelope assign (per `planned/GATE_ENVELOPE.md`), remaining colors for new settings
+
+---
+
+### CV step encoder preview
+
+**Area:** `src/app.hh` `Sequencer::App::Update()`, `src/ui/seq_morph.hh` or Advanced Track Settings
+
+While the sequencer is stopped, turning a step encoder on a CV track outputs the voltage of the step being edited to the DAC in real time, so pitches can be auditioned without running the sequencer.
+
+**Mechanism:** UI layer sets a per-channel "preview override" value + flag when an encoder is turned while stopped. `App::Update()` checks the flag and substitutes the override value for that channel's normal `Cv()` output for that tick. Flag clears after one tick (or after encoder activity stops).
+
+**Toggle:** on/off per track, stored in `Settings::Channel`. Surfaced as a page in Advanced Track Settings.
+
+---
+
+### Per-track reset behavior
+
+**Area:** `src/sequencer_player.hh`, `src/sequencer_settings.hh`, Advanced Track Settings
+
+Customize how each track responds to Play/Reset. Useful for generative patches where you want one primary track to anchor the pattern while others continue freely.
+
+**Proposed modes (per track):**
+- `always` -- resets on Play/Reset (current behavior for all tracks)
+- `never` -- Play/Reset has no effect; track runs continuously
+- `follow_chan_N` -- resets when track N loops back to step 1, not on the button press itself
+
+The `follow_chan_N` variant is the most powerful: one track's natural loop point drives reset timing for others, allowing phasing relationships to develop and re-sync organically.
+
+Stored as a `reset_mode` field + optional `reset_source` channel index in `Settings::Channel`. Requires `current_tag` bump (coordinate with conditional auto-reset TODO to avoid a wipe).
