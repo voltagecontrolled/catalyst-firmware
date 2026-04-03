@@ -112,12 +112,12 @@ Each parameter independently sourceable: unassigned (fixed default), CV track (p
 
 **Area:** `src/ui/seq_follow_assign.hh`, `src/ui/seq_settings.hh`, `src/ui/seq.hh`, `wiki/NEW_FEATURES.md`
 
-The Follow Assign menu currently uses 4 of 9 available FINE sub-mode colors for CV tracks (blue = CV transpose, orange/yellow/salmon = gate clock follow modes). Gate tracks have no advanced settings menu yet. Both channel types have pending features that need per-track configuration pages (gate envelope, step preview, reset behavior).
+The Follow Assign menu currently uses 6 of 9 available FINE sub-mode colors for CV tracks (blue = CV add follow, lavender = CV replace, orange/yellow/salmon = gate clock follow ratchets/repeats/both, teal = gate clock step-only). Gate tracks have no advanced settings menu yet. Both channel types have pending features that need per-track configuration pages (gate envelope, step preview, reset behavior).
 
 Rename and expand to a general Advanced Track Settings menu. Entry combo and persistent-mode behavior unchanged. FINE still cycles sub-modes; with 9 colors available there is room to add pages for both CV and gate tracks without navigation changes.
 
 Planned page layout (subject to revision as features are added):
-- CV tracks: blue = CV transpose follow, orange/yellow/salmon = gate clock follow (existing), remaining colors for new settings
+- CV tracks: blue/lavender = CV follow (existing), orange/yellow/salmon/teal = gate clock follow (existing), remaining colors for new settings
 - Gate tracks: blue/orange/yellow/salmon = envelope assign (per `planned/GATE_ENVELOPE.md`), remaining colors for new settings
 
 ---
