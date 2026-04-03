@@ -173,10 +173,12 @@ namespace Sequencer
 {
 class App {
 	Interface &p;
+	std::array<Channel::Cv::type, Model::NumChans> last_cv_stepval;
 
 public:
 	App(Interface &p)
 		: p{p} {
+		last_cv_stepval.fill(Channel::Cv::zero);
 	}
 	Model::Output::Buffer Update() {
 		Model::Output::Buffer buf;
@@ -305,6 +307,18 @@ private:
 		const auto stepmorph = seqmorph(p.player.GetStepPhase(chan), current_step.ReadMorph());
 		stepval += distance * stepmorph;
 		stepval = Transposer::Process(stepval, p.slot.settings.GetTransposeOrGlobal(chan));
+
+		// Apply CV follow source transpose (one-tick delay: reads previous tick's cached stepval)
+		const auto follow_source = p.slot.settings.GetTransposeSource(chan);
+		if (follow_source > 0 && follow_source <= Model::NumChans) {
+			const int32_t offset = static_cast<int32_t>(last_cv_stepval[follow_source - 1]) -
+			                       static_cast<int32_t>(Channel::Cv::zero);
+			stepval = static_cast<Channel::Cv::type>(
+				std::clamp<int32_t>(static_cast<int32_t>(stepval) + offset,
+				                    Channel::Cv::min, Channel::Cv::max));
+		}
+		last_cv_stepval[chan] = stepval;
+
 		const auto r = p.slot.settings.GetRange(chan);
 		const auto temp = Channel::Output::ScaleCv(stepval, r);
 		return Calibration::Dac::Process(p.shared.data.dac_calibration.channel[chan], temp);

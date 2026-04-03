@@ -65,7 +65,7 @@ struct Slot {
 struct Data {
 	// Increment current_tag whenever sizeof(Step) or any other persistent field layout changes.
 	// validate() checks this tag so WearLevel rejects incompatible flash data gracefully.
-	static constexpr uint32_t current_tag = 2u;
+	static constexpr uint32_t current_tag = 5u;
 	uint32_t SettingsVersionTag = 0;
 
 	std::array<Slot, Model::Sequencer::NumSlots> slot;
@@ -115,6 +115,8 @@ class Interface {
 	bool show_playhead = true;
 	bool gates_blocked = true;
 	std::array<uint8_t, Model::NumChans> repeat_ticks_remaining{};
+	std::array<bool, Model::NumChans> gate_repeat_fired{};    // set after repeat tick fires; consumed next 3kHz tick
+	std::array<uint8_t, Model::NumChans> gate_substep_idx{}; // last seen ratchet sub-step index per gate channel
 
 public:
 	Slot slot;
@@ -156,15 +158,79 @@ public:
 	void Update(float phase) {
 		const auto clock_ticked = seqclock.Update();
 
-		std::array<bool, Model::NumChans> per_chan_step{};
+		std::array<uint8_t, Model::NumChans> per_chan_step{};
 		for (auto chan = 0u; chan < Model::NumChans; chan++) {
 			if (!clock_ticked) {
-				per_chan_step[chan] = false;
+				per_chan_step[chan] = 0;
 			} else if (repeat_ticks_remaining[chan] > 0) {
 				repeat_ticks_remaining[chan]--;
-				per_chan_step[chan] = false;
+				per_chan_step[chan] = 0;
+			} else if (!slot.settings.GetChannelMode(chan).IsGate() &&
+			           slot.settings.GetClockSource(chan) > 0) {
+				// CV track with gate clock source: master clock does not advance it
+				per_chan_step[chan] = 0;
 			} else {
-				per_chan_step[chan] = true;
+				per_chan_step[chan] = 1;
+			}
+		}
+
+		// Gate Track Follow: advance linked CV tracks.
+		// Runs every 3kHz iteration (not just on clock ticks) to catch ratchet sub-step crossings.
+		// Each gate channel produces three separate advance signals; each CV channel selects
+		// which to consume based on its clock_follow_mode (0=ratchets, 1=repeats, 2=both).
+		{
+			// Phase 1: compute per-gate-channel advance signals for this iteration
+			std::array<uint8_t, Model::NumChans> gate_step_adv{};    // step boundary: always
+			std::array<uint8_t, Model::NumChans> gate_ratchet_adv{}; // ratchet sub-step crossings
+			std::array<uint8_t, Model::NumChans> gate_repeat_adv{};  // repeat tick fires
+
+			for (auto gate_chan = 0u; gate_chan < Model::NumChans; gate_chan++) {
+				const auto cm = slot.settings.GetChannelMode(gate_chan);
+				if (!cm.IsGate() || cm.IsMuted()) {
+					gate_substep_idx[gate_chan] = 0;
+					continue;
+				}
+				if (per_chan_step[gate_chan] > 0) {
+					// Gate step just advanced (first tick of any step, including repeat and ratchet)
+					gate_step_adv[gate_chan] = 1;
+					gate_substep_idx[gate_chan] = 0;
+				} else {
+					if (gate_repeat_fired[gate_chan]) {
+						gate_repeat_adv[gate_chan] = 1;
+						gate_repeat_fired[gate_chan] = false;
+					}
+					// Ratchet sub-step boundary detection
+					const auto cur_step = player.GetRelativeStep(gate_chan, 0);
+					const auto &gs = slot.channel[gate_chan][cur_step];
+					if (!gs.IsRepeat()) {
+						const auto ratchet_count = gs.ReadRatchetRepeatCount() + 1u;
+						if (ratchet_count > 1) {
+							const auto step_phase = player.GetStepPhase(gate_chan);
+							const auto cur_substep = static_cast<uint8_t>(ratchet_count * step_phase);
+							if (cur_substep > gate_substep_idx[gate_chan]) {
+								gate_ratchet_adv[gate_chan] = cur_substep - gate_substep_idx[gate_chan];
+								gate_substep_idx[gate_chan] = cur_substep;
+							}
+						}
+					}
+				}
+			}
+
+			// Phase 2: apply selected advances to each linked CV channel
+			for (auto cv_chan = 0u; cv_chan < Model::NumChans; cv_chan++) {
+				if (slot.settings.GetChannelMode(cv_chan).IsGate()) continue;
+				const auto clock_src = slot.settings.GetClockSource(cv_chan);
+				if (clock_src == 0 || clock_src > Model::NumChans) continue;
+				const auto gate_chan = static_cast<uint8_t>(clock_src - 1u);
+				if (!slot.settings.GetChannelMode(gate_chan).IsGate()) continue;
+
+				const auto follow_mode = slot.settings.GetClockFollowMode(cv_chan);
+				const bool use_ratchets = (follow_mode != 1); // 0=ratchets or 2=both
+				const bool use_repeats  = (follow_mode >= 1); // 1=repeats or 2=both
+
+				per_chan_step[cv_chan] += gate_step_adv[gate_chan]; // always included
+				if (use_ratchets) per_chan_step[cv_chan] += gate_ratchet_adv[gate_chan];
+				if (use_repeats)  per_chan_step[cv_chan] += gate_repeat_adv[gate_chan];
 			}
 		}
 
@@ -177,6 +243,22 @@ public:
 					const auto &s = slot.channel[chan][cur_step];
 					repeat_ticks_remaining[chan] = s.IsRepeat() ? s.ReadRatchetRepeatCount() : 0u;
 				}
+			}
+		}
+
+		// Record repeat tick signals for Gate Track Follow.
+		// Only repeat steps need this — step boundary and ratchet sub-steps are detected directly.
+		// gate_repeat_fired persists until consumed by the Gate Track Follow block.
+		if (clock_ticked) {
+			for (auto chan = 0u; chan < Model::NumChans; chan++) {
+				const auto cm = slot.settings.GetChannelMode(chan);
+				if (!cm.IsGate() || cm.IsMuted() || per_chan_step[chan] > 0) continue;
+				const auto cur_step = player.GetRelativeStep(chan, 0);
+				const auto &s = slot.channel[chan][cur_step];
+				if (!s.IsRepeat()) continue;
+				const uint32_t sub_step_idx = s.ReadRatchetRepeatCount() - repeat_ticks_remaining[chan];
+				const uint32_t count = s.ReadRatchetRepeatCount() + 1u;
+				gate_repeat_fired[chan] = !(count > 1 && !(s.ReadSubStepMask() & (1u << sub_step_idx)));
 			}
 		}
 		playhead_page = player.GetPlayheadPage(cur_channel);
@@ -249,6 +331,8 @@ public:
 		seqclock.Reset();
 		gates_blocked = false;
 		repeat_ticks_remaining.fill(0);
+		gate_repeat_fired.fill(false);
+		gate_substep_idx.fill(0);
 
 		// blocks next trig for a short period of time after reset
 		time_last_reset = Controls::TimeNow();
@@ -362,6 +446,24 @@ public:
 	}
 	uint8_t GetRepeatTicksRemaining(uint8_t chan) const {
 		return repeat_ticks_remaining[chan];
+	}
+	uint8_t GetTransposeSource(uint8_t chan) const {
+		return slot.settings.GetTransposeSource(chan);
+	}
+	void SetTransposeSource(uint8_t chan, uint8_t source) {
+		slot.settings.SetTransposeSource(chan, source);
+	}
+	uint8_t GetClockSource(uint8_t chan) const {
+		return slot.settings.GetClockSource(chan);
+	}
+	void SetClockSource(uint8_t chan, uint8_t source) {
+		slot.settings.SetClockSource(chan, source);
+	}
+	uint8_t GetClockFollowMode(uint8_t chan) const {
+		return slot.settings.GetClockFollowMode(chan);
+	}
+	void SetClockFollowMode(uint8_t chan, uint8_t mode) {
+		slot.settings.SetClockFollowMode(chan, mode);
 	}
 	void ToggleSubStepMask(uint8_t step_on_page, uint8_t sub_step) {
 		show_playhead = false;

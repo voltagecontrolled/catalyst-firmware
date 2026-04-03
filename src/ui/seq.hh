@@ -10,6 +10,7 @@
 #include "seq_page_params.hh"
 #include "seq_substep_mask.hh"
 #include "seq_prob.hh"
+#include "seq_follow_assign.hh"
 #include "seq_settings.hh"
 #include "seq_settings_global.hh"
 #include "sequencer.hh"
@@ -26,6 +27,7 @@ class Main : public Usual {
 	Probability probability{p, c, *this};
 	Settings::Global global_settings{p, c, *this};
 	Settings::Channel channel_settings{p, c, *this};
+	Settings::FollowAssign follow_assign{p, c, *this, *this};
 	PageParams page_params{p, c, *this};
 	bool just_queued = false;
 
@@ -33,6 +35,7 @@ public:
 	Main(Catalyst2::Sequencer::Interface &p, Controls &c, Abstract &macro)
 		: Usual{p, c, macro} {
 		morph.set_substep_ui(substep_mask);
+		channel_settings.set_follow_assign_ui(follow_assign);
 	}
 	//	using Usual::Usual;
 	void Init() override {
