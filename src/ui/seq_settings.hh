@@ -9,8 +9,11 @@
 namespace Catalyst2::Ui::Sequencer::Settings
 {
 class Channel : public Usual {
+	Abstract *follow_assign_ui = nullptr;
+
 public:
 	using Usual::Usual;
+	void set_follow_assign_ui(Abstract &ui) { follow_assign_ui = &ui; }
 	void Init() override {
 		p.shared.hang.Cancel();
 		if (!p.IsChannelSelected()) {
@@ -24,6 +27,13 @@ public:
 
 		if (!c.button.add.is_high()) {
 			p.shared.modeswitcher.SetAlarm();
+		}
+
+		if (c.button.morph.just_went_high() && follow_assign_ui != nullptr) {
+			if (p.GetSelectedChannel() < Model::NumChans) {
+				SwitchUiMode(*follow_assign_ui);
+				return;
+			}
 		}
 
 		if (!c.button.shift.is_high() || !c.button.bank.is_high()) {

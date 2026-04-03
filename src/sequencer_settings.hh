@@ -188,6 +188,9 @@ public:
 	Setting<Random::Amount::type, Random::Amount::min, Random::Amount::max> random{};
 	Catalyst2::Channel::Cv::Range range;
 	Catalyst2::Channel::Mode mode;
+	uint8_t transpose_source = 0;   // 0 = unlinked, 1..NumChans = source channel (1-based)
+	uint8_t clock_source = 0;       // 0 = unlinked, 1..NumChans = gate track clock source (1-based)
+	uint8_t clock_follow_mode = 0;  // 0 = ratchets only, 1 = repeats only, 2 = ratchets+repeats
 
 	bool Validate() const {
 		auto ret = true;
@@ -200,6 +203,9 @@ public:
 		ret &= range.Validate();
 		ret &= random.Validate();
 		ret &= mode.Validate();
+		ret &= transpose_source <= Model::NumChans;
+		ret &= clock_source <= Model::NumChans;
+		ret &= clock_follow_mode <= 2;
 		return ret;
 	}
 };
@@ -379,6 +385,24 @@ public:
 	}
 	void ToggleMute(uint8_t chan) {
 		channel[chan].mode.ToggleMute();
+	}
+	uint8_t GetTransposeSource(uint8_t chan) const {
+		return channel[chan].transpose_source;
+	}
+	void SetTransposeSource(uint8_t chan, uint8_t source) {
+		channel[chan].transpose_source = source;
+	}
+	uint8_t GetClockSource(uint8_t chan) const {
+		return channel[chan].clock_source;
+	}
+	void SetClockSource(uint8_t chan, uint8_t source) {
+		channel[chan].clock_source = source;
+	}
+	uint8_t GetClockFollowMode(uint8_t chan) const {
+		return channel[chan].clock_follow_mode;
+	}
+	void SetClockFollowMode(uint8_t chan, uint8_t mode) {
+		channel[chan].clock_follow_mode = std::min(mode, uint8_t{2});
 	}
 };
 } // namespace Settings
