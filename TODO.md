@@ -89,16 +89,6 @@ Each parameter independently sourceable: unassigned (fixed default), CV track (p
 
 ---
 
-### Follow Assign: switching gate clock modes quirk
-
-**Area:** `src/ui/seq_follow_assign.hh`
-
-When a gate track is assigned as clock source under one mode (e.g. Orange) and the user presses FINE to switch to a different mode (e.g. Yellow), the page button for the previously assigned track remains lit. The stored assignment is the Orange-mode one -- it is not automatically re-applied under the new mode.
-
-**Fix:** when FINE cycles to a new clock-follow mode and a clock source is already assigned, carry the source assignment forward to the new mode (call `SetClockFollowMode` and re-apply) and clear it from the previous mode. Documented as a known quirk in `wiki/NEW_FEATURES.md`.
-
----
-
 ### Rename Follow Assign to Advanced Track Settings
 
 **Area:** `src/ui/seq_follow_assign.hh`, `src/ui/seq_settings.hh`, `src/ui/seq.hh`, `wiki/NEW_FEATURES.md`
