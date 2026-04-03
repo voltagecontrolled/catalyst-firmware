@@ -225,8 +225,9 @@ public:
 				if (!slot.settings.GetChannelMode(gate_chan).IsGate()) continue;
 
 				const auto follow_mode = slot.settings.GetClockFollowMode(cv_chan);
-				const bool use_ratchets = (follow_mode != 1); // 0=ratchets or 2=both
-				const bool use_repeats  = (follow_mode >= 1); // 1=repeats or 2=both
+				const bool use_ratchets = (follow_mode == 0 || follow_mode == 2); // ratchets or both
+				const bool use_repeats  = (follow_mode == 1 || follow_mode == 2); // repeats or both
+				// follow_mode 3 = step only: neither ratchets nor repeats (gate_step_adv always applied)
 
 				per_chan_step[cv_chan] += gate_step_adv[gate_chan]; // always included
 				if (use_ratchets) per_chan_step[cv_chan] += gate_ratchet_adv[gate_chan];
@@ -452,6 +453,12 @@ public:
 	}
 	void SetTransposeSource(uint8_t chan, uint8_t source) {
 		slot.settings.SetTransposeSource(chan, source);
+	}
+	bool IsTransposeReplace(uint8_t chan) const {
+		return slot.settings.IsTransposeReplace(chan);
+	}
+	void SetTransposeSourceReplace(uint8_t chan, uint8_t source) {
+		slot.settings.SetTransposeSourceReplace(chan, source);
 	}
 	uint8_t GetClockSource(uint8_t chan) const {
 		return slot.settings.GetClockSource(chan);

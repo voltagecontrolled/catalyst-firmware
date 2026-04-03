@@ -308,14 +308,20 @@ private:
 		stepval += distance * stepmorph;
 		stepval = Transposer::Process(stepval, p.slot.settings.GetTransposeOrGlobal(chan));
 
-		// Apply CV follow source transpose (one-tick delay: reads previous tick's cached stepval)
+		// Apply CV follow source (one-tick delay: reads previous tick's cached stepval)
 		const auto follow_source = p.slot.settings.GetTransposeSource(chan);
 		if (follow_source > 0 && follow_source <= Model::NumChans) {
-			const int32_t offset = static_cast<int32_t>(last_cv_stepval[follow_source - 1]) -
-			                       static_cast<int32_t>(Channel::Cv::zero);
-			stepval = static_cast<Channel::Cv::type>(
-				std::clamp<int32_t>(static_cast<int32_t>(stepval) + offset,
-				                    Channel::Cv::min, Channel::Cv::max));
+			if (p.slot.settings.IsTransposeReplace(chan)) {
+				// Replace mode: output source track's value directly
+				stepval = last_cv_stepval[follow_source - 1];
+			} else {
+				// Add mode: offset by source track's value relative to 0V
+				const int32_t offset = static_cast<int32_t>(last_cv_stepval[follow_source - 1]) -
+				                       static_cast<int32_t>(Channel::Cv::zero);
+				stepval = static_cast<Channel::Cv::type>(
+					std::clamp<int32_t>(static_cast<int32_t>(stepval) + offset,
+					                    Channel::Cv::min, Channel::Cv::max));
+			}
 		}
 		last_cv_stepval[chan] = stepval;
 

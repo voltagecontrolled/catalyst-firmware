@@ -188,7 +188,7 @@ public:
 	Setting<Random::Amount::type, Random::Amount::min, Random::Amount::max> random{};
 	Catalyst2::Channel::Cv::Range range;
 	Catalyst2::Channel::Mode mode;
-	uint8_t transpose_source = 0;   // 0 = unlinked, 1..NumChans = source channel (1-based)
+	uint8_t transpose_source = 0;   // 0 = unlinked, 1..NumChans = add/transpose, NumChans+1..2*NumChans = replace
 	uint8_t clock_source = 0;       // 0 = unlinked, 1..NumChans = gate track clock source (1-based)
 	uint8_t clock_follow_mode = 0;  // 0 = ratchets only, 1 = repeats only, 2 = ratchets+repeats
 
@@ -203,9 +203,9 @@ public:
 		ret &= range.Validate();
 		ret &= random.Validate();
 		ret &= mode.Validate();
-		ret &= transpose_source <= Model::NumChans;
+		ret &= transpose_source <= 2 * Model::NumChans;
 		ret &= clock_source <= Model::NumChans;
-		ret &= clock_follow_mode <= 2;
+		ret &= clock_follow_mode <= 3;
 		return ret;
 	}
 };
@@ -387,10 +387,17 @@ public:
 		channel[chan].mode.ToggleMute();
 	}
 	uint8_t GetTransposeSource(uint8_t chan) const {
-		return channel[chan].transpose_source;
+		const auto raw = channel[chan].transpose_source;
+		return raw > Model::NumChans ? raw - Model::NumChans : raw;
 	}
-	void SetTransposeSource(uint8_t chan, uint8_t source) {
+	bool IsTransposeReplace(uint8_t chan) const {
+		return channel[chan].transpose_source > Model::NumChans;
+	}
+	void SetTransposeSource(uint8_t chan, uint8_t source) {        // add/transpose mode
 		channel[chan].transpose_source = source;
+	}
+	void SetTransposeSourceReplace(uint8_t chan, uint8_t source) { // replace mode; source 0 = unlink
+		channel[chan].transpose_source = source > 0 ? source + Model::NumChans : 0;
 	}
 	uint8_t GetClockSource(uint8_t chan) const {
 		return channel[chan].clock_source;
@@ -402,7 +409,7 @@ public:
 		return channel[chan].clock_follow_mode;
 	}
 	void SetClockFollowMode(uint8_t chan, uint8_t mode) {
-		channel[chan].clock_follow_mode = std::min(mode, uint8_t{2});
+		channel[chan].clock_follow_mode = std::min(mode, uint8_t{3});
 	}
 };
 } // namespace Settings

@@ -95,11 +95,19 @@ In all sub-modes, the **Page buttons** act as a radio selector for the source tr
 
 ---
 
-### Blue - CV Transpose Follow
+### Blue - CV Add Follow
 
 The selected CV track follows another CV track as a transpose source. The source track's current pitch (relative to 0V) is added to the target track's pitch each update cycle, shifting the entire pitch sequence up or down by the source value.
 
 **Use case:** run a short 2-4 step CV sequence as a transposer over a longer melodic pattern. The transposer sequence can have its own clock division, length, and direction settings, shifting the melody by different intervals each cycle.
+
+---
+
+### Lavender - CV Replace Follow
+
+The selected CV track's step values are replaced entirely by the source CV track's current output. The target track outputs exactly what the source track outputs, ignoring its own programmed steps.
+
+**Use case:** temporarily override a melodic track with the output of another sequence -- useful for unison lines, hard pitch coupling, or driving a track from a live CV input routed through another channel.
 
 ---
 
@@ -139,19 +147,20 @@ The selected CV track advances on **both** ratchet sub-steps and repeat ticks.
 
 ---
 
-### Combining Transpose and Clock Follow
+### Teal - Gate Clock Follow (Step Only)
 
-A CV track can have both a transpose source (Blue) and a gate clock source (Orange/Yellow/Salmon) assigned at the same time. The transpose offset is applied on top of whatever step the CV track is currently on, regardless of what is clocking it.
+The selected CV track advances **once per gate step**, ignoring ratchets and repeats entirely.
 
-### Known Quirk: Switching Gate Clock Modes
+- Each gate step advances the CV track exactly once, regardless of ratchet count or repeat ticks.
+- Useful when the gate track drives rhythm but you want the CV track to move at the step rate only.
 
-When a gate track is assigned as a clock source in one mode (e.g. Orange) and you press FINE to switch to a different gate clock mode (e.g. Yellow), the page button for the previously assigned track remains lit. The assignment shown is still the Orange-mode assignment - switching modes does not automatically re-assign or clear it.
+**Use case:** a ratcheted percussion track keeps its rhythmic intensity while a melodic CV track advances at a steady one-pitch-per-step rate.
 
-To change the active clock follow mode for an already-linked track:
-1. Press the lit page button to unlink.
-2. Press the same button again to re-assign under the new mode.
+---
 
-This will be improved in a future update so that switching modes automatically re-applies the current assignment under the new mode and clears it from the old one.
+### Combining CV Follow and Gate Clock Follow
+
+A CV track can have both a CV follow source (Blue or Lavender) and a gate clock source (Orange/Yellow/Salmon/Teal) assigned at the same time. The CV follow is applied on top of whatever step the CV track is currently on, regardless of what is clocking it.
 
 ---
 
