@@ -12,4 +12,5 @@ void _fstat(){}
 void _isatty(){}
 void _lseek(){}
 void _read(){}
+void *_sbrk(int incr){ (void)incr; return (void *)-1; }
 
