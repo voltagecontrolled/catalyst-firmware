@@ -61,6 +61,18 @@ SHIFT+PLAY currently fires an immediate reset and exits. Repurposing it as a **p
 
 ---
 
+### Step Arpeggio
+
+**Area:** `src/sequencer_step.hh`, `src/app.hh` `Cv()`, `src/sequencer_player.hh`, `src/ui/seq_prob.hh`
+
+Per-step arp type on CV tracks. CCW turns in probability mode (SHIFT+GLIDE) select an arp type (1–15) instead of probability. On ratcheted/repeated steps the arp walks a chord or scale fragment across sub-steps, producing a strum or melodic roll. On plain steps the arp advances across successive playhead passes, with the track's Random setting controlling advancement rate.
+
+Full spec: `planned/STEP_ARP.md`
+
+Requires `current_tag` bump (coordinate with other v1.4.6 tag bumps). Uses lower 4 bits of `sub_step_mask` field on CV channels, which is otherwise unused.
+
+---
+
 ### Gate probability iterative mode
 
 **Area:** `src/sequencer_step.hh`, `src/sequencer.hh`, `src/ui/seq_morph.hh`
