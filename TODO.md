@@ -65,11 +65,15 @@ SHIFT+PLAY currently fires an immediate reset and exits. Repurposing it as a **p
 
 **Area:** `src/sequencer_step.hh`, `src/app.hh` `Cv()`, `src/sequencer_player.hh`, `src/ui/seq_prob.hh`
 
-Per-step arp type on CV tracks. CCW turns in probability mode (SHIFT+GLIDE) select an arp type (1–15) instead of probability. On ratcheted/repeated steps the arp walks a chord or scale fragment across sub-steps, producing a strum or melodic roll. On plain steps the arp advances across successive playhead passes, with the track's Random setting controlling advancement rate.
+Per-step arp on CV tracks. 6 chord types (major 5th, minor 5th, major 7th, minor 7th, octave, minor pentatonic); each has ascending/descending direction controlled independently per step. Mutually exclusive with probability.
+
+**Entry:** CCW in SHIFT+GLIDE (quick edit); or SHIFT+GLIDE+TAP TEMPO enters a persistent hands-free editor where encoders set type and page buttons toggle up/down direction. SHIFT+PAGE navigates pages within the persistent mode.
+
+On ratcheted/repeated steps the arp walks the chord across sub-steps (strum/roll). On plain steps it advances one note per clock pass.
 
 Full spec: `planned/STEP_ARP.md`
 
-Requires `current_tag` bump (coordinate with other v1.4.6 tag bumps). Uses lower 4 bits of `sub_step_mask` field on CV channels, which is otherwise unused.
+Requires `current_tag` bump (coordinate with other v1.4.6 tag bumps). Uses bits 0–3 of `sub_step_mask` on CV channels (otherwise unused).
 
 ---
 
