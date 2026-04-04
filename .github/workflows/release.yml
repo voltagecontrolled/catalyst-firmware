@@ -39,7 +39,7 @@ jobs:
         id: notes
         run: |
           BASE=$(echo "${{ github.ref_name }}" | sed 's/-alpha[0-9]*$//' | sed 's/-rc[0-9]*$//')
-          echo "path=release-notes/${BASE}.md" >> $GITHUB_OUTPUT
+          echo "path=docs/release-notes/${BASE}.md" >> $GITHUB_OUTPUT
 
       - name: Create release
         uses: softprops/action-gh-release@v2

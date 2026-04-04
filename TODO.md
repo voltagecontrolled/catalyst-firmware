@@ -71,7 +71,7 @@ Per-step arp on CV tracks. 6 chord types (major 5th, minor 5th, major 7th, minor
 
 On ratcheted/repeated steps the arp walks the chord across sub-steps (strum/roll). On plain steps it advances one note per clock pass.
 
-Full spec: `planned/STEP_ARP.md`
+Full spec: `docs/planned/STEP_ARP.md`
 
 Requires `current_tag` bump (coordinate with other v1.4.6 tag bumps). Uses bits 0–3 of `sub_step_mask` on CV channels (otherwise unused).
 
@@ -91,7 +91,7 @@ Requires 1 extra bit in the probability field to represent negative (iterative) 
 
 **Area:** `src/ui/seq_common.hh`, `src/ui/seq.hh`, global settings storage
 
-Extends Phase Scrub Lock with two persistent options. Full spec: `planned/PHASESCRUB_SETTINGS.md`.
+Extends Phase Scrub Lock with two persistent options. Full spec: `docs/planned/PHASESCRUB_SETTINGS.md`.
 
 - **Quantized mode (global):** Phase Scrub offset only takes effect at step boundaries.
 - **Per-track ignore (per-track):** Individual tracks excluded from Phase Scrub entirely.
@@ -112,7 +112,7 @@ Extends mask edit mode with a third per-sub-step state: tied. A tied sub-step ho
 
 **Area:** `src/app.hh` `Sequencer::App::Gate()`, `src/sequencer_settings.hh`, `src/ui/seq_envelope_assign.hh` (new)
 
-A west coast-style A/D function generator per gate channel. When any envelope parameter is configured, the gate output becomes a shaped voltage envelope. Full spec: `planned/GATE_ENVELOPE.md`.
+A west coast-style A/D function generator per gate channel. When any envelope parameter is configured, the gate output becomes a shaped voltage envelope. Full spec: `docs/planned/GATE_ENVELOPE.md`.
 
 Parameters (Follow Assign sub-mode colors):
 - Blue = peak amplitude
@@ -126,7 +126,7 @@ Each parameter independently sourceable: unassigned (fixed default), CV track (p
 
 ### Rename Follow Assign to Advanced Track Settings
 
-**Area:** `src/ui/seq_follow_assign.hh`, `src/ui/seq_settings.hh`, `src/ui/seq.hh`, `wiki/NEW_FEATURES.md`
+**Area:** `src/ui/seq_follow_assign.hh`, `src/ui/seq_settings.hh`, `src/ui/seq.hh`, `docs/wiki/NEW_FEATURES.md`
 
 The Follow Assign menu currently uses 6 of 9 available FINE sub-mode colors for CV tracks (blue = CV add follow, lavender = CV replace, orange/yellow/salmon = gate clock follow ratchets/repeats/both, teal = gate clock step-only). Gate tracks have no advanced settings menu yet. Both channel types have pending features that need per-track configuration pages (gate envelope, step preview, reset behavior).
 
@@ -134,7 +134,7 @@ Rename and expand to a general Advanced Track Settings menu. Entry combo and per
 
 Planned page layout (subject to revision as features are added):
 - CV tracks: blue/lavender = CV follow (existing), orange/yellow/salmon/teal = gate clock follow (existing), remaining colors for new settings
-- Gate tracks: blue/orange/yellow/salmon = envelope assign (per `planned/GATE_ENVELOPE.md`), remaining colors for new settings
+- Gate tracks: blue/orange/yellow/salmon = envelope assign (per `docs/planned/GATE_ENVELOPE.md`), remaining colors for new settings
 
 ---
 
