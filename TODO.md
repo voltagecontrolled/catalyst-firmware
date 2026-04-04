@@ -150,6 +150,22 @@ While the sequencer is stopped, turning a step encoder on a CV track outputs the
 
 ---
 
+### Per-step clock divisions / multiplications (gate tracks)
+
+**Area:** `src/sequencer_player.hh`, `src/sequencer_step.hh`, `src/ui/seq.hh`
+
+**Entry combo reserved: SHIFT + TAP TEMPO** (gate tracks only)
+
+Per-step clock div/mult allows individual gate steps to fire at a fraction or multiple of
+the global clock rate. Useful for polyrhythmic patterns without requiring separate clock
+sources.
+
+Exact UX and storage TBD. Implement after Step Arp (v1.4.6) to avoid `current_tag`
+conflicts. Gate tracks only — CV tracks use SHIFT+TAP TEMPO for a different purpose or
+leave it unassigned.
+
+---
+
 ### Per-track reset behavior
 
 **Area:** `src/sequencer_player.hh`, `src/sequencer_settings.hh`, Advanced Track Settings

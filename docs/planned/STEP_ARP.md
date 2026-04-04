@@ -254,5 +254,8 @@ Reset to all-zero in `Reset()`.
 - [ ] Confirm 6 arp-type colors read as visually distinct on hardware LEDs
 - [ ] Confirm entry combo (SHIFT+GLIDE held, then TAP TEMPO) doesn't conflict with
       existing substep mask entry (GLIDE+TAP TEMPO on gate tracks)
+      **Note:** SHIFT+TAP TEMPO (two buttons) is reserved for per-step clock div/mult
+      (gate tracks). SHIFT+GLIDE+TAP TEMPO (three buttons, used here) is distinct and
+      unaffected.
 - [ ] Decide whether `arp_pos[]` lives in `Interface` (alongside `repeat_ticks_remaining`)
       or in `App` (alongside `replace_latch`)
