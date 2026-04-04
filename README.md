@@ -1,6 +1,6 @@
 # Catalyst Sequencer and Catalyst Controller
 
-Firmware for the Eurorack modules from 4ms Company.
+Alternate Firmware for the Eurorack modules from 4ms Company.
 
 ---
 
@@ -19,6 +19,10 @@ If you need to preserve v1.3 presets, do not flash this firmware.
 For a user-friendly guide to all added features, see the [New Features wiki page](https://github.com/voltagecontrolled/catalyst-firmware/wiki/New-Features).
 
 ---
+
+# Current Version Overview:
+
+[![v1.4.5 Preview Video](https://img.youtube.com/vi/L5W8HPROsC4/0.jpg)](https://www.youtube.com/watch?v=L5W8HPROsC4)
 
 ## Added Features
 
