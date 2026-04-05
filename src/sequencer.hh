@@ -296,8 +296,8 @@ public:
 				bool orbit_should_advance = false;
 
 				if (perf_mode == 1) {
-					// Granular: advance on each clock tick when width > 0
-					orbit_active = (width_pct > 0);
+					// Granular: active only when width > 0 and slider is off zero (zero = bypass)
+					orbit_active = (width_pct > 0) && (shared.orbit_center > 0.f);
 					orbit_should_advance = clock_ticked && orbit_active;
 					beat_repeat_phase = 0.f;
 				} else {

@@ -22,12 +22,14 @@ public:
 	}
 
 	void Update() override {
-		// Exit: COPY+GLIDE (any duration) or Play/Reset
+		// Exit: COPY+GLIDE (any duration) or Play/Reset — save on exit, not on every change
 		if (c.button.play.just_went_high()) {
+			p.shared.do_save_shared = true;
 			SwitchUiMode(main_ui);
 			return;
 		}
 		if (c.button.fine.is_high() && c.button.morph.just_went_high()) {
+			p.shared.do_save_shared = true;
 			SwitchUiMode(main_ui);
 			return;
 		}
@@ -35,19 +37,18 @@ public:
 		ForEachEncoderInc(c, [this](uint8_t encoder, int32_t inc) {
 			if (encoder == quantize_encoder) {
 				p.shared.data.quantized_scrub ^= 1u;
-				p.shared.do_save_shared = true;
 			} else if (encoder == perf_mode_encoder) {
 				auto &mode = p.shared.data.slider_perf_mode;
-				if (inc > 0 && mode < 3) { mode++; p.shared.do_save_shared = true; }
-				else if (inc < 0 && mode > 0) { mode--; p.shared.do_save_shared = true; }
+				if (inc > 0 && mode < 3) { mode++; }
+				else if (inc < 0 && mode > 0) { mode--; }
 			} else if (encoder == width_encoder) {
 				auto &w = p.shared.data.orbit_width;
-				if (inc > 0 && w < 100) { w++; p.shared.do_save_shared = true; }
-				else if (inc < 0 && w > 0) { w--; p.shared.do_save_shared = true; }
+				if (inc > 0 && w < 100) { w++; }
+				else if (inc < 0 && w > 0) { w--; }
 			} else if (encoder == direction_encoder) {
 				auto &d = p.shared.data.orbit_direction;
-				if (inc > 0) { d = (d + 1) % 4; p.shared.do_save_shared = true; }
-				else if (inc < 0) { d = (d + 3) % 4; p.shared.do_save_shared = true; }
+				if (inc > 0) { d = (d + 1) % 4; }
+				else if (inc < 0) { d = (d + 3) % 4; }
 			} else if (encoder == lock_encoder) {
 				DoLockToggle();
 			}
@@ -56,7 +57,6 @@ public:
 		// Page buttons: toggle per-track scrub ignore
 		ForEachSceneButtonJustPressed(c, [this](uint8_t button) {
 			p.shared.data.scrub_ignore_mask ^= (1u << button);
-			p.shared.do_save_shared = true;
 		});
 	}
 
