@@ -28,7 +28,7 @@ public:
 			SwitchUiMode(main_ui);
 			return;
 		}
-		if (c.button.morph.is_high() && c.button.fine.just_went_high()) {
+		if (c.button.fine.is_high() && c.button.morph.just_went_high()) {
 			p.shared.do_save_shared = true;
 			SwitchUiMode(main_ui);
 			return;

@@ -78,22 +78,22 @@ public:
 			}
 		}
 
-		// Hold GLIDE, tap COPY = lock toggle; hold GLIDE + hold COPY 1.5s = scrub settings entry.
-		// Order is explicit: GLIDE must already be held when COPY is pressed.
-		// Releasing GLIDE before the action fires aborts with no effect.
-		if (c.button.morph.is_high() && c.button.fine.just_went_high() && !p.shared.scrub_hold_pending) {
+		// COPY+GLIDE: press both (any order) to arm; releasing either before 1.5s = lock toggle;
+		// holding both for 1.5s = scrub settings entry. Toggle fires on release so continuing
+		// to hold seamlessly transitions into menu entry with no ambiguous mid-press state.
+		const bool both_held = c.button.fine.is_high() && c.button.morph.is_high();
+		const bool either_just_pressed = c.button.fine.just_went_high() || c.button.morph.just_went_high();
+		if (both_held && either_just_pressed && !p.shared.scrub_hold_pending) {
 			p.shared.scrub_hold_pending = true;
 			p.shared.scrub_hold_start = Controls::TimeNow();
 		}
 		if (p.shared.scrub_hold_pending) {
-			if (!c.button.morph.is_high()) {
-				p.shared.scrub_hold_pending = false; // GLIDE released — abort
-			} else if (c.button.fine.just_went_low()) {
+			if (Controls::TimeNow() - p.shared.scrub_hold_start >= scrub_settings_hold_ticks) {
 				p.shared.scrub_hold_pending = false;
-				DoLockToggle(); // COPY tapped — short press
-			} else if (Controls::TimeNow() - p.shared.scrub_hold_start >= scrub_settings_hold_ticks) {
+				p.shared.scrub_settings_entry_requested = true; // held long enough → menu
+			} else if (!c.button.fine.is_high() || !c.button.morph.is_high()) {
 				p.shared.scrub_hold_pending = false;
-				p.shared.scrub_settings_entry_requested = true;
+				DoLockToggle(); // either released before timer → toggle
 			}
 		}
 
