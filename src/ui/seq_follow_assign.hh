@@ -39,6 +39,7 @@ public:
 
 	void Init() override {
 		mode = 0;
+		c.button.fine.clear_events();
 	}
 
 	void Update() override {

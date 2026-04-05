@@ -114,8 +114,10 @@ public:
 
 		// Phase computation
 		if (p.shared.data.slider_perf_mode > 0) {
+			// When locked/picking-up, treat locked_raw as the effective slider position
+			const uint16_t effective_slider = (phase_locked || picking_up) ? locked_raw : slider_now;
 			// Orbit / beat repeat: set orbit_center from slider; orbit advance runs in sequencer Update()
-			p.shared.orbit_center = static_cast<float>(slider_now) / 4095.f;
+			p.shared.orbit_center = static_cast<float>(effective_slider) / 4095.f;
 
 			if (p.shared.data.slider_perf_mode >= 2) {
 				// Beat repeat: blue (mode 2) = 8 zones with triplets, cyan (mode 3) = 4 wide zones no triplets
@@ -123,14 +125,14 @@ public:
 				const uint8_t num_zones = is_cyan ? 4 : 8;
 				const uint16_t zone_width = 4096 / num_zones; // 1024 or 512
 
-				if (slider_now == 0) {
+				if (effective_slider == 0) {
 					p.shared.beat_repeat_pending = 0xFF;
 					if (!c.button.shift.is_high()) {
 						p.shared.beat_repeat_committed = 0xFF;
 					}
 				} else {
 					const uint8_t zone = std::min(
-						static_cast<uint8_t>((slider_now - 1) / zone_width),
+						static_cast<uint8_t>((effective_slider - 1) / zone_width),
 						static_cast<uint8_t>(num_zones - 1));
 					if (zone != p.shared.beat_repeat_pending) {
 						p.shared.beat_repeat_pending = zone;
@@ -174,7 +176,7 @@ protected:
 	uint32_t lock_toggle_time = 0;
 	uint16_t locked_raw = 0;
 
-	static constexpr uint32_t scrub_settings_hold_ticks = Clock::MsToTicks(3000);
+	static constexpr uint32_t scrub_settings_hold_ticks = Clock::MsToTicks(1500);
 
 	// Slider movement tracking for indicator
 	uint16_t last_slider_raw = 0;

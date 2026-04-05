@@ -172,7 +172,7 @@ public:
 	uint8_t GetOrbitStep(uint8_t chan) const { return orbit_step[chan]; }
 	uint8_t GetOrbitStepPrev(uint8_t chan) const { return orbit_step_prev[chan]; }
 	float GetEffectiveStepPhase(uint8_t chan) const {
-		if (orbit_active && shared.data.slider_perf_mode >= 2) {
+		if (OrbitActiveForChannel(chan) && shared.data.slider_perf_mode >= 2) {
 			return beat_repeat_phase;
 		}
 		return player.GetStepPhase(chan);
