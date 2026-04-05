@@ -124,8 +124,11 @@ public:
 				const bool is_cyan = (p.shared.data.slider_perf_mode == 3);
 				const uint8_t num_zones = is_cyan ? 4 : 8;
 				const uint16_t zone_width = 4096 / num_zones; // 1024 or 512
+				// Small dead zone at slider minimum; ADC jitter near 0 would otherwise briefly
+				// land on zone 0 and corrupt beat_repeat_pending right as shift releases.
+				static constexpr uint16_t off_zone = 32;
 
-				if (effective_slider == 0) {
+				if (effective_slider < off_zone) {
 					p.shared.beat_repeat_pending = 0xFF;
 					if (!c.button.shift.is_high()) {
 						p.shared.beat_repeat_committed = 0xFF;

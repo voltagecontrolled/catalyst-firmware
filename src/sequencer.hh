@@ -127,6 +127,7 @@ class Interface {
 	std::array<uint8_t, Model::NumChans> orbit_step_prev{};
 	uint32_t beat_repeat_countdown = 0;
 	float beat_repeat_phase = 0.f;
+	bool beat_repeat_synced = false; // true once the first clock tick after activation has fired
 
 public:
 	Slot slot;
@@ -314,7 +315,16 @@ public:
 						const uint32_t safe_period = is_cyan
 							? std::max<uint32_t>(1u, beat_period * div_num_4[zone] / div_denom_4[zone])
 							: std::max<uint32_t>(1u, beat_period * div_num_8[zone] / div_denom_8[zone]);
-						if (beat_repeat_countdown == 0) {
+						if (!beat_repeat_synced) {
+							// Hold at phase 0 until the next master clock tick so the loop
+							// starts on the step grid rather than at a random phase offset.
+							beat_repeat_phase = 0.f;
+							if (clock_ticked) {
+								beat_repeat_synced = true;
+								orbit_should_advance = true;
+								beat_repeat_countdown = safe_period;
+							}
+						} else if (beat_repeat_countdown == 0) {
 							beat_repeat_phase = 0.f;
 							orbit_should_advance = true;
 							beat_repeat_countdown = safe_period;
@@ -324,6 +334,7 @@ public:
 							beat_repeat_countdown--;
 						}
 					} else {
+						beat_repeat_synced = false;
 						beat_repeat_countdown = 0;
 						beat_repeat_phase = 0.f;
 					}
