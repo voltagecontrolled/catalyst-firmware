@@ -58,7 +58,7 @@ These two axes are fully orthogonal:
 **Encoder 1 — Quantization toggle:**
 - Red = Quantized Off (default, current behavior)
 - Orange = Quantized On
-- Turn or press to toggle
+- Turn to toggle
 
 **Page buttons — Per-track ignore (radio-style per track):**
 - Button N = track N
