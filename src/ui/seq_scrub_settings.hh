@@ -52,9 +52,9 @@ public:
 	void PaintLeds(const Model::Output::Buffer & /*outs*/) override {
 		ClearEncoderLeds(c);
 
-		// Encoder 1: quantization state (orange = on, red = off)
+		// Encoder 1: quantization state (orange = on, off = off)
 		c.SetEncoderLed(quantize_encoder,
-		                p.shared.data.quantized_scrub ? Palette::orange : Palette::red);
+		                p.shared.data.quantized_scrub ? Palette::orange : Palette::off);
 
 		// Encoder 8: lock state (red = locked, off = unlocked)
 		c.SetEncoderLed(lock_encoder, phase_locked ? Palette::red : Palette::off);
