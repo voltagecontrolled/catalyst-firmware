@@ -116,8 +116,21 @@ public:
 		if (p.shared.data.slider_perf_mode > 0) {
 			// When locked/picking-up, treat locked_raw as the effective slider position
 			const uint16_t effective_slider = (phase_locked || picking_up) ? locked_raw : slider_now;
-			// Orbit / beat repeat: set orbit_center from slider; orbit advance runs in sequencer Update()
-			p.shared.orbit_center = static_cast<float>(effective_slider) / 4095.f;
+
+			// Orbit center: in beat repeat entry pickup mode, hold at the playhead-snapped value
+			// until the slider moves away from where it was on shift release. This lets the user
+			// time the loop start step rhythmically (release shift on the beat) rather than
+			// having to nail the slider position within a zone. Slider takes over once it moves.
+			if (orbit_pickup && p.shared.data.slider_perf_mode >= 2) {
+				if (std::abs((int32_t)slider_now - (int32_t)orbit_pickup_slider) > pickup_threshold) {
+					orbit_pickup = false;
+					p.shared.orbit_center = static_cast<float>(effective_slider) / 4095.f;
+				} else {
+					p.shared.orbit_center = orbit_pickup_center;
+				}
+			} else {
+				p.shared.orbit_center = static_cast<float>(effective_slider) / 4095.f;
+			}
 
 			if (p.shared.data.slider_perf_mode >= 2) {
 				// Beat repeat: blue (mode 2) = 8 zones with triplets, cyan (mode 3) = 4 wide zones no triplets
@@ -132,6 +145,7 @@ public:
 					p.shared.beat_repeat_pending = 0xFF;
 					if (!c.button.shift.is_high()) {
 						p.shared.beat_repeat_committed = 0xFF;
+						orbit_pickup = false;
 					}
 				} else {
 					const uint8_t zone = std::min(
@@ -148,9 +162,24 @@ public:
 					}
 				}
 
-				// Shift release: immediately commit wherever the slider is
+				// Shift release: commit pending zone immediately.
+				// On first entry from off: snap orbit_center to the current playhead step so the
+				// loop starts on the step the user timed with their ear, not the slider position.
 				if (c.button.shift.just_went_low()) {
+					const bool was_off = (p.shared.beat_repeat_committed == 0xFF);
 					p.shared.beat_repeat_committed = p.shared.beat_repeat_pending;
+					if (p.shared.beat_repeat_committed == 0xFF) {
+						orbit_pickup = false; // returning to off, reset for next entry
+					} else if (was_off) {
+						const auto len = p.slot.settings.GetLength();
+						const auto global_step =
+							static_cast<uint32_t>(p.GetPlayheadPage()) * Model::Sequencer::Steps::PerPage
+							+ p.GetPlayheadStepOnPage();
+						orbit_pickup_center = static_cast<float>(global_step)
+						                    / static_cast<float>(len > 0u ? len : 1u);
+						orbit_pickup_slider = slider_now;
+						orbit_pickup = true;
+					}
 				}
 			}
 
@@ -190,6 +219,12 @@ protected:
 	static constexpr uint32_t toggle_feedback_ticks = Clock::MsToTicks(600);
 	static constexpr int32_t pickup_threshold = 80;
 	static constexpr uint8_t phase_lock_encoder = 7;
+
+	// Beat repeat entry: orbit_center snapped to playhead on shift release, slider takes
+	// over once it moves away from its position at the moment of entry (pickup mode).
+	bool orbit_pickup = false;
+	uint16_t orbit_pickup_slider = 0;
+	float orbit_pickup_center = 0.f;
 	// Debounce durations indexed by beat_repeat_debounce_idx (0=fastest, 7=slowest). Default = 2 (150ms).
 	static constexpr std::array<uint32_t, 8> beat_repeat_debounce_table = {
 		Clock::MsToTicks(50),  Clock::MsToTicks(100), Clock::MsToTicks(150), Clock::MsToTicks(250),
