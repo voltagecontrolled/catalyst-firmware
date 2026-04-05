@@ -117,16 +117,15 @@ public:
 
 			// Orbit center update — beat repeat modes freeze it whenever SHIFT is held so the
 			// looped step doesn't scrub as the slider moves (e.g. returning to zero).
-			// On first entry from off, it is snapped to the playhead step (pickup mode) so the
-			// loop starts on the step the user timed with their ear rather than the slider position.
+			// On first entry from off, it is snapped to the current player step at shift release
+			// so the loop locks immediately to the beat the user timed. Slider takes over once
+			// it moves away from where it was at entry (pickup mode).
 			if (orbit_pickup && p.shared.data.slider_perf_mode >= 2) {
-				// Entry pickup: orbit_center was snapped by the sequencer on the first clock tick;
-				// leave it alone until the slider moves away from its position at shift release.
+				// Entry pickup: hold snapped orbit_center until slider moves away
 				if (std::abs((int32_t)slider_now - (int32_t)orbit_pickup_slider) > pickup_threshold) {
 					orbit_pickup = false;
 					p.shared.orbit_center = static_cast<float>(effective_slider) / 4095.f;
 				}
-				// else: don't touch orbit_center — sequencer wrote the correct step there
 			} else if (p.shared.data.slider_perf_mode >= 2 && c.button.shift.is_high()) {
 				// SHIFT held: freeze orbit_center so the active loop step doesn't change
 			} else {
@@ -146,7 +145,6 @@ public:
 					p.shared.beat_repeat_pending = 0xFF;
 					if (!c.button.shift.is_high()) {
 						p.shared.beat_repeat_committed = 0xFF;
-						p.shared.beat_repeat_snap_pending = false;
 						orbit_pickup = false;
 					}
 				} else {
@@ -165,18 +163,21 @@ public:
 				}
 
 				// Shift release: commit pending zone immediately.
-				// On first entry from off: snap orbit_center to the current playhead step so the
-				// loop starts on the step the user timed with their ear, not the slider position.
+				// On first entry from off: snap orbit_center to the current player step right now
+				// (UI runs before sequencer this tick) so the loop locks to this beat on the very
+				// first fire with no clock-sync delay.
 				if (c.button.shift.just_went_low()) {
 					const bool was_off = (p.shared.beat_repeat_committed == 0xFF);
 					p.shared.beat_repeat_committed = p.shared.beat_repeat_pending;
 					if (p.shared.beat_repeat_committed == 0xFF) {
 						orbit_pickup = false;
-						p.shared.beat_repeat_snap_pending = false;
 					} else if (was_off) {
-						// Flag the sequencer to snap orbit_center on the first clock tick after
-						// activation — the step that fires first is the step that gets looped.
-						p.shared.beat_repeat_snap_pending = true;
+						const auto len = p.slot.settings.GetLength();
+						const auto global_step =
+							static_cast<uint32_t>(p.GetPlayheadPage()) * Model::Sequencer::Steps::PerPage
+							+ p.GetPlayheadStepOnPage();
+						p.shared.orbit_center =
+							static_cast<float>(global_step) / static_cast<float>(len > 0u ? len : 1u);
 						orbit_pickup_slider = slider_now;
 						orbit_pickup = true;
 					}

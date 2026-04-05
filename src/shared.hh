@@ -163,7 +163,6 @@ public:
 	bool scrub_hold_pending = false;
 	uint32_t scrub_hold_start = 0;
 	bool scrub_settings_entry_requested = false;
-	bool beat_repeat_snap_pending = false; // set by UI on shift-release entry; consumed by sequencer on first clock_ticked
 	bool do_save_macro = false;
 	bool do_save_seq = false;
 	bool do_save_shared = false;

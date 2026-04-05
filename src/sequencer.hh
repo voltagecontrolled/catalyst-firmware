@@ -127,7 +127,6 @@ class Interface {
 	std::array<uint8_t, Model::NumChans> orbit_step_prev{};
 	uint32_t beat_repeat_countdown = 0;
 	float beat_repeat_phase = 0.f;
-	bool beat_repeat_synced = false; // true once the first clock tick after activation has fired
 
 public:
 	Slot slot;
@@ -315,28 +314,7 @@ public:
 						const uint32_t safe_period = is_cyan
 							? std::max<uint32_t>(1u, beat_period * div_num_4[zone] / div_denom_4[zone])
 							: std::max<uint32_t>(1u, beat_period * div_num_8[zone] / div_denom_8[zone]);
-						if (!beat_repeat_synced) {
-							// Hold at phase 0 until the next master clock tick so the loop
-							// starts on the step grid rather than at a random phase offset.
-							beat_repeat_phase = 0.f;
-							if (clock_ticked) {
-								beat_repeat_synced = true;
-								// If the UI flagged a snap (shift-release entry from off), lock
-								// orbit_center to whichever step is firing right now. This is the
-								// step the user will hear as the first beat of the repeat loop,
-								// so it's the right one to lock regardless of reaction-time lag.
-								if (shared.beat_repeat_snap_pending && cur_channel < Model::NumChans) {
-									const auto len = slot.settings.GetLengthOrGlobal(cur_channel);
-									if (len > 0) {
-										const auto step = player.GetRelativeStep(cur_channel, 0);
-										shared.orbit_center = static_cast<float>(step) / static_cast<float>(len);
-									}
-									shared.beat_repeat_snap_pending = false;
-								}
-								orbit_should_advance = true;
-								beat_repeat_countdown = safe_period;
-							}
-						} else if (beat_repeat_countdown == 0) {
+						if (beat_repeat_countdown == 0) {
 							beat_repeat_phase = 0.f;
 							orbit_should_advance = true;
 							beat_repeat_countdown = safe_period;
@@ -346,7 +324,6 @@ public:
 							beat_repeat_countdown--;
 						}
 					} else {
-						beat_repeat_synced = false;
 						beat_repeat_countdown = 0;
 						beat_repeat_phase = 0.f;
 					}
