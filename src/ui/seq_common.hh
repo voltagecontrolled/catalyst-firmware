@@ -117,17 +117,20 @@ public:
 			// When locked/picking-up, treat locked_raw as the effective slider position
 			const uint16_t effective_slider = (phase_locked || picking_up) ? locked_raw : slider_now;
 
-			// Orbit center: in beat repeat entry pickup mode, hold at the playhead-snapped value
-			// until the slider moves away from where it was on shift release. This lets the user
-			// time the loop start step rhythmically (release shift on the beat) rather than
-			// having to nail the slider position within a zone. Slider takes over once it moves.
+			// Orbit center update — beat repeat modes freeze it whenever SHIFT is held so the
+			// looped step doesn't scrub as the slider moves (e.g. returning to zero).
+			// On first entry from off, it is snapped to the playhead step (pickup mode) so the
+			// loop starts on the step the user timed with their ear rather than the slider position.
 			if (orbit_pickup && p.shared.data.slider_perf_mode >= 2) {
+				// Entry pickup: hold at playhead-snapped value until slider moves away
 				if (std::abs((int32_t)slider_now - (int32_t)orbit_pickup_slider) > pickup_threshold) {
 					orbit_pickup = false;
 					p.shared.orbit_center = static_cast<float>(effective_slider) / 4095.f;
 				} else {
 					p.shared.orbit_center = orbit_pickup_center;
 				}
+			} else if (p.shared.data.slider_perf_mode >= 2 && c.button.shift.is_high()) {
+				// SHIFT held: freeze orbit_center so the active loop step doesn't change
 			} else {
 				p.shared.orbit_center = static_cast<float>(effective_slider) / 4095.f;
 			}
