@@ -56,9 +56,11 @@ public:
 					else if (inc < 0 && w > 0) { w--; }
 				}
 			} else if (encoder == direction_encoder) {
-				auto &d = p.shared.data.orbit_direction;
-				if (inc > 0) { d = (d + 1) % 4; }
-				else if (inc < 0) { d = (d + 3) % 4; }
+				if (p.shared.data.slider_perf_mode == 1) {
+					auto &d = p.shared.data.orbit_direction;
+					if (inc > 0 && d < 3) { d++; }
+					else if (inc < 0 && d > 0) { d--; }
+				}
 			} else if (encoder == lock_encoder) {
 				DoLockToggle();
 			}
@@ -94,10 +96,14 @@ public:
 			c.SetEncoderLed(width_encoder, Palette::off.blend(Palette::orange, brightness));
 		}
 
-		// Encoder 4: orbit direction (green=fwd, blue=bck, orange=ping-pong, lavender=random)
-		static constexpr std::array<Color, 4> direction_colors = {
-		    Palette::green, Palette::blue, Palette::orange, Palette::lavender};
-		c.SetEncoderLed(direction_encoder, direction_colors[p.shared.data.orbit_direction]);
+		// Encoder 4: orbit direction — only active in granular mode
+		if (p.shared.data.slider_perf_mode == 1) {
+			static constexpr std::array<Color, 4> direction_colors = {
+			    Palette::green, Palette::blue, Palette::orange, Palette::lavender};
+			c.SetEncoderLed(direction_encoder, direction_colors[p.shared.data.orbit_direction]);
+		} else {
+			c.SetEncoderLed(direction_encoder, Palette::off);
+		}
 
 		// Encoder 8: lock state (red = locked, off = unlocked)
 		c.SetEncoderLed(lock_encoder, phase_locked ? Palette::red : Palette::off);

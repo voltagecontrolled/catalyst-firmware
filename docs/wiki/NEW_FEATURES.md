@@ -48,7 +48,7 @@ Default behavior. The slider continuously positions the playhead across the full
 The slider positions a **looping orbit window** within the sequence. The sequencer repeats steps within that window at the normal clock rate, similar to how granular synthesis loops a grain of audio.
 
 - **Enc 3 (Width):** Size of the window, as a percentage of pattern length. At 0% the orbit is off and the slider falls back to standard phase scrub. At 100% the orbit covers the full pattern. LED scales from unlit (0%) to bright orange (100%).
-- **Enc 4 (Direction):** Playback direction within the window.
+- **Enc 4 (Direction):** Playback direction within the window. Turn CW to advance through modes, CCW to go back. Enc 4 is unlit and inactive in all other modes.
   - **Green** — Forward (left to right through the window)
   - **Blue** — Backward
   - **Orange** — Ping-pong (bounces between window edges)
@@ -80,7 +80,7 @@ The slider is divided into 8 equal zones:
 | 8 | 1/32 | Thirty-second |
 
 - **Enc 3 (Debounce):** How long the slider must sit in a zone before it commits. LED scales dim→bright white. Default is 150ms; range is 50ms–1500ms. A longer debounce makes it easier to swipe through zones without accidentally committing. This setting is transient and resets on reboot.
-- **Enc 4 (Direction):** Orbit direction within the window, same as Granular.
+- **Enc 4:** Unlit and inactive in beat repeat modes.
 
 **Use case:** hold the slider on 1/8 during a breakdown for a stuttering repeat effect. Slide right for increasingly rapid subdivisions. Set Width > 0 (using Granular enc 3 before switching to beat repeat) to cycle through a small phrase at the repeat rate rather than hammering a single step.
 
@@ -97,7 +97,7 @@ Like Blue but with four wider zones — easier to target by hand during performa
 | 3 | 1/8 | Eighth note |
 | 4 | 1/16 | Sixteenth note |
 
-Enc 3 (Debounce) and Enc 4 (Direction) work the same as in Blue mode. Use this when you want broad, clean division changes with minimal risk of landing on a triplet by accident.
+Enc 3 (Debounce) works the same as in Blue mode. Enc 4 is unlit and inactive. Use Cyan when you want broad, clean division changes with minimal risk of landing on a triplet by accident.
 
 ---
 
