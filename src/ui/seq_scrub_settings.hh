@@ -16,7 +16,6 @@ public:
 	using Usual::Usual;
 
 	void Init() override {
-		scrub_settings_entry_requested = false;
 		c.button.fine.clear_events();
 		c.button.morph.clear_events();
 		c.button.play.clear_events();

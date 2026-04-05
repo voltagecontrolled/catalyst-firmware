@@ -158,6 +158,10 @@ public:
 	uint8_t beat_repeat_committed = 0xFF;   // 0xFF = off; 0-7 = active division index
 	uint8_t beat_repeat_pending = 0xFF;     // candidate zone while debouncing
 	uint32_t beat_repeat_pending_since = 0; // tick when pending zone was entered
+	// Scrub settings entry hold — shared so timer survives mode switches (e.g. Morph→Main)
+	bool scrub_hold_pending = false;
+	uint32_t scrub_hold_start = 0;
+	bool scrub_settings_entry_requested = false;
 	bool do_save_macro = false;
 	bool do_save_seq = false;
 	bool do_save_shared = false;

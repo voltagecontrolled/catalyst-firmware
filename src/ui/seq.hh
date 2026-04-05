@@ -41,7 +41,7 @@ public:
 	}
 	//	using Usual::Usual;
 	void Init() override {
-		scrub_settings_entry_requested = false;
+		p.shared.scrub_settings_entry_requested = false;
 		c.button.fine.clear_events();
 		c.button.bank.clear_events();
 		c.button.add.clear_events();
@@ -52,8 +52,8 @@ public:
 	}
 
 	void Update() override {
-		if (scrub_settings_entry_requested) {
-			scrub_settings_entry_requested = false;
+		if (p.shared.scrub_settings_entry_requested) {
+			p.shared.scrub_settings_entry_requested = false;
 			SwitchUiMode(scrub_settings);
 			return;
 		}

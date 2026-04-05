@@ -80,22 +80,22 @@ public:
 
 		// COPY+GLIDE: short release = lock toggle; 3s hold = scrub settings entry.
 		// Trigger on whichever button is pressed second so both press orders work.
-		// GLIDE-first briefly enters morph mode; pressing COPY exits it and starts the timer here.
+		// Timer is in p.shared so it survives Morph→Main mode switches (GLIDE-first path).
 		const bool both_held = c.button.fine.is_high() && c.button.morph.is_high();
 		const bool either_just_pressed = c.button.fine.just_went_high() || c.button.morph.just_went_high();
-		if (both_held && either_just_pressed && !scrub_hold_pending) {
-			scrub_hold_pending = true;
-			scrub_hold_start = Controls::TimeNow();
+		if (both_held && either_just_pressed && !p.shared.scrub_hold_pending) {
+			p.shared.scrub_hold_pending = true;
+			p.shared.scrub_hold_start = Controls::TimeNow();
 		}
-		if (scrub_hold_pending) {
+		if (p.shared.scrub_hold_pending) {
 			if (!c.button.fine.is_high()) {
-				scrub_hold_pending = false; // COPY released first — abort, no toggle
+				p.shared.scrub_hold_pending = false; // COPY released first — abort, no toggle
 			} else if (c.button.morph.just_went_low()) {
-				scrub_hold_pending = false;
+				p.shared.scrub_hold_pending = false;
 				DoLockToggle(); // GLIDE released with COPY still held — short press
-			} else if (Controls::TimeNow() - scrub_hold_start >= scrub_settings_hold_ticks) {
-				scrub_hold_pending = false;
-				scrub_settings_entry_requested = true;
+			} else if (Controls::TimeNow() - p.shared.scrub_hold_start >= scrub_settings_hold_ticks) {
+				p.shared.scrub_hold_pending = false;
+				p.shared.scrub_settings_entry_requested = true;
 			}
 		}
 
@@ -153,8 +153,6 @@ public:
 		}
 	}
 
-	bool scrub_settings_entry_requested = false;
-
 protected:
 	bool phase_locked = false;
 	bool picking_up = false;
@@ -162,9 +160,6 @@ protected:
 	uint32_t lock_toggle_time = 0;
 	uint16_t locked_raw = 0;
 
-	// Scrub hold detection
-	bool scrub_hold_pending = false;
-	uint32_t scrub_hold_start = 0;
 	static constexpr uint32_t scrub_settings_hold_ticks = Clock::MsToTicks(3000);
 
 	// Slider movement tracking for indicator
