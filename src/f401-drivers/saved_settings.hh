@@ -19,9 +19,14 @@ class SavedSettings {
 	WearLevel<mdrivlib::FlashBlock<SharedData, SharedSettingsFlashAddr, SharedSettingsSectorSize>>
 		shared_settings_flash;
 
-	static constexpr uint32_t CurrentSharedSettingsVersionTag = Legacy::V1_1__V1_2::Shared::tag + 2;
+	static constexpr uint32_t CurrentSharedSettingsVersionTag = Legacy::V1_1__V1_2::Shared::tag + 3;
 	// v1.4.5 tag (tag+1): SharedData without phase lock persistence or scrub settings fields
 	static constexpr uint32_t V1_4_5_SharedSettingsVersionTag = Legacy::V1_1__V1_2::Shared::tag + 1;
+	// v1.4.6-alpha tag (tag+2): SharedData with scrub settings fields; dac_calibration may be
+	// corrupted by the alpha1 migration bug (missing alignas caused a 2-byte layout shift in the
+	// V1_4_5_SharedData overlay, corrupting calibration on any device that ran alpha1 or alpha2).
+	// Cannot distinguish good from bad tag+2 data, so calibration is always reset to defaults.
+	static constexpr uint32_t V1_4_6_Alpha_SharedSettingsVersionTag = Legacy::V1_1__V1_2::Shared::tag + 2;
 
 public:
 	bool read(SeqModeData &data) {
@@ -67,6 +72,44 @@ public:
 				data.custom_scale = old.custom_scale;
 				data.palette = old.palette;
 				// new fields retain their zero-initialized defaults (unlocked, no quantization, all tracks active)
+				shared_settings_flash.erase();
+				data.SettingsVersionTag = CurrentSharedSettingsVersionTag;
+				shared_settings_flash.write(data);
+				return shared_settings_flash.read(data);
+			}
+		} else if (magic_number == V1_4_6_Alpha_SharedSettingsVersionTag) {
+			// v1.4.6-alpha1/2 may have corrupted dac_calibration via a struct overlay bug.
+			// Preserve everything else; reset calibration to defaults (recalibration required).
+			struct V1_4_6_Alpha_SharedData {
+				uint32_t SettingsVersionTag alignas(4);
+				Model::Mode saved_mode alignas(4);
+				Calibration::Dac::Data dac_calibration alignas(4);
+				Quantizer::CustomScales custom_scale;
+				std::array<uint8_t, Model::NumChans> palette;
+				uint8_t phase_locked;
+				uint8_t quantized_scrub;
+				uint8_t scrub_ignore_mask;
+				uint8_t slider_perf_mode;
+				uint16_t locked_raw;
+				uint8_t orbit_width;
+				uint8_t orbit_direction;
+				bool validate() const { return SettingsVersionTag == V1_4_6_Alpha_SharedSettingsVersionTag; }
+			};
+			WearLevel<mdrivlib::FlashBlock<V1_4_6_Alpha_SharedData, SharedSettingsFlashAddr, SharedSettingsSectorSize>>
+				alpha_flash;
+			V1_4_6_Alpha_SharedData old{};
+			if (alpha_flash.read(old)) {
+				data.saved_mode = old.saved_mode;
+				// dac_calibration intentionally NOT copied -- may be corrupted by alpha1/2 bug
+				data.custom_scale = old.custom_scale;
+				data.palette = old.palette;
+				data.phase_locked = old.phase_locked;
+				data.quantized_scrub = old.quantized_scrub;
+				data.scrub_ignore_mask = old.scrub_ignore_mask;
+				data.slider_perf_mode = old.slider_perf_mode;
+				data.locked_raw = old.locked_raw;
+				data.orbit_width = old.orbit_width;
+				data.orbit_direction = old.orbit_direction;
 				shared_settings_flash.erase();
 				data.SettingsVersionTag = CurrentSharedSettingsVersionTag;
 				shared_settings_flash.write(data);
