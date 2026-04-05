@@ -63,6 +63,7 @@ public:
 				std::array<uint8_t, Model::NumChans> palette;
 				bool validate() const { return SettingsVersionTag == V1_4_5_SharedSettingsVersionTag; }
 			};
+			static_assert(sizeof(V1_4_5_SharedData) == sizeof(SharedData) - 8, "V1_4_5_SharedData layout mismatch — must be exactly 8 bytes smaller than SharedData (the 8 fields added in v1.4.6)");
 			WearLevel<mdrivlib::FlashBlock<V1_4_5_SharedData, SharedSettingsFlashAddr, SharedSettingsSectorSize>>
 				v1_4_5_flash;
 			V1_4_5_SharedData old{};
@@ -95,6 +96,7 @@ public:
 				uint8_t orbit_direction;
 				bool validate() const { return SettingsVersionTag == V1_4_6_Alpha_SharedSettingsVersionTag; }
 			};
+			static_assert(sizeof(V1_4_6_Alpha_SharedData) == sizeof(SharedData), "V1_4_6_Alpha_SharedData layout mismatch — must match SharedData exactly");
 			WearLevel<mdrivlib::FlashBlock<V1_4_6_Alpha_SharedData, SharedSettingsFlashAddr, SharedSettingsSectorSize>>
 				alpha_flash;
 			V1_4_6_Alpha_SharedData old{};
