@@ -2,6 +2,99 @@
 
 This page covers features added beyond the stock 4ms Catalyst Sequencer firmware. All features are Sequencer mode only unless noted.
 
+> **v1.4.6 is a pre-release.** Features in this section are in testing and may change before a stable release.
+
+---
+
+## Phase Scrub Performance Page (v1.4.6 pre-release)
+
+**Entry:** Hold **COPY + GLIDE** for 3 seconds.  
+**Exit:** **COPY + GLIDE** (any duration) or **Play/Reset**.
+
+A dedicated performance page for Phase Scrub. All settings are stored and survive reboots.
+
+### Page controls at a glance
+
+| Encoder | Function | LED |
+|---------|----------|-----|
+| 1 | Quantize | Orange = on, unlit = off |
+| 2 | Slider Performance Mode | Unlit / green / blue |
+| 3 | Granular Width | Unlit at 0%, dim→bright orange |
+| 4 | Orbit Direction | Green / blue / orange / lavender |
+| 8 | Phase Scrub Lock | Red = locked, unlit = unlocked |
+
+**Page buttons:** Toggle per-track scrub participation. Lit = track follows scrub; unlit = track ignores scrub and plays normally.
+
+---
+
+### Quantize (Enc 1)
+
+Snaps the phase scrub position to the nearest step boundary. The playhead jumps cleanly between steps instead of continuously scrubbing. Particularly useful with Granular mode.
+
+---
+
+### Slider Performance Mode (Enc 2)
+
+Selects what the Phase Scrub slider does in real time. Turn CW to step through modes, CCW to go back.
+
+#### Unlit — Standard Phase Scrub
+
+Default behavior. The slider continuously positions the playhead across the full pattern.
+
+---
+
+#### Green — Granular Sequencing
+
+The slider positions a **looping orbit window** within the sequence. The sequencer repeats steps within that window at the normal clock rate, similar to how granular synthesis loops a grain of audio.
+
+- **Enc 3 (Width):** Size of the window, as a percentage of pattern length. At 0% the orbit is off and the slider falls back to standard phase scrub. At 100% the orbit covers the full pattern.
+- **Enc 4 (Direction):** Playback direction within the window.
+  - **Green** — Forward (left to right through the window)
+  - **Blue** — Backward
+  - **Orange** — Ping-pong (bounces between window edges)
+  - **Lavender** — Random (jumps to a random step in the window each tick)
+
+The orbit position counter advances continuously. Sliding to a new center moves the window without resetting the counter — the orbit keeps playing uninterrupted, and the window shifts underneath it. Quantize (Enc 1) snaps the window center to the nearest step boundary.
+
+**Use case:** position the slider at a short phrase within a longer sequence and have it loop at the pattern's clock rate. Move the slider during performance to jump to different sections. Gradually widen the window to let more of the pattern through.
+
+---
+
+#### Blue — Beat Repeat
+
+The slider selects a **rhythmic subdivision rate** at which the current orbit repeats. The beat repeat fires independently of the master clock, locked to BPM.
+
+The slider is divided into 8 equal zones. Swipe quickly past zones to audition them; a **150ms debounce** prevents an accidental commit. Slide to the minimum (fully left) to turn beat repeat off.
+
+| Zone | Division | Feel |
+|------|----------|------|
+| 1 | 1/2 | Half note |
+| 2 | 1/4 | Quarter note |
+| 3 | 1/4T | Quarter triplet |
+| 4 | 1/8 | Eighth note |
+| 5 | 1/8T | Eighth triplet |
+| 6 | 1/16 | Sixteenth note |
+| 7 | 1/16T | Sixteenth triplet |
+| 8 | 1/32 | Thirty-second |
+
+Enc 3 and Enc 4 apply as in Granular mode — width controls how many steps cycle at the repeat rate, direction controls the order.
+
+**Use case:** hold the slider on 1/8 during a breakdown for a stuttering repeat effect. Slide right for increasingly rapid subdivisions. Set Width > 0 to cycle through a small phrase at the repeat rate rather than hammering a single step.
+
+---
+
+### Phase Scrub Lock persistence (v1.4.6 pre-release)
+
+Phase Scrub Lock (COPY + GLIDE short press) now **survives power cycles**. On boot with the lock restored, the slider enters pickup mode automatically — the playhead stays at the locked position until the slider physically reaches it.
+
+---
+
+## Sub-step Page Navigation (v1.4.6 pre-release)
+
+**Combo:** SHIFT + PAGE button (while in sub-step mask edit mode)
+
+For sequences longer than 8 steps, you can now change pages without exiting sub-step edit mode. Previously the only way to navigate was to exit (losing edit context), change page, and re-enter.
+
 ---
 
 ## Phase Scrub Lock (v1.4.1)

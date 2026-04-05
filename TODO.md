@@ -6,16 +6,6 @@ Items are grouped by target version where known, then backlog.
 
 ## v1.4.6
 
-### Sub-step page navigation
-
-**Area:** Sub-step mask edit mode (`src/ui/seq_substep_mask.hh`)
-
-Sequences longer than 8 steps span multiple pages. There is currently no way to change pages while inside sub-step edit mode -- the only exit path is Tap Tempo or Play/Reset, which destroys the edit context.
-
-**Proposed:** SHIFT + PAGE button changes page without exiting the mode. The focused step should follow or clear on page change; exact behavior TBD during implementation.
-
----
-
 ### Conditional auto-reset on firmware upgrade
 
 
@@ -29,16 +19,6 @@ Currently any `current_tag` mismatch wipes all presets on first boot. This is ap
 May require splitting `current_tag` into two values: `layout_tag` (increment only on struct layout breaks) and `feature_tag` (increment on any additive change, used for migration).
 
 ---
-
-### Phase Scrub lock persistence
-
-**Area:** `src/shared.hh` `Shared::Data`, `src/ui/seq_common.hh`, `src/f401-drivers/saved_settings.hh`
-
-Phase Scrub lock state is lost on reboot. Add `bool phase_locked` and `uint16_t locked_raw` (4 bytes padded) to `Shared::Data` so the lock state and locked slider position survive power cycles.
-
-On boot with lock restored, `locked_phase` is recomputed from `locked_raw + current CV` (same formula used when locking live). The slider automatically enters pickup mode since its physical position will have drifted. Save `Shared::Data` (via the existing `do_save_shared` flag) whenever lock state toggles.
-
-Requires a `CurrentSharedSettingsVersionTag` bump in `saved_settings.hh`, which triggers the existing migration path -- new fields fill with defaults (unlocked), no preset loss.
 
 ---
 
@@ -84,19 +64,6 @@ Requires `current_tag` bump (coordinate with other v1.4.6 tag bumps). Uses bits 
 CCW encoder positions in gate probability mode replace random percentage with a deterministic cycle. CW (1--15) = percentage probability (current behavior). CCW (1--14) = iterative: fires p out of every n steps in rotation (1/2, 2/2, 1/3... up to 5/5).
 
 Requires 1 extra bit in the probability field to represent negative (iterative) values. Candidate: repurpose gate-channel morph bits (morph is unused on gate channels, already partially repurposed for ratchet/repeat display). Player needs a per-channel cycle counter analogous to `repeat_ticks_remaining`.
-
----
-
-### Phase Scrub Settings
-
-**Area:** `src/ui/seq_common.hh`, `src/ui/seq.hh`, global settings storage
-
-Extends Phase Scrub Lock with two persistent options. Full spec: `docs/planned/PHASESCRUB_SETTINGS.md`.
-
-- **Quantized mode (global):** Phase Scrub offset only takes effect at step boundaries.
-- **Per-track ignore (per-track):** Individual tracks excluded from Phase Scrub entirely.
-
-**Entry:** COPY + GLIDE held 3 seconds.
 
 ---
 
