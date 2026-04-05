@@ -172,7 +172,7 @@ public:
 	uint8_t GetOrbitStep(uint8_t chan) const { return orbit_step[chan]; }
 	uint8_t GetOrbitStepPrev(uint8_t chan) const { return orbit_step_prev[chan]; }
 	float GetEffectiveStepPhase(uint8_t chan) const {
-		if (orbit_active && shared.data.slider_perf_mode == 2) {
+		if (orbit_active && shared.data.slider_perf_mode >= 2) {
 			return beat_repeat_phase;
 		}
 		return player.GetStepPhase(chan);
@@ -301,14 +301,19 @@ public:
 					orbit_should_advance = clock_ticked && orbit_active;
 					beat_repeat_phase = 0.f;
 				} else {
-					// Beat repeat (perf_mode == 2)
+					// Beat repeat: mode 2 = 8 zones with triplets, mode 3 = 4 wide zones no triplets
 					orbit_active = (shared.beat_repeat_committed != 0xFF);
 					if (orbit_active) {
-						static constexpr std::array<uint32_t, 8> div_num   = {2, 1, 2, 1, 1, 1, 1, 1};
-						static constexpr std::array<uint32_t, 8> div_denom = {1, 1, 3, 2, 3, 4, 6, 8};
-						const auto zone = shared.beat_repeat_committed;
-						const uint32_t safe_period =
-							std::max<uint32_t>(1u, beat_period * div_num[zone] / div_denom[zone]);
+						static constexpr std::array<uint32_t, 8> div_num_8   = {2, 1, 2, 1, 1, 1, 1, 1};
+						static constexpr std::array<uint32_t, 8> div_denom_8 = {1, 1, 3, 2, 3, 4, 6, 8};
+						static constexpr std::array<uint32_t, 4> div_num_4   = {2, 1, 1, 1};
+						static constexpr std::array<uint32_t, 4> div_denom_4 = {1, 1, 2, 4};
+						const bool is_cyan = (perf_mode == 3);
+						const auto zone = std::min(shared.beat_repeat_committed,
+						                           static_cast<uint8_t>(is_cyan ? 3 : 7));
+						const uint32_t safe_period = is_cyan
+							? std::max<uint32_t>(1u, beat_period * div_num_4[zone] / div_denom_4[zone])
+							: std::max<uint32_t>(1u, beat_period * div_num_8[zone] / div_denom_8[zone]);
 						if (beat_repeat_countdown == 0) {
 							beat_repeat_phase = 0.f;
 							orbit_should_advance = true;

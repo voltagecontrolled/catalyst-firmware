@@ -41,10 +41,20 @@ public:
 				auto &mode = p.shared.data.slider_perf_mode;
 				if (inc > 0 && mode < 3) { mode++; }
 				else if (inc < 0 && mode > 0) { mode--; }
+				// Clear beat repeat state on any mode switch to avoid stale zone index
+				p.shared.beat_repeat_committed = 0xFF;
+				p.shared.beat_repeat_pending = 0xFF;
 			} else if (encoder == width_encoder) {
-				auto &w = p.shared.data.orbit_width;
-				if (inc > 0 && w < 100) { w++; }
-				else if (inc < 0 && w > 0) { w--; }
+				if (p.shared.data.slider_perf_mode >= 2) {
+					// In beat repeat modes, enc 3 adjusts debounce delay (transient, not saved)
+					auto &d = p.shared.beat_repeat_debounce_idx;
+					if (inc > 0 && d < 7) d++;
+					else if (inc < 0 && d > 0) d--;
+				} else {
+					auto &w = p.shared.data.orbit_width;
+					if (inc > 0 && w < 100) { w++; }
+					else if (inc < 0 && w > 0) { w--; }
+				}
 			} else if (encoder == direction_encoder) {
 				auto &d = p.shared.data.orbit_direction;
 				if (inc > 0) { d = (d + 1) % 4; }
@@ -73,8 +83,11 @@ public:
 		    Palette::off, Palette::green, Palette::blue, Palette::cyan};
 		c.SetEncoderLed(perf_mode_encoder, perf_mode_colors[p.shared.data.slider_perf_mode]);
 
-		// Encoder 3: granular width (off at 0, dim→bright orange as width increases)
-		if (p.shared.data.orbit_width == 0) {
+		// Encoder 3: granular width (orange) in granular mode; debounce delay (white) in beat repeat modes
+		if (p.shared.data.slider_perf_mode >= 2) {
+			const auto brightness = p.shared.beat_repeat_debounce_idx / 7.f;
+			c.SetEncoderLed(width_encoder, Palette::off.blend(Palette::full_white, brightness));
+		} else if (p.shared.data.orbit_width == 0) {
 			c.SetEncoderLed(width_encoder, Palette::off);
 		} else {
 			const auto brightness = p.shared.data.orbit_width / 100.f;

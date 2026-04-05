@@ -117,21 +117,35 @@ public:
 			// Orbit / beat repeat: set orbit_center from slider; orbit advance runs in sequencer Update()
 			p.shared.orbit_center = static_cast<float>(slider_now) / 4095.f;
 
-			if (p.shared.data.slider_perf_mode == 2) {
-				// Beat repeat: debounce slider zone before committing division
+			if (p.shared.data.slider_perf_mode >= 2) {
+				// Beat repeat: blue (mode 2) = 8 zones with triplets, cyan (mode 3) = 4 wide zones no triplets
+				const bool is_cyan = (p.shared.data.slider_perf_mode == 3);
+				const uint8_t num_zones = is_cyan ? 4 : 8;
+				const uint16_t zone_width = 4096 / num_zones; // 1024 or 512
+
 				if (slider_now == 0) {
 					p.shared.beat_repeat_pending = 0xFF;
-					p.shared.beat_repeat_committed = 0xFF;
+					if (!c.button.shift.is_high()) {
+						p.shared.beat_repeat_committed = 0xFF;
+					}
 				} else {
-					const uint8_t zone =
-						std::min(static_cast<uint8_t>((slider_now - 1) / 512), static_cast<uint8_t>(7));
+					const uint8_t zone = std::min(
+						static_cast<uint8_t>((slider_now - 1) / zone_width),
+						static_cast<uint8_t>(num_zones - 1));
 					if (zone != p.shared.beat_repeat_pending) {
 						p.shared.beat_repeat_pending = zone;
 						p.shared.beat_repeat_pending_since = Controls::TimeNow();
-					} else if (Controls::TimeNow() - p.shared.beat_repeat_pending_since >=
-					           beat_repeat_debounce_ticks) {
-						p.shared.beat_repeat_committed = p.shared.beat_repeat_pending;
+					} else if (!c.button.shift.is_high()) {
+						const auto debounce = beat_repeat_debounce_table[p.shared.beat_repeat_debounce_idx];
+						if (Controls::TimeNow() - p.shared.beat_repeat_pending_since >= debounce) {
+							p.shared.beat_repeat_committed = p.shared.beat_repeat_pending;
+						}
 					}
+				}
+
+				// Shift release: immediately commit wherever the slider is
+				if (c.button.shift.just_went_low()) {
+					p.shared.beat_repeat_committed = p.shared.beat_repeat_pending;
 				}
 			}
 
@@ -171,7 +185,11 @@ protected:
 	static constexpr uint32_t toggle_feedback_ticks = Clock::MsToTicks(600);
 	static constexpr int32_t pickup_threshold = 80;
 	static constexpr uint8_t phase_lock_encoder = 7;
-	static constexpr uint32_t beat_repeat_debounce_ticks = Clock::MsToTicks(150);
+	// Debounce durations indexed by beat_repeat_debounce_idx (0=fastest, 7=slowest). Default = 2 (150ms).
+	static constexpr std::array<uint32_t, 8> beat_repeat_debounce_table = {
+		Clock::MsToTicks(50),  Clock::MsToTicks(100), Clock::MsToTicks(150), Clock::MsToTicks(250),
+		Clock::MsToTicks(400), Clock::MsToTicks(600), Clock::MsToTicks(900), Clock::MsToTicks(1500),
+	};
 
 	void DoLockToggle() {
 		if (!phase_locked && !picking_up) {

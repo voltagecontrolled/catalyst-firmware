@@ -111,7 +111,7 @@ struct Data {
 	uint8_t phase_locked = 0;         // persisted lock state (bool)
 	uint8_t quantized_scrub = 0;      // bool: phase scrub snaps to nearest step boundary
 	uint8_t scrub_ignore_mask = 0xFF; // bit N=1: track N follows scrub; bit N=0: track ignores scrub
-	uint8_t slider_perf_mode = 0;     // 0=standard, 1=granular, 2=beat-repeat, 3=beat-repeat+triplets
+	uint8_t slider_perf_mode = 0;     // 0=standard, 1=granular, 2=beat-repeat 8-zone (triplets), 3=beat-repeat 4-zone (no triplets)
 	uint16_t locked_raw = 0;          // raw slider reading when lock was engaged
 	uint8_t orbit_width = 0;          // % of pattern length (0-100)
 	uint8_t orbit_direction = 0;      // 0=fwd, 1=bck, 2=ping-pong, 3=random
@@ -155,9 +155,10 @@ public:
 	Clock::Timer colors{Model::HoldTimes::colors};
 	Blinker blinker;
 	float orbit_center = 0.f;               // normalized slider pos, updated by UI each tick
-	uint8_t beat_repeat_committed = 0xFF;   // 0xFF = off; 0-7 = active division index
+	uint8_t beat_repeat_committed = 0xFF;   // 0xFF = off; 0-N = active zone index (max depends on mode)
 	uint8_t beat_repeat_pending = 0xFF;     // candidate zone while debouncing
 	uint32_t beat_repeat_pending_since = 0; // tick when pending zone was entered
+	uint8_t beat_repeat_debounce_idx = 2;   // 0-7, indexes beat_repeat_debounce_table in seq_common.hh
 	// Scrub settings entry hold — shared so timer survives mode switches (e.g. Morph→Main)
 	bool scrub_hold_pending = false;
 	uint32_t scrub_hold_start = 0;
