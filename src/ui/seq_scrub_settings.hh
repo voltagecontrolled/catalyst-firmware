@@ -6,11 +6,11 @@
 namespace Catalyst2::Ui::Sequencer
 {
 class ScrubSettings : public Usual {
-	static constexpr uint8_t quantize_encoder  = 0;
-	static constexpr uint8_t perf_mode_encoder = 1; // granular / beat-repeat mode select
-	// encoder index 2: granular width (future)
-	// encoder index 3: granular direction / beat-repeat direction (future)
-	static constexpr uint8_t lock_encoder = 7;
+	static constexpr uint8_t quantize_encoder   = 0;
+	static constexpr uint8_t perf_mode_encoder  = 1;
+	static constexpr uint8_t width_encoder      = 2;
+	static constexpr uint8_t direction_encoder  = 3;
+	static constexpr uint8_t lock_encoder       = 7;
 
 public:
 	using Usual::Usual;
@@ -41,6 +41,14 @@ public:
 				auto &mode = p.shared.data.slider_perf_mode;
 				if (inc > 0 && mode < 3) { mode++; p.shared.do_save_shared = true; }
 				else if (inc < 0 && mode > 0) { mode--; p.shared.do_save_shared = true; }
+			} else if (encoder == width_encoder) {
+				auto &w = p.shared.data.orbit_width;
+				if (inc > 0 && w < 100) { w++; p.shared.do_save_shared = true; }
+				else if (inc < 0 && w > 0) { w--; p.shared.do_save_shared = true; }
+			} else if (encoder == direction_encoder) {
+				auto &d = p.shared.data.orbit_direction;
+				if (inc > 0) { d = (d + 1) % 4; p.shared.do_save_shared = true; }
+				else if (inc < 0) { d = (d + 3) % 4; p.shared.do_save_shared = true; }
 			} else if (encoder == lock_encoder) {
 				DoLockToggle();
 			}
@@ -66,7 +74,18 @@ public:
 		    Palette::off, Palette::green, Palette::blue, Palette::cyan};
 		c.SetEncoderLed(perf_mode_encoder, perf_mode_colors[p.shared.data.slider_perf_mode]);
 
-		// Encoders 3 & 4: granular width / direction (future — unlit)
+		// Encoder 3: granular width (off at 0, dim→bright orange as width increases)
+		if (p.shared.data.orbit_width == 0) {
+			c.SetEncoderLed(width_encoder, Palette::off);
+		} else {
+			const auto brightness = p.shared.data.orbit_width / 100.f;
+			c.SetEncoderLed(width_encoder, Palette::off.blend(Palette::orange, brightness));
+		}
+
+		// Encoder 4: orbit direction (green=fwd, blue=bck, orange=ping-pong, lavender=random)
+		static constexpr std::array<Color, 4> direction_colors = {
+		    Palette::green, Palette::blue, Palette::orange, Palette::lavender};
+		c.SetEncoderLed(direction_encoder, direction_colors[p.shared.data.orbit_direction]);
 
 		// Encoder 8: lock state (red = locked, off = unlocked)
 		c.SetEncoderLed(lock_encoder, phase_locked ? Palette::red : Palette::off);

@@ -209,9 +209,9 @@ private:
 	Model::Output::type Gate(uint8_t chan) {
 		bool out = false;
 
-		const auto step_phase = p.player.GetStepPhase(chan);
+		const auto step_phase = p.GetEffectiveStepPhase(chan);
 
-		auto steps = p.GetStepCluster_TEST(chan);
+		auto steps = p.OrbitActiveForChannel(chan) ? p.GetOrbitStepCluster(chan) : p.GetStepCluster_TEST(chan);
 
 		std::array order = {-1, 0, 1};
 
@@ -219,9 +219,9 @@ private:
 		// later steps (in time) should always override steps already in progress
 		for (int i = 0; i <= 1; i++) {
 			auto p_step = steps[i].ReadTrigDelay();
-			p_step *= p.player.RelativeStepMovementDir(chan, i - 1);
+			p_step *= p.GetEffectiveMovementDir(chan, i - 1);
 			auto step = steps[i + 1].ReadTrigDelay();
-			step *= p.player.RelativeStepMovementDir(chan, i);
+			step *= p.GetEffectiveMovementDir(chan, i);
 			if ((p_step - 1.f) > step) {
 				std::swap(order[i + 1], order[i]);
 				break;
@@ -297,16 +297,20 @@ private:
 	}
 	Model::Output::type Cv(uint8_t chan) {
 		const auto random = p.slot.settings.GetRandomOrGlobal(chan);
-		const auto prev_step = p.GetRelativeStep(chan, -1);
+		const auto prev_step = p.OrbitActiveForChannel(chan)
+		                           ? p.slot.channel[chan][p.GetOrbitStepPrev(chan)]
+		                           : p.GetRelativeStep(chan, -1);
 		const auto prev_step_random = p.player.randomvalue.ReadRelative(chan, -1, prev_step.ReadProbability());
 
-		const auto current_step = p.GetRelativeStep(chan, 0);
+		const auto current_step = p.OrbitActiveForChannel(chan)
+		                              ? p.slot.channel[chan][p.GetOrbitStep(chan)]
+		                              : p.GetRelativeStep(chan, 0);
 		const auto current_step_random = p.player.randomvalue.ReadRelative(chan, 0, current_step.ReadProbability());
 
 		const auto &scale = p.GetScale(chan);
 		auto stepval = Quantizer::Process(scale, prev_step.ReadCv(prev_step_random * random));
 		const auto distance = Quantizer::Process(scale, current_step.ReadCv(current_step_random * random)) - stepval;
-		const auto stepmorph = seqmorph(p.player.GetStepPhase(chan), current_step.ReadMorph());
+		const auto stepmorph = seqmorph(p.GetEffectiveStepPhase(chan), current_step.ReadMorph());
 		stepval += distance * stepmorph;
 		stepval = Transposer::Process(stepval, p.slot.settings.GetTransposeOrGlobal(chan));
 

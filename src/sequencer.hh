@@ -119,6 +119,15 @@ class Interface {
 	std::array<uint8_t, Model::NumChans> gate_substep_idx{}; // last seen ratchet sub-step index per gate channel
 	std::array<bool, Model::NumChans> step_fired{};           // true on the tick a channel's step advances
 
+	// Orbit / beat repeat state
+	bool orbit_active = false;
+	uint8_t orbit_pos = 0;
+	bool orbit_ping_dir = true;
+	std::array<uint8_t, Model::NumChans> orbit_step{};
+	std::array<uint8_t, Model::NumChans> orbit_step_prev{};
+	uint32_t beat_repeat_countdown = 0;
+	float beat_repeat_phase = 0.f;
+
 public:
 	Slot slot;
 	Clock::Bpm::Interface seqclock{slot.bpm};
@@ -156,6 +165,35 @@ public:
 	uint8_t GetStartupSlot() {
 		return data.startup_slot;
 	}
+	bool OrbitActive() const { return orbit_active; }
+	bool OrbitActiveForChannel(uint8_t chan) const {
+		return orbit_active && ((shared.data.scrub_ignore_mask >> chan) & 1u);
+	}
+	uint8_t GetOrbitStep(uint8_t chan) const { return orbit_step[chan]; }
+	uint8_t GetOrbitStepPrev(uint8_t chan) const { return orbit_step_prev[chan]; }
+	float GetEffectiveStepPhase(uint8_t chan) const {
+		if (orbit_active && shared.data.slider_perf_mode == 2) {
+			return beat_repeat_phase;
+		}
+		return player.GetStepPhase(chan);
+	}
+	float GetEffectiveMovementDir(uint8_t chan, int8_t relative) const {
+		if (OrbitActiveForChannel(chan)) {
+			const auto dir = shared.data.orbit_direction;
+			if (dir == 1) return -1.f;
+			if (dir == 2) return orbit_ping_dir ? 1.f : -1.f;
+			return 1.f;
+		}
+		return player.RelativeStepMovementDir(chan, relative);
+	}
+	std::array<Step, 3> GetOrbitStepCluster(uint8_t chan) {
+		std::array<Step, 3> out;
+		out[0] = slot.channel[chan][orbit_step_prev[chan]];
+		out[1] = slot.channel[chan][orbit_step[chan]];
+		out[2] = slot.channel[chan][orbit_step[chan]]; // next = current (window loops)
+		return out;
+	}
+
 	void Update(float phase, uint8_t scrub_ignore_mask = 0xFFu) {
 		const auto clock_ticked = seqclock.Update();
 
@@ -241,6 +279,105 @@ public:
 		// Record which channels advanced a step this tick (used by lavender CV replace intersection logic)
 		for (auto chan = 0u; chan < Model::NumChans; chan++) {
 			step_fired[chan] = per_chan_step[chan] > 0;
+		}
+
+		// Orbit / Beat Repeat advance
+		{
+			const auto perf_mode = shared.data.slider_perf_mode;
+			if (perf_mode == 0) {
+				orbit_active = false;
+				beat_repeat_countdown = 0;
+				beat_repeat_phase = 0.f;
+			} else {
+				const auto width_pct = shared.data.orbit_width;
+				const auto dir = shared.data.orbit_direction;
+				const auto bpm = GetGlobalDividedBpm();
+				const uint32_t beat_period = (bpm > 0.f) ? static_cast<uint32_t>(3000.f * 60.f / bpm) : 3000u;
+				bool orbit_should_advance = false;
+
+				if (perf_mode == 1) {
+					// Granular: advance on each clock tick when width > 0
+					orbit_active = (width_pct > 0);
+					orbit_should_advance = clock_ticked && orbit_active;
+					beat_repeat_phase = 0.f;
+				} else {
+					// Beat repeat (perf_mode == 2)
+					orbit_active = (shared.beat_repeat_committed != 0xFF);
+					if (orbit_active) {
+						static constexpr std::array<uint32_t, 8> div_num   = {2, 1, 2, 1, 1, 1, 1, 1};
+						static constexpr std::array<uint32_t, 8> div_denom = {1, 1, 3, 2, 3, 4, 6, 8};
+						const auto zone = shared.beat_repeat_committed;
+						const uint32_t safe_period =
+							std::max<uint32_t>(1u, beat_period * div_num[zone] / div_denom[zone]);
+						if (beat_repeat_countdown == 0) {
+							beat_repeat_phase = 0.f;
+							orbit_should_advance = true;
+							beat_repeat_countdown = safe_period;
+						} else {
+							beat_repeat_phase =
+								1.f - static_cast<float>(beat_repeat_countdown) / static_cast<float>(safe_period);
+							beat_repeat_countdown--;
+						}
+					} else {
+						beat_repeat_countdown = 0;
+						beat_repeat_phase = 0.f;
+					}
+				}
+
+				// Advance orbit_pos based on direction
+				if (orbit_should_advance) {
+					const auto ref_len = slot.settings.GetLength();
+					const uint32_t window_ref =
+						(perf_mode == 1)
+							? std::max<uint32_t>(1u, static_cast<uint32_t>(width_pct / 100.f * ref_len + 0.5f))
+							: 1u;
+					if (dir == 0) {
+						orbit_pos = static_cast<uint8_t>((orbit_pos + 1) % window_ref);
+					} else if (dir == 1) {
+						orbit_pos = static_cast<uint8_t>((orbit_pos + window_ref - 1) % window_ref);
+					} else if (dir == 2) {
+						if (window_ref <= 1) {
+							orbit_pos = 0;
+						} else if (orbit_ping_dir) {
+							if (orbit_pos + 1u >= window_ref) {
+								orbit_ping_dir = false;
+								orbit_pos = static_cast<uint8_t>(window_ref - 2);
+							} else {
+								orbit_pos++;
+							}
+						} else {
+							if (orbit_pos == 0) {
+								orbit_ping_dir = true;
+								orbit_pos = 1;
+							} else {
+								orbit_pos--;
+							}
+						}
+					} else {
+						orbit_pos = static_cast<uint8_t>(static_cast<uint32_t>(std::rand()) % window_ref);
+					}
+				}
+
+				// Compute per-channel orbit_step
+				if (orbit_active) {
+					for (auto chan = 0u; chan < Model::NumChans; chan++) {
+						orbit_step_prev[chan] = orbit_step[chan];
+						const auto len = slot.settings.GetLengthOrGlobal(chan);
+						const uint32_t window_chan =
+							(perf_mode == 1)
+								? std::max<uint32_t>(1u, static_cast<uint32_t>(width_pct / 100.f * len + 0.5f))
+								: 1u;
+						float center_f = shared.orbit_center * static_cast<float>(len);
+						if (shared.data.quantized_scrub && len > 1) {
+							center_f = std::round(center_f);
+						}
+						const auto center_step = static_cast<uint8_t>(
+							std::clamp<uint32_t>(static_cast<uint32_t>(center_f), 0u, static_cast<uint32_t>(len - 1)));
+						const auto pos_in_window = orbit_pos % window_chan;
+						orbit_step[chan] = static_cast<uint8_t>((center_step + pos_in_window) % len);
+					}
+				}
+			}
 		}
 
 		if (clock_ticked) {
@@ -341,6 +478,13 @@ public:
 		gate_repeat_fired.fill(false);
 		gate_substep_idx.fill(0);
 		step_fired.fill(false);
+		orbit_active = false;
+		orbit_pos = 0;
+		orbit_ping_dir = true;
+		orbit_step.fill(0);
+		orbit_step_prev.fill(0);
+		beat_repeat_countdown = 0;
+		beat_repeat_phase = 0.f;
 
 		// blocks next trig for a short period of time after reset
 		time_last_reset = Controls::TimeNow();

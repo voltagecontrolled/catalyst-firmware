@@ -113,7 +113,31 @@ public:
 		}
 
 		// Phase computation
-		if (phase_locked || picking_up) {
+		if (p.shared.data.slider_perf_mode > 0) {
+			// Orbit / beat repeat: set orbit_center from slider; orbit advance runs in sequencer Update()
+			p.shared.orbit_center = static_cast<float>(slider_now) / 4095.f;
+
+			if (p.shared.data.slider_perf_mode == 2) {
+				// Beat repeat: debounce slider zone before committing division
+				if (slider_now == 0) {
+					p.shared.beat_repeat_pending = 0xFF;
+					p.shared.beat_repeat_committed = 0xFF;
+				} else {
+					const uint8_t zone =
+						std::min(static_cast<uint8_t>((slider_now - 1) / 512), static_cast<uint8_t>(7));
+					if (zone != p.shared.beat_repeat_pending) {
+						p.shared.beat_repeat_pending = zone;
+						p.shared.beat_repeat_pending_since = Controls::TimeNow();
+					} else if (Controls::TimeNow() - p.shared.beat_repeat_pending_since >=
+					           beat_repeat_debounce_ticks) {
+						p.shared.beat_repeat_committed = p.shared.beat_repeat_pending;
+					}
+				}
+			}
+
+			// Pass phase=0; orbit overrides phase scrub entirely
+			p.Update(0.f, p.shared.data.scrub_ignore_mask);
+		} else if (phase_locked || picking_up) {
 			p.Update(locked_phase, p.shared.data.scrub_ignore_mask);
 		} else {
 			const auto live_phase = (slider_now + c.ReadCv()) / 4096.f;
@@ -152,6 +176,7 @@ protected:
 	static constexpr uint32_t toggle_feedback_ticks = Clock::MsToTicks(600);
 	static constexpr int32_t pickup_threshold = 80;
 	static constexpr uint8_t phase_lock_encoder = 7;
+	static constexpr uint32_t beat_repeat_debounce_ticks = Clock::MsToTicks(150);
 
 	void DoLockToggle() {
 		if (!phase_locked && !picking_up) {
