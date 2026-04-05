@@ -103,9 +103,18 @@ Enc 3 (Debounce) works the same as in Blue mode. Enc 4 is unlit and inactive. Us
 
 ### Staging a division change with SHIFT
 
-In either beat repeat mode, **hold SHIFT** to freeze the currently active division — the slider can be repositioned freely without committing to the new zone. When you release SHIFT, whatever zone the slider is in commits immediately (no debounce wait).
+In either beat repeat mode, **hold SHIFT** to freeze both the active division and the looped step — the slider can be repositioned freely without committing to a new zone or scrubbing through the pattern. When you release SHIFT, the pending zone commits immediately (no debounce wait) and the slider resumes control of orbit_center.
 
-This lets you pre-position the slider at your target division and then drop in exactly on the beat by releasing SHIFT.
+This is also the cleanest way to return to zero: hold SHIFT, slide all the way left, release SHIFT to drop out of beat repeat on the beat.
+
+### Locking a step at beat repeat entry
+
+When entering beat repeat from off (slider at zero → shift release → beat repeat starts):
+
+1. Beat repeat does not fire immediately — it waits for the **next master clock tick** so the loop starts on the step grid.
+2. The **first step that fires** becomes the looped step — locked automatically at that moment, not at shift-release time.
+
+This means you time your entry with your ear: release SHIFT when you hear the hit you want to loop. The loop will lock to that hit as it fires, correcting for any reaction-time lag. After entry the slider is in pickup mode — move it to take over which step is looped.
 
 ---
 
@@ -114,7 +123,7 @@ This lets you pre-position the slider at your target division and then drop in e
 Phase Scrub Lock (Enc 8, or COPY + GLIDE short press) works in all slider performance modes. When locked:
 
 - **Granular:** orbit window stays centered at the locked position.
-- **Beat Repeat:** active zone is frozen at the locked position — the physical slider has no effect.
+- **Beat Repeat:** active zone and looped step are both frozen — the physical slider has no effect.
 
 Unlock behavior is the same as in standard mode: the slider re-engages after physically reaching the locked position (pickup mode).
 
@@ -136,12 +145,13 @@ For sequences longer than 8 steps, you can now change pages without exiting sub-
 
 ## Phase Scrub Lock (v1.4.1)
 
-**Combo:** COPY + GLIDE
+**Combo:** COPY + GLIDE (short press — release either button before 1.5s)
 
 Locks the Phase Scrub slider at its current position, preventing accidental playhead jumps during performance.
 
-- Press **COPY + GLIDE** to lock. Encoder 8 LED blinks red while locked.
-- Press **COPY + GLIDE** again to unlock. The slider uses **pickup behavior** - it resumes control only after physically reaching the locked position, so the playhead never jumps on unlock.
+- Press **COPY + GLIDE** and release either button to toggle lock. Encoder 8 LED blinks red while locked.
+- Holding both buttons past 1.5s enters the **Scrub Settings page** instead of toggling.
+- On unlock, the slider uses **pickup behavior** — it resumes control only after physically reaching the locked position, so the playhead never jumps.
 - Encoder 8 continues blinking during pickup; stops once the slider catches up.
 
 ---

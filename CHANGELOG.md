@@ -124,7 +124,9 @@ Phase Scrub lock state and locked slider position now survive power cycles. On b
 
 ### Phase Scrub Performance Page (v1.4.6)
 
-**Entry:** COPY + GLIDE held 1.5 seconds. Exit: COPY + GLIDE (any duration) or Play/Reset.
+**Entry:** COPY + GLIDE held 1.5 seconds (fires at 1.5s, no release needed). **Exit:** COPY + GLIDE (any duration) or Play/Reset.
+
+**Lock toggle (outside menu):** COPY + GLIDE, release either button before 1.5s. Fires on release, so continuing to hold transitions into menu entry with no conflicting mid-press state.
 
 A dedicated performance page for Phase Scrub controls, replacing the basic lock combo with a full menu. All settings persist across reboots.
 
@@ -149,16 +151,18 @@ Page buttons toggle per-track scrub participation: lit = track follows scrub, un
 
 **Enc 3 — context-aware:** In granular mode, adjusts orbit width (0–100%, LED = dim→bright orange). In either beat repeat mode, adjusts the debounce delay before a new zone commits (8 steps, LED = dim→bright white; default = 150ms, range 50ms–1500ms). Debounce setting is transient, not saved across reboots.
 
-**Shift staging (beat repeat):** Hold SHIFT to freeze the committed zone at its current value. The pending zone (where the slider physically is) tracks freely, but will not commit. On SHIFT release, the pending zone commits immediately — no debounce wait. Useful for pre-positioning the slider before dropping into a new division on the beat.
+**Shift staging (beat repeat):** Hold SHIFT to freeze both the committed zone and `orbit_center`. The slider can be moved freely — no scrubbing occurs and no new zone commits. On SHIFT release, the pending zone commits immediately and `orbit_center` resumes tracking the slider. Useful for staging a division change or a clean return to zero without chaotic scrubbing in transit.
+
+**Beat repeat entry and step lock:** On first entry from off (committed transitions from 0xFF to a zone), beat repeat waits for the next master clock tick before starting, ensuring the first repeat fires on the step grid. At that first clock tick, `orbit_center` is snapped to the step currently firing — so the looped step is the one you hear as the first beat of the repeat, not wherever the slider happened to be at shift release. Slider remains in pickup mode after entry; moving it takes over `orbit_center` continuously.
 
 **Orbit behavior:** The orbit position counter advances continuously; moving the slider to a new center shifts the window without resetting the position. Quantize snaps the center to the nearest step boundary if enabled. `scrub_ignore_mask` applies — ignored channels continue normal playback regardless of mode. Phase Scrub Lock is respected in all modes: when locked, the orbit center and beat repeat zone calculation use the locked slider value rather than the physical slider position.
 
 **Implementation notes:**
 
-- `src/shared.hh` `Shared::Data` — `slider_perf_mode`: 0=standard, 1=granular, 2=beat-repeat 8-zone (triplets), 3=beat-repeat 4-zone (no triplets). `orbit_width`, `orbit_direction` persisted. `Shared::Interface` — transient fields: `orbit_center`, `beat_repeat_committed`, `beat_repeat_pending`, `beat_repeat_pending_since`, `beat_repeat_debounce_idx`.
-- `src/sequencer.hh` `Interface` — private orbit state: `orbit_active`, `orbit_pos`, `orbit_ping_dir`, `orbit_step[NumChans]`, `orbit_step_prev[NumChans]`, `beat_repeat_countdown`, `beat_repeat_phase`. `GetEffectiveStepPhase(chan)` checks `OrbitActiveForChannel(chan)` (not bare `orbit_active`) so excluded channels use their own step phase. Beat repeat uses independent countdown timer derived from `GetGlobalDividedBpm()`; granular advances on `clock_ticked`.
+- `src/shared.hh` `Shared::Data` — `slider_perf_mode`: 0=standard, 1=granular, 2=beat-repeat 8-zone (triplets), 3=beat-repeat 4-zone (no triplets). `orbit_width`, `orbit_direction` persisted. `Shared::Interface` — transient fields: `orbit_center`, `beat_repeat_committed`, `beat_repeat_pending`, `beat_repeat_pending_since`, `beat_repeat_debounce_idx`, `beat_repeat_snap_pending`.
+- `src/sequencer.hh` `Interface` — private orbit state: `orbit_active`, `orbit_pos`, `orbit_ping_dir`, `orbit_step[NumChans]`, `orbit_step_prev[NumChans]`, `beat_repeat_countdown`, `beat_repeat_phase`, `beat_repeat_synced`. `GetEffectiveStepPhase(chan)` checks `OrbitActiveForChannel(chan)` (not bare `orbit_active`) so excluded channels use their own step phase. Beat repeat uses independent countdown timer derived from `GetGlobalDividedBpm()`; first fire waits for `clock_ticked` (`beat_repeat_synced` flag) to align to step grid. At the first `clock_ticked`, if `beat_repeat_snap_pending` is set, `shared.orbit_center` is snapped to the current player step before `orbit_step[]` is computed.
 - `src/app.hh` `Cv()` — substitutes orbit steps when `OrbitActiveForChannel(chan)`. `Gate()` — uses `GetOrbitStepCluster()` and `GetEffectiveStepPhase()` when orbit active.
-- `src/ui/seq_common.hh` `Usual::Common()` — when `slider_perf_mode > 0`: derives `effective_slider` (uses `locked_raw` when `phase_locked || picking_up`), sets `orbit_center`, runs beat repeat zone debounce with Shift staging, passes `phase=0` to `p.Update()`.
+- `src/ui/seq_common.hh` `Usual::Common()` — when `slider_perf_mode > 0`: derives `effective_slider` (uses `locked_raw` when `phase_locked || picking_up`), sets `orbit_center` (frozen while SHIFT held or in orbit pickup mode), runs beat repeat zone debounce with Shift staging, passes `phase=0` to `p.Update()`. On shift-release entry from off: sets `beat_repeat_snap_pending` and enters pickup mode (`orbit_pickup_slider` captures slider position at entry). COPY+GLIDE combo: both-held → arm timer; release either before 1.5s → `DoLockToggle()`; hold 1.5s → menu entry.
 - `src/ui/seq_scrub_settings.hh` — enc 3 context-aware: `orbit_width` in granular, `beat_repeat_debounce_idx` (transient) in beat repeat modes; mode switch clears `beat_repeat_committed/pending`. Save deferred to exit paths to avoid flash write stutter.
 
 ---
