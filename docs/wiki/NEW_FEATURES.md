@@ -8,7 +8,7 @@ This page covers features added beyond the stock 4ms Catalyst Sequencer firmware
 
 ## Phase Scrub Performance Page (v1.4.6 pre-release)
 
-**Entry:** Hold **COPY + GLIDE** for 3 seconds.  
+**Entry:** Hold **COPY + GLIDE** for 1.5 seconds.  
 **Exit:** **COPY + GLIDE** (any duration) or **Play/Reset**.
 
 A dedicated performance page for Phase Scrub. All settings are stored and survive reboots.
@@ -18,8 +18,8 @@ A dedicated performance page for Phase Scrub. All settings are stored and surviv
 | Encoder | Function | LED |
 |---------|----------|-----|
 | 1 | Quantize | Orange = on, unlit = off |
-| 2 | Slider Performance Mode | Unlit / green / blue |
-| 3 | Granular Width | Unlit at 0%, dim→bright orange |
+| 2 | Slider Performance Mode | Unlit / green / blue / cyan |
+| 3 | Granular Width *or* Debounce Delay | Dim→bright orange / dim→bright white |
 | 4 | Orbit Direction | Green / blue / orange / lavender |
 | 8 | Phase Scrub Lock | Red = locked, unlit = unlocked |
 
@@ -47,7 +47,7 @@ Default behavior. The slider continuously positions the playhead across the full
 
 The slider positions a **looping orbit window** within the sequence. The sequencer repeats steps within that window at the normal clock rate, similar to how granular synthesis loops a grain of audio.
 
-- **Enc 3 (Width):** Size of the window, as a percentage of pattern length. At 0% the orbit is off and the slider falls back to standard phase scrub. At 100% the orbit covers the full pattern.
+- **Enc 3 (Width):** Size of the window, as a percentage of pattern length. At 0% the orbit is off and the slider falls back to standard phase scrub. At 100% the orbit covers the full pattern. LED scales from unlit (0%) to bright orange (100%).
 - **Enc 4 (Direction):** Playback direction within the window.
   - **Green** — Forward (left to right through the window)
   - **Blue** — Backward
@@ -56,15 +56,17 @@ The slider positions a **looping orbit window** within the sequence. The sequenc
 
 The orbit position counter advances continuously. Sliding to a new center moves the window without resetting the counter — the orbit keeps playing uninterrupted, and the window shifts underneath it. Quantize (Enc 1) snaps the window center to the nearest step boundary.
 
+Tracks excluded from scrub via the page buttons continue normal clock-driven playback regardless of orbit width or direction.
+
 **Use case:** position the slider at a short phrase within a longer sequence and have it loop at the pattern's clock rate. Move the slider during performance to jump to different sections. Gradually widen the window to let more of the pattern through.
 
 ---
 
-#### Blue — Beat Repeat
+#### Blue — Beat Repeat (8 zones, with triplets)
 
-The slider selects a **rhythmic subdivision rate** at which the current orbit repeats. The beat repeat fires independently of the master clock, locked to BPM.
+The slider selects a **rhythmic subdivision rate** at which the current orbit repeats. The beat repeat fires independently of the master clock, locked to BPM. Slide all the way left to turn beat repeat off.
 
-The slider is divided into 8 equal zones. Swipe quickly past zones to audition them; a **150ms debounce** prevents an accidental commit. Slide to the minimum (fully left) to turn beat repeat off.
+The slider is divided into 8 equal zones:
 
 | Zone | Division | Feel |
 |------|----------|------|
@@ -77,9 +79,44 @@ The slider is divided into 8 equal zones. Swipe quickly past zones to audition t
 | 7 | 1/16T | Sixteenth triplet |
 | 8 | 1/32 | Thirty-second |
 
-Enc 3 and Enc 4 apply as in Granular mode — width controls how many steps cycle at the repeat rate, direction controls the order.
+- **Enc 3 (Debounce):** How long the slider must sit in a zone before it commits. LED scales dim→bright white. Default is 150ms; range is 50ms–1500ms. A longer debounce makes it easier to swipe through zones without accidentally committing. This setting is transient and resets on reboot.
+- **Enc 4 (Direction):** Orbit direction within the window, same as Granular.
 
-**Use case:** hold the slider on 1/8 during a breakdown for a stuttering repeat effect. Slide right for increasingly rapid subdivisions. Set Width > 0 to cycle through a small phrase at the repeat rate rather than hammering a single step.
+**Use case:** hold the slider on 1/8 during a breakdown for a stuttering repeat effect. Slide right for increasingly rapid subdivisions. Set Width > 0 (using Granular enc 3 before switching to beat repeat) to cycle through a small phrase at the repeat rate rather than hammering a single step.
+
+---
+
+#### Cyan — Beat Repeat (4 zones, no triplets)
+
+Like Blue but with four wider zones — easier to target by hand during performance:
+
+| Zone | Division | Feel |
+|------|----------|------|
+| 1 | 1/2 | Half note |
+| 2 | 1/4 | Quarter note |
+| 3 | 1/8 | Eighth note |
+| 4 | 1/16 | Sixteenth note |
+
+Enc 3 (Debounce) and Enc 4 (Direction) work the same as in Blue mode. Use this when you want broad, clean division changes with minimal risk of landing on a triplet by accident.
+
+---
+
+### Staging a division change with SHIFT
+
+In either beat repeat mode, **hold SHIFT** to freeze the currently active division — the slider can be repositioned freely without committing to the new zone. When you release SHIFT, whatever zone the slider is in commits immediately (no debounce wait).
+
+This lets you pre-position the slider at your target division and then drop in exactly on the beat by releasing SHIFT.
+
+---
+
+### Phase Scrub Lock in performance modes
+
+Phase Scrub Lock (Enc 8, or COPY + GLIDE short press) works in all slider performance modes. When locked:
+
+- **Granular:** orbit window stays centered at the locked position.
+- **Beat Repeat:** active zone is frozen at the locked position — the physical slider has no effect.
+
+Unlock behavior is the same as in standard mode: the slider re-engages after physically reaching the locked position (pickup mode).
 
 ---
 
@@ -259,10 +296,23 @@ A CV track can have both a CV follow source (Blue or Lavender) and a gate clock 
 
 ## Tips
 
-- Phase Scrub Lock is most useful mapped to a performable moment - lock before a breakdown, unlock on the drop.
+### Phase Scrub and performance
+
+- Phase Scrub Lock is most useful at a performable moment — lock before a breakdown, unlock on the drop.
+- In Beat Repeat, set a longer debounce (Enc 3) and use SHIFT staging for precise division drops: hold SHIFT, slide to target, release on the beat.
+- Cyan mode (4-zone beat repeat) is easier to play live. Blue mode (8-zone) gives you triplet access but a smaller target for each zone — set debounce longer to compensate.
+- Exclude a track from scrub (page button unlit) to keep it as a rhythmic anchor while granular or beat repeat reshapes everything else.
+- In Granular mode, set direction to Ping-pong or Random for textures that don't repeat predictably even when the orbit window is stationary.
+- Lock the scrub in Granular mode after dialing in an orbit position to freeze the loop while freeing your hand from the slider.
+
+### Ratchets, repeats, and sub-steps
+
 - Repeats are particularly effective on the last step of a pattern to create odd-length phrases that shift against other tracks.
 - In the sub-step editor, setting a ratcheted step to `x o x o` produces a pattern that feels half the ratchet rate without changing the clock division.
 - Mixing ratchets and repeats across steps in the same pattern produces complex polyrhythmic structures from a short base sequence.
+
+### Linked Tracks
+
 - In Orange mode, a CV track with a shorter length than the gate track will cycle through its pitches faster during ratcheted steps, creating repeating melodic fragments that change phase relative to the gate pattern.
 - In Yellow mode, a repeat count of ×3 on a gate step produces 4 pitches from the CV track (the step start plus 3 repeat ticks) for that single gate event.
 - Transpose Follow with a 2-step CV source set to a root and a fifth produces automatic power-chord-style transposition of any melody it follows.

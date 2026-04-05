@@ -10,15 +10,15 @@ If you are upgrading directly from v1.4.5, your calibration is migrated correctl
 
 ## Phase Scrub Performance Page (v1.4.6)
 
-**Entry:** hold Copy + Glide for 3 seconds. **Exit:** Copy + Glide (any duration) or Play/Reset.
+**Entry:** hold Copy + Glide for 1.5 seconds. **Exit:** Copy + Glide (any duration) or Play/Reset.
 
 A dedicated performance page replacing the basic lock toggle combo. All settings persist across reboots.
 
 | Encoder | Function | Colors |
 |---------|----------|--------|
 | 1 | Quantize | orange = on, off = off |
-| 2 | Slider Performance Mode | off / green / blue |
-| 3 | Granular Width | off at 0%, dim→bright orange |
+| 2 | Slider Performance Mode | off / green / blue / cyan |
+| 3 | Granular Width *or* Debounce Delay | dim→bright orange / dim→bright white |
 | 4 | Orbit Direction | green / blue / orange / lavender |
 | 8 | Phase Scrub Lock | red = locked, off = unlocked |
 
@@ -28,8 +28,11 @@ A dedicated performance page replacing the basic lock toggle combo. All settings
 
 **Slider Performance Mode (Enc 2):**
 - **Off:** standard phase scrub
-- **Green — Granular:** slider positions an orbit window within the sequence. The sequencer loops steps within that window at the normal clock rate. Enc 3 sets window width (0–100% of pattern length); Enc 4 sets playback direction within the window.
-- **Blue — Beat Repeat:** slider selects a subdivision rate from 8 zones (1/2, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32). A 150ms debounce prevents accidental division changes while swiping.
+- **Green — Granular:** slider positions a looping orbit window within the sequence. Enc 3 sets window width (0–100%); Enc 4 sets playback direction (green=fwd, blue=bck, orange=ping-pong, lavender=random). Width=0 or slider at minimum disables orbit.
+- **Blue — Beat Repeat (8 zones, triplets):** slider selects a subdivision rate from 8 zones (1/2, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32). Enc 3 sets debounce delay (50ms–1500ms, default 150ms, transient). Hold SHIFT to freeze the active zone; release to commit the pending zone immediately. Slider at minimum turns beat repeat off.
+- **Cyan — Beat Repeat (4 zones, no triplets):** wider zones for easier live targeting (1/2, 1/4, 1/8, 1/16). Enc 3 and Enc 4 same as Blue.
+
+Phase Scrub Lock (Enc 8) works in all modes. Beat repeat and granular both respect the per-track scrub ignore mask.
 
 ## Phase Scrub lock persistence (v1.4.6)
 

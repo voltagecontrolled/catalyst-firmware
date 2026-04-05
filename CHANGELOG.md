@@ -124,37 +124,42 @@ Phase Scrub lock state and locked slider position now survive power cycles. On b
 
 ### Phase Scrub Performance Page (v1.4.6)
 
-**Entry:** COPY + GLIDE held 3 seconds. Exit: COPY + GLIDE (any duration) or Play/Reset.
+**Entry:** COPY + GLIDE held 1.5 seconds. Exit: COPY + GLIDE (any duration) or Play/Reset.
 
 A dedicated performance page for Phase Scrub controls, replacing the basic lock combo with a full menu. All settings persist across reboots.
 
 | Encoder | Function | Colors |
 |---------|----------|--------|
 | 1 | Quantize | orange = on, off = off |
-| 2 | Slider Performance Mode | off / green / blue |
-| 3 | Granular Width | off at 0%, dim→bright orange |
+| 2 | Slider Performance Mode | off / green / blue / cyan |
+| 3 | Granular Width (granular) or Debounce Delay (beat repeat) | off→orange / dim→bright white |
 | 4 | Orbit Direction | green / blue / orange / lavender |
 | 8 | Phase Scrub Lock | red = locked, off = unlocked |
 
-Page buttons toggle per-track scrub participation: lit = track follows scrub, unlit = track ignores scrub.
+Page buttons toggle per-track scrub participation: lit = track follows scrub, unlit = track ignores scrub and plays normally.
 
 **Quantize (Enc 1):** Snaps the scrub phase to the nearest step boundary. Uses `round(phase / step_size) * step_size` — deterministic, no intersection logic.
 
 **Slider Performance Mode (Enc 2):** Selects what the slider does during performance.
 
 - **Off (unlit):** Standard phase scrub.
-- **Green — Granular:** Slider positions an orbit window within the sequence. The sequencer loops steps within that window at the normal clock rate. Enc 3 sets window width (0–100% of pattern length); Enc 4 sets playback direction within the window.
-- **Blue — Beat Repeat:** Slider selects a subdivision rate from 8 zones (1/2, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32). A 150ms debounce prevents accidental division changes while swiping. Enc 3 + Enc 4 apply as in granular mode.
+- **Green — Granular:** Slider positions a looping orbit window within the sequence. Enc 3 sets window width (0–100% of pattern length); Enc 4 sets playback direction. Width=0 or slider at minimum disables orbit and falls back to standard scrub.
+- **Blue — Beat Repeat (8-zone, with triplets):** Slider selects a subdivision rate from 8 zones: 1/2, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32. Slider at minimum turns beat repeat off. Enc 3 sets debounce delay (see below). Enc 4 sets orbit direction as in granular mode.
+- **Cyan — Beat Repeat (4-zone, no triplets):** Like Blue but with 4 wider zones: 1/2, 1/4, 1/8, 1/16. Easier to land on a target while performing. Enc 3 and Enc 4 same as Blue.
 
-**Orbit behavior:** The orbit position counter advances continuously; moving the slider to a new center shifts the window without resetting the position. Quantize snaps the center to the nearest step boundary if enabled. `scrub_ignore_mask` applies — ignored channels continue normal playback.
+**Enc 3 — context-aware:** In granular mode, adjusts orbit width (0–100%, LED = dim→bright orange). In either beat repeat mode, adjusts the debounce delay before a new zone commits (8 steps, LED = dim→bright white; default = 150ms, range 50ms–1500ms). Debounce setting is transient, not saved across reboots.
+
+**Shift staging (beat repeat):** Hold SHIFT to freeze the committed zone at its current value. The pending zone (where the slider physically is) tracks freely, but will not commit. On SHIFT release, the pending zone commits immediately — no debounce wait. Useful for pre-positioning the slider before dropping into a new division on the beat.
+
+**Orbit behavior:** The orbit position counter advances continuously; moving the slider to a new center shifts the window without resetting the position. Quantize snaps the center to the nearest step boundary if enabled. `scrub_ignore_mask` applies — ignored channels continue normal playback regardless of mode. Phase Scrub Lock is respected in all modes: when locked, the orbit center and beat repeat zone calculation use the locked slider value rather than the physical slider position.
 
 **Implementation notes:**
 
-- `src/shared.hh` `Shared::Data` — `uint16_t _reserved1` replaced with `uint8_t orbit_width` + `uint8_t orbit_direction` (same size, no tag bump). `Shared::Interface` — transient fields: `orbit_center`, `beat_repeat_committed`, `beat_repeat_pending`, `beat_repeat_pending_since`.
-- `src/sequencer.hh` `Interface` — private orbit state: `orbit_active`, `orbit_pos`, `orbit_ping_dir`, `orbit_step[NumChans]`, `orbit_step_prev[NumChans]`, `beat_repeat_countdown`, `beat_repeat_phase`. Public accessors: `OrbitActive()`, `OrbitActiveForChannel()`, `GetOrbitStep()`, `GetOrbitStepPrev()`, `GetEffectiveStepPhase()`, `GetEffectiveMovementDir()`, `GetOrbitStepCluster()`. Advance logic added to `Update()` after the step_fired recording block. Beat repeat uses independent countdown timer derived from `GetGlobalDividedBpm()`; granular advances on `clock_ticked`.
-- `src/app.hh` `Cv()` — substitutes `slot.channel[chan][orbit_step[chan]]` and `orbit_step_prev[chan]` when `OrbitActiveForChannel(chan)`. `Gate()` — uses `GetOrbitStepCluster()` and `GetEffectiveStepPhase()` when orbit active.
-- `src/ui/seq_common.hh` `Usual::Common()` — when `slider_perf_mode > 0`: sets `orbit_center` from slider, runs beat repeat zone debounce, passes `phase=0` to `p.Update()`.
-- `src/ui/seq_scrub_settings.hh` — enc 3 wired to `orbit_width` (0–100, CW increases); enc 4 wired to `orbit_direction` (0–3 cycling). LEDs: width = brightness-scaled orange, direction = four colors per mode.
+- `src/shared.hh` `Shared::Data` — `slider_perf_mode`: 0=standard, 1=granular, 2=beat-repeat 8-zone (triplets), 3=beat-repeat 4-zone (no triplets). `orbit_width`, `orbit_direction` persisted. `Shared::Interface` — transient fields: `orbit_center`, `beat_repeat_committed`, `beat_repeat_pending`, `beat_repeat_pending_since`, `beat_repeat_debounce_idx`.
+- `src/sequencer.hh` `Interface` — private orbit state: `orbit_active`, `orbit_pos`, `orbit_ping_dir`, `orbit_step[NumChans]`, `orbit_step_prev[NumChans]`, `beat_repeat_countdown`, `beat_repeat_phase`. `GetEffectiveStepPhase(chan)` checks `OrbitActiveForChannel(chan)` (not bare `orbit_active`) so excluded channels use their own step phase. Beat repeat uses independent countdown timer derived from `GetGlobalDividedBpm()`; granular advances on `clock_ticked`.
+- `src/app.hh` `Cv()` — substitutes orbit steps when `OrbitActiveForChannel(chan)`. `Gate()` — uses `GetOrbitStepCluster()` and `GetEffectiveStepPhase()` when orbit active.
+- `src/ui/seq_common.hh` `Usual::Common()` — when `slider_perf_mode > 0`: derives `effective_slider` (uses `locked_raw` when `phase_locked || picking_up`), sets `orbit_center`, runs beat repeat zone debounce with Shift staging, passes `phase=0` to `p.Update()`.
+- `src/ui/seq_scrub_settings.hh` — enc 3 context-aware: `orbit_width` in granular, `beat_repeat_debounce_idx` (transient) in beat repeat modes; mode switch clears `beat_repeat_committed/pending`. Save deferred to exit paths to avoid flash write stutter.
 
 ---
 
