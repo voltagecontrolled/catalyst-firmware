@@ -78,21 +78,19 @@ public:
 			}
 		}
 
-		// COPY+GLIDE: short release = lock toggle; 3s hold = scrub settings entry.
-		// Trigger on whichever button is pressed second so both press orders work.
-		// Timer is in p.shared so it survives Morph→Main mode switches (GLIDE-first path).
-		const bool both_held = c.button.fine.is_high() && c.button.morph.is_high();
-		const bool either_just_pressed = c.button.fine.just_went_high() || c.button.morph.just_went_high();
-		if (both_held && either_just_pressed && !p.shared.scrub_hold_pending) {
+		// Hold GLIDE, tap COPY = lock toggle; hold GLIDE + hold COPY 1.5s = scrub settings entry.
+		// Order is explicit: GLIDE must already be held when COPY is pressed.
+		// Releasing GLIDE before the action fires aborts with no effect.
+		if (c.button.morph.is_high() && c.button.fine.just_went_high() && !p.shared.scrub_hold_pending) {
 			p.shared.scrub_hold_pending = true;
 			p.shared.scrub_hold_start = Controls::TimeNow();
 		}
 		if (p.shared.scrub_hold_pending) {
-			if (!c.button.fine.is_high()) {
-				p.shared.scrub_hold_pending = false; // COPY released first — abort, no toggle
-			} else if (c.button.morph.just_went_low()) {
+			if (!c.button.morph.is_high()) {
+				p.shared.scrub_hold_pending = false; // GLIDE released — abort
+			} else if (c.button.fine.just_went_low()) {
 				p.shared.scrub_hold_pending = false;
-				DoLockToggle(); // GLIDE released with COPY still held — short press
+				DoLockToggle(); // COPY tapped — short press
 			} else if (Controls::TimeNow() - p.shared.scrub_hold_start >= scrub_settings_hold_ticks) {
 				p.shared.scrub_hold_pending = false;
 				p.shared.scrub_settings_entry_requested = true;
