@@ -78,17 +78,21 @@ public:
 			}
 		}
 
-		// COPY+GLIDE: short release = lock toggle; 3s hold = scrub settings entry
-		if (c.button.fine.is_high() && c.button.morph.just_went_high()) {
+		// COPY+GLIDE: short release = lock toggle; 3s hold = scrub settings entry.
+		// Trigger on whichever button is pressed second so both press orders work.
+		// GLIDE-first briefly enters morph mode; pressing COPY exits it and starts the timer here.
+		const bool both_held = c.button.fine.is_high() && c.button.morph.is_high();
+		const bool either_just_pressed = c.button.fine.just_went_high() || c.button.morph.just_went_high();
+		if (both_held && either_just_pressed && !scrub_hold_pending) {
 			scrub_hold_pending = true;
 			scrub_hold_start = Controls::TimeNow();
 		}
 		if (scrub_hold_pending) {
 			if (!c.button.fine.is_high()) {
-				scrub_hold_pending = false; // COPY released — abort
+				scrub_hold_pending = false; // COPY released first — abort, no toggle
 			} else if (c.button.morph.just_went_low()) {
 				scrub_hold_pending = false;
-				DoLockToggle();
+				DoLockToggle(); // GLIDE released with COPY still held — short press
 			} else if (Controls::TimeNow() - scrub_hold_start >= scrub_settings_hold_ticks) {
 				scrub_hold_pending = false;
 				scrub_settings_entry_requested = true;
@@ -108,15 +112,20 @@ public:
 			last_slider_move_time = Controls::TimeNow();
 		}
 
-		// Phase computation: quantized mode latches at step boundaries (one tick lag)
+		// Phase computation
 		if (phase_locked || picking_up) {
 			p.Update(locked_phase, p.shared.data.scrub_ignore_mask);
 		} else {
 			const auto live_phase = (slider_now + c.ReadCv()) / 4096.f;
-			if (!p.shared.data.quantized_scrub || p.StepFired(0)) {
-				committed_phase = live_phase;
+			float apply_phase = live_phase;
+			if (p.shared.data.quantized_scrub) {
+				const auto length = static_cast<float>(p.slot.settings.GetLength());
+				if (length > 1.f) {
+					const float step_size = 1.f / length;
+					apply_phase = std::round(apply_phase / step_size) * step_size;
+				}
 			}
-			p.Update(committed_phase, p.shared.data.scrub_ignore_mask);
+			p.Update(apply_phase, p.shared.data.scrub_ignore_mask);
 		}
 	}
 
@@ -126,7 +135,6 @@ protected:
 	bool phase_locked = false;
 	bool picking_up = false;
 	float locked_phase = 0.f;
-	float committed_phase = 0.f;
 	uint32_t lock_toggle_time = 0;
 	uint16_t locked_raw = 0;
 

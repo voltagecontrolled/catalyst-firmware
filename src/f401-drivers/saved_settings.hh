@@ -51,9 +51,9 @@ public:
 			// Old struct is identical except it lacks the 8 bytes at the end.
 			// Read only the known-good fields by overlaying the old struct size.
 			struct V1_4_5_SharedData {
-				uint32_t SettingsVersionTag;
-				Model::Mode saved_mode;
-				Calibration::Dac::Data dac_calibration;
+				uint32_t SettingsVersionTag alignas(4);
+				Model::Mode saved_mode alignas(4);
+				Calibration::Dac::Data dac_calibration alignas(4);
 				Quantizer::CustomScales custom_scale;
 				std::array<uint8_t, Model::NumChans> palette;
 				bool validate() const { return SettingsVersionTag == V1_4_5_SharedSettingsVersionTag; }

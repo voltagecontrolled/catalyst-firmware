@@ -109,9 +109,9 @@ struct Data {
 	std::array<uint8_t, Model::NumChans> palette;
 
 	uint8_t phase_locked = 0;         // persisted lock state (bool)
-	uint8_t quantized_scrub = 0;      // bool: phase scrub snaps at step boundaries
+	uint8_t quantized_scrub = 0;      // bool: phase scrub snaps to nearest step boundary
 	uint8_t scrub_ignore_mask = 0xFF; // bit N=1: track N follows scrub; bit N=0: track ignores scrub
-	uint8_t _reserved0 = 0;
+	uint8_t slider_perf_mode = 0;     // 0=standard, 1=granular, 2=beat-repeat, 3=beat-repeat+triplets
 	uint16_t locked_raw = 0;          // raw slider reading when lock was engaged
 	uint16_t _reserved1 = 0;
 
