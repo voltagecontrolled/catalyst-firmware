@@ -122,13 +122,13 @@ public:
 			// On first entry from off, it is snapped to the playhead step (pickup mode) so the
 			// loop starts on the step the user timed with their ear rather than the slider position.
 			if (orbit_pickup && p.shared.data.slider_perf_mode >= 2) {
-				// Entry pickup: hold at playhead-snapped value until slider moves away
+				// Entry pickup: orbit_center was snapped by the sequencer on the first clock tick;
+				// leave it alone until the slider moves away from its position at shift release.
 				if (std::abs((int32_t)slider_now - (int32_t)orbit_pickup_slider) > pickup_threshold) {
 					orbit_pickup = false;
 					p.shared.orbit_center = static_cast<float>(effective_slider) / 4095.f;
-				} else {
-					p.shared.orbit_center = orbit_pickup_center;
 				}
+				// else: don't touch orbit_center — sequencer wrote the correct step there
 			} else if (p.shared.data.slider_perf_mode >= 2 && c.button.shift.is_high()) {
 				// SHIFT held: freeze orbit_center so the active loop step doesn't change
 			} else {
@@ -148,6 +148,7 @@ public:
 					p.shared.beat_repeat_pending = 0xFF;
 					if (!c.button.shift.is_high()) {
 						p.shared.beat_repeat_committed = 0xFF;
+						p.shared.beat_repeat_snap_pending = false;
 						orbit_pickup = false;
 					}
 				} else {
@@ -172,14 +173,12 @@ public:
 					const bool was_off = (p.shared.beat_repeat_committed == 0xFF);
 					p.shared.beat_repeat_committed = p.shared.beat_repeat_pending;
 					if (p.shared.beat_repeat_committed == 0xFF) {
-						orbit_pickup = false; // returning to off, reset for next entry
+						orbit_pickup = false;
+						p.shared.beat_repeat_snap_pending = false;
 					} else if (was_off) {
-						const auto len = p.slot.settings.GetLength();
-						const auto global_step =
-							static_cast<uint32_t>(p.GetPlayheadPage()) * Model::Sequencer::Steps::PerPage
-							+ p.GetPlayheadStepOnPage();
-						orbit_pickup_center = static_cast<float>(global_step)
-						                    / static_cast<float>(len > 0u ? len : 1u);
+						// Flag the sequencer to snap orbit_center on the first clock tick after
+						// activation — the step that fires first is the step that gets looped.
+						p.shared.beat_repeat_snap_pending = true;
 						orbit_pickup_slider = slider_now;
 						orbit_pickup = true;
 					}
@@ -223,11 +222,11 @@ protected:
 	static constexpr int32_t pickup_threshold = 80;
 	static constexpr uint8_t phase_lock_encoder = 7;
 
-	// Beat repeat entry: orbit_center snapped to playhead on shift release, slider takes
-	// over once it moves away from its position at the moment of entry (pickup mode).
+	// Beat repeat entry: orbit_center is snapped by the sequencer on the first clock tick
+	// after shift-release (the step that actually fires first = the step that loops).
+	// Slider takes over once it moves away from where it was at entry (pickup mode).
 	bool orbit_pickup = false;
 	uint16_t orbit_pickup_slider = 0;
-	float orbit_pickup_center = 0.f;
 	// Debounce durations indexed by beat_repeat_debounce_idx (0=fastest, 7=slowest). Default = 2 (150ms).
 	static constexpr std::array<uint32_t, 8> beat_repeat_debounce_table = {
 		Clock::MsToTicks(50),  Clock::MsToTicks(100), Clock::MsToTicks(150), Clock::MsToTicks(250),

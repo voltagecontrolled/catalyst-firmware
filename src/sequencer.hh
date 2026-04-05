@@ -321,6 +321,18 @@ public:
 							beat_repeat_phase = 0.f;
 							if (clock_ticked) {
 								beat_repeat_synced = true;
+								// If the UI flagged a snap (shift-release entry from off), lock
+								// orbit_center to whichever step is firing right now. This is the
+								// step the user will hear as the first beat of the repeat loop,
+								// so it's the right one to lock regardless of reaction-time lag.
+								if (shared.beat_repeat_snap_pending && cur_channel < Model::NumChans) {
+									const auto len = slot.settings.GetLengthOrGlobal(cur_channel);
+									if (len > 0) {
+										const auto step = player.GetRelativeStep(cur_channel, 0);
+										shared.orbit_center = static_cast<float>(step) / static_cast<float>(len);
+									}
+									shared.beat_repeat_snap_pending = false;
+								}
 								orbit_should_advance = true;
 								beat_repeat_countdown = safe_period;
 							}
