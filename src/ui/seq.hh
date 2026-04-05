@@ -8,6 +8,7 @@
 #include "seq_common.hh"
 #include "seq_morph.hh"
 #include "seq_page_params.hh"
+#include "seq_scrub_settings.hh"
 #include "seq_substep_mask.hh"
 #include "seq_prob.hh"
 #include "seq_follow_assign.hh"
@@ -25,6 +26,7 @@ class Main : public Usual {
 	Morph morph{p, c, *this};
 	SubStepMask substep_mask{p, c, morph, *this};
 	Probability probability{p, c, *this};
+	ScrubSettings scrub_settings{p, c, *this};
 	Settings::Global global_settings{p, c, *this};
 	Settings::Channel channel_settings{p, c, *this};
 	Settings::FollowAssign follow_assign{p, c, *this, *this};
@@ -39,6 +41,7 @@ public:
 	}
 	//	using Usual::Usual;
 	void Init() override {
+		scrub_settings_entry_requested = false;
 		c.button.fine.clear_events();
 		c.button.bank.clear_events();
 		c.button.add.clear_events();
@@ -47,7 +50,14 @@ public:
 			b.clear_events();
 		}
 	}
+
 	void Update() override {
+		if (scrub_settings_entry_requested) {
+			scrub_settings_entry_requested = false;
+			SwitchUiMode(scrub_settings);
+			return;
+		}
+
 		ForEachEncoderInc(c, [this](uint8_t encoder, int32_t inc) { OnEncoderInc(encoder, inc); });
 		ForEachSceneButtonJustPressed(c, [this](uint8_t button) { OnSceneButtonPress(button); });
 		ForEachSceneButtonJustReleased(c, [this](uint8_t button) { OnSceneButtonRelease(button); });

@@ -39,6 +39,7 @@ inline void PlayModeLedAnimation(Controls &c, Catalyst2::Sequencer::Settings::Pl
 }
 
 class Usual : public Abstract {
+	bool initialized_from_shared = false;
 
 public:
 	Catalyst2::Sequencer::Interface &p;
@@ -66,16 +67,32 @@ public:
 			p.Trig();
 		}
 
-		if (c.button.fine.is_high() && c.button.morph.just_went_high()) {
-			if (!phase_locked && !picking_up) {
+		// One-time init: restore persisted lock state from Shared::Data on first tick
+		if (!initialized_from_shared) {
+			initialized_from_shared = true;
+			if (p.shared.data.phase_locked) {
 				phase_locked = true;
-				locked_raw = c.ReadSlider();
+				locked_raw = p.shared.data.locked_raw;
 				locked_phase = (locked_raw + c.ReadCv()) / 4096.f;
-			} else {
-				phase_locked = false;
 				picking_up = true;
 			}
-			lock_toggle_time = Controls::TimeNow();
+		}
+
+		// COPY+GLIDE: short release = lock toggle; 3s hold = scrub settings entry
+		if (c.button.fine.is_high() && c.button.morph.just_went_high()) {
+			scrub_hold_pending = true;
+			scrub_hold_start = Controls::TimeNow();
+		}
+		if (scrub_hold_pending) {
+			if (!c.button.fine.is_high()) {
+				scrub_hold_pending = false; // COPY released — abort
+			} else if (c.button.morph.just_went_low()) {
+				scrub_hold_pending = false;
+				DoLockToggle();
+			} else if (Controls::TimeNow() - scrub_hold_start >= scrub_settings_hold_ticks) {
+				scrub_hold_pending = false;
+				scrub_settings_entry_requested = true;
+			}
 		}
 
 		if (picking_up) {
@@ -84,31 +101,73 @@ public:
 			}
 		}
 
-		const auto phase = (phase_locked || picking_up)
-							  ? locked_phase
-							  : (c.ReadSlider() + c.ReadCv()) / 4096.f;
-		p.Update(phase);
+		// Slider movement tracking for indicator (active-movement-only flash)
+		const auto slider_now = c.ReadSlider();
+		if (std::abs((int32_t)slider_now - (int32_t)last_slider_raw) > slider_move_threshold) {
+			last_slider_raw = slider_now;
+			last_slider_move_time = Controls::TimeNow();
+		}
+
+		// Phase computation: quantized mode latches at step boundaries (one tick lag)
+		if (phase_locked || picking_up) {
+			p.Update(locked_phase, p.shared.data.scrub_ignore_mask);
+		} else {
+			const auto live_phase = (slider_now + c.ReadCv()) / 4096.f;
+			if (!p.shared.data.quantized_scrub || p.StepFired(0)) {
+				committed_phase = live_phase;
+			}
+			p.Update(committed_phase, p.shared.data.scrub_ignore_mask);
+		}
 	}
+
+	bool scrub_settings_entry_requested = false;
 
 protected:
 	bool phase_locked = false;
 	bool picking_up = false;
 	float locked_phase = 0.f;
+	float committed_phase = 0.f;
 	uint32_t lock_toggle_time = 0;
 	uint16_t locked_raw = 0;
 
+	// Scrub hold detection
+	bool scrub_hold_pending = false;
+	uint32_t scrub_hold_start = 0;
+	static constexpr uint32_t scrub_settings_hold_ticks = Clock::MsToTicks(3000);
+
+	// Slider movement tracking for indicator
+	uint16_t last_slider_raw = 0;
+	uint32_t last_slider_move_time = 0;
+	static constexpr uint32_t slider_active_ticks = Clock::MsToTicks(400);
+	static constexpr int32_t slider_move_threshold = 8;
+
 	static constexpr uint32_t toggle_feedback_ticks = Clock::MsToTicks(600);
-	static constexpr int32_t wiggle_threshold = 80;
 	static constexpr int32_t pickup_threshold = 80;
 	static constexpr uint8_t phase_lock_encoder = 7;
+
+	void DoLockToggle() {
+		if (!phase_locked && !picking_up) {
+			phase_locked = true;
+			locked_raw = c.ReadSlider();
+			locked_phase = (locked_raw + c.ReadCv()) / 4096.f;
+		} else {
+			phase_locked = false;
+			picking_up = true;
+		}
+		p.shared.data.phase_locked = phase_locked;
+		p.shared.data.locked_raw = locked_raw;
+		p.shared.do_save_shared = true;
+		lock_toggle_time = Controls::TimeNow();
+	}
 
 	void PaintPhaseLockIndicator() {
 		const auto t = Controls::TimeNow();
 		const bool just_toggled = (t - lock_toggle_time) < toggle_feedback_ticks;
-		const auto diff = (int32_t)c.ReadSlider() - (int32_t)locked_raw;
-		const bool wiggling = phase_locked && std::abs(diff) > wiggle_threshold;
+		const bool slider_moving = phase_locked &&
+		                           (t - last_slider_move_time) < slider_active_ticks &&
+		                           last_slider_move_time != 0;
 
-		if (just_toggled || wiggling || picking_up) {
+		if (just_toggled || slider_moving || picking_up) {
 			c.SetEncoderLed(phase_lock_encoder, ((t >> 7) & 1) ? Palette::red : Palette::off);
 		}
 	}

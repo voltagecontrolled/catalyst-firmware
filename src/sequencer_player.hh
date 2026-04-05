@@ -43,7 +43,7 @@ public:
 	bool pause = false;
 	float phase = 0.f;
 
-	void Update(float phase, float internal_clock_phase, const std::array<uint8_t, Model::NumChans> &do_step) {
+	void Update(float phase, float internal_clock_phase, const std::array<uint8_t, Model::NumChans> &do_step, uint8_t scrub_ignore_mask = 0xFFu) {
 		for (auto chan = 0u; chan < Model::NumChans; chan++) {
 			const auto l = settings.GetLengthOrGlobal(chan);
 			const auto pm = settings.GetPlayModeOrGlobal(chan);
@@ -66,7 +66,8 @@ public:
 				}
 			}
 			auto &c = channel[chan];
-			const auto sp = GetPhase(chan, phase, internal_clock_phase, actual_length);
+			const auto chan_phase = ((scrub_ignore_mask >> chan) & 1u) ? phase : 0.f;
+			const auto sp = GetPhase(chan, chan_phase, internal_clock_phase, actual_length);
 
 			const auto new_ = static_cast<uint32_t>(sp);
 			const auto prev_ = static_cast<uint32_t>(c.sequence_phase);

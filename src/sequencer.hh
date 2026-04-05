@@ -156,7 +156,7 @@ public:
 	uint8_t GetStartupSlot() {
 		return data.startup_slot;
 	}
-	void Update(float phase) {
+	void Update(float phase, uint8_t scrub_ignore_mask = 0xFFu) {
 		const auto clock_ticked = seqclock.Update();
 
 		std::array<uint8_t, Model::NumChans> per_chan_step{};
@@ -236,7 +236,7 @@ public:
 			}
 		}
 
-		player.Update(phase, seqclock.GetPhase(), per_chan_step);
+		player.Update(phase, seqclock.GetPhase(), per_chan_step, scrub_ignore_mask);
 
 		// Record which channels advanced a step this tick (used by lavender CV replace intersection logic)
 		for (auto chan = 0u; chan < Model::NumChans; chan++) {

@@ -19,7 +19,9 @@ class SavedSettings {
 	WearLevel<mdrivlib::FlashBlock<SharedData, SharedSettingsFlashAddr, SharedSettingsSectorSize>>
 		shared_settings_flash;
 
-	static constexpr uint32_t CurrentSharedSettingsVersionTag = Legacy::V1_1__V1_2::Shared::tag + 1;
+	static constexpr uint32_t CurrentSharedSettingsVersionTag = Legacy::V1_1__V1_2::Shared::tag + 2;
+	// v1.4.5 tag (tag+1): SharedData without phase lock persistence or scrub settings fields
+	static constexpr uint32_t V1_4_5_SharedSettingsVersionTag = Legacy::V1_1__V1_2::Shared::tag + 1;
 
 public:
 	bool read(SeqModeData &data) {
@@ -44,6 +46,32 @@ public:
 		const auto magic_number = *reinterpret_cast<uint32_t *>(SharedSettingsFlashAddr);
 		if (magic_number == CurrentSharedSettingsVersionTag) {
 			return shared_settings_flash.read(data);
+		} else if (magic_number == V1_4_5_SharedSettingsVersionTag) {
+			// v1.4.5 → v1.4.6: added phase lock persistence and scrub settings fields.
+			// Old struct is identical except it lacks the 8 bytes at the end.
+			// Read only the known-good fields by overlaying the old struct size.
+			struct V1_4_5_SharedData {
+				uint32_t SettingsVersionTag;
+				Model::Mode saved_mode;
+				Calibration::Dac::Data dac_calibration;
+				Quantizer::CustomScales custom_scale;
+				std::array<uint8_t, Model::NumChans> palette;
+				bool validate() const { return SettingsVersionTag == V1_4_5_SharedSettingsVersionTag; }
+			};
+			WearLevel<mdrivlib::FlashBlock<V1_4_5_SharedData, SharedSettingsFlashAddr, SharedSettingsSectorSize>>
+				v1_4_5_flash;
+			V1_4_5_SharedData old{};
+			if (v1_4_5_flash.read(old)) {
+				data.saved_mode = old.saved_mode;
+				data.dac_calibration = old.dac_calibration;
+				data.custom_scale = old.custom_scale;
+				data.palette = old.palette;
+				// new fields retain their zero-initialized defaults (unlocked, no quantization, all tracks active)
+				shared_settings_flash.erase();
+				data.SettingsVersionTag = CurrentSharedSettingsVersionTag;
+				shared_settings_flash.write(data);
+				return shared_settings_flash.read(data);
+			}
 		} else if (magic_number == Legacy::V1_1__V1_2::Shared::tag) {
 			WearLevel<mdrivlib::FlashBlock<Legacy::V1_1__V1_2::Shared::Data,
 										   SharedSettingsFlashAddr,

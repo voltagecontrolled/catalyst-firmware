@@ -56,6 +56,15 @@ public:
 			}
 		});
 
+		// SHIFT + page button: change page without exiting
+		if (c.button.shift.is_high()) {
+			ForEachSceneButtonJustPressed(c, [this](uint8_t button) {
+				p.SelectPage(button);
+				focused_step = Model::NumChans; // clear focus — new page may have different step counts
+			});
+			return;
+		}
+
 		// Page buttons toggle sub-steps on the focused step
 		if (focused_step < Model::NumChans) {
 			const auto page = p.IsPageSelected() ? p.GetSelectedPage() : p.GetPlayheadPage();
