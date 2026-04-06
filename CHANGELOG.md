@@ -9,7 +9,7 @@ All changes relative to upstream 4ms-company/catalyst-firmware v1.3.
 | v1.4.3 | Sub-step mask edit mode | Hardware verified |
 | v1.4.4 | Linked Tracks: CV transpose follow + gate track clock follow | Hardware verified |
 | v1.4.5 | Gate clock step-only mode, CV replace follow, bugfixes | Hardware verified |
-| v1.4.6 | Phase Scrub Performance Page: granular sequencing, beat repeat, lock persistence, sub-step page nav | Pre-release |
+| v1.4.6 | Phase Scrub Performance Page: granular sequencing, beat repeat, lock persistence, sub-step page nav | Release Candidate |
 
 **Note on preset compatibility:** v1.4.2 expanded `sizeof(Step)` from 4 to 8 bytes. Presets saved under v1.3 are not compatible and are discarded on first boot. The firmware detects the mismatch via a version tag and resets to defaults automatically -- no manual factory reset needed.
 
@@ -140,7 +140,9 @@ A dedicated performance page for Phase Scrub controls, replacing the basic lock 
 
 Page buttons toggle per-track scrub participation: lit = track follows scrub, unlit = track ignores scrub and plays normally.
 
-**Quantize (Enc 1):** Snaps the scrub phase to the nearest step boundary. Uses `round(phase / step_size) * step_size` — deterministic, no intersection logic.
+**Quantize (Enc 1):** Two behaviors depending on slider performance mode.
+- *Standard/Granular:* snaps the scrub phase to the nearest step boundary. Uses `round(phase / step_size) * step_size` — deterministic, no intersection logic.
+- *Beat Repeat:* controls entry timing. Off = fires the instant SHIFT releases (raw timing, full player control). On = snaps to the nearest step boundary: fires immediately if SHIFT releases in the first half of the current step, waits for the next step boundary if in the second half. Max wait = half a step period.
 
 **Slider Performance Mode (Enc 2):** Selects what the slider does during performance.
 
@@ -153,7 +155,7 @@ Page buttons toggle per-track scrub participation: lit = track follows scrub, un
 
 **Shift staging (beat repeat):** Hold SHIFT to freeze both the committed zone and `orbit_center`. The slider can be moved freely — no scrubbing occurs and no new zone commits. On SHIFT release, the pending zone commits immediately and `orbit_center` resumes tracking the slider. Useful for staging a division change or a clean return to zero without chaotic scrubbing in transit.
 
-**Beat repeat entry and step lock:** On first entry from off (committed transitions from 0xFF to a zone), beat repeat waits for the next master clock tick before starting, ensuring the first repeat fires on the step grid. At that first clock tick, `orbit_center` is snapped to the step currently firing — so the looped step is the one you hear as the first beat of the repeat, not wherever the slider happened to be at shift release. Slider remains in pickup mode after entry; moving it takes over `orbit_center` continuously.
+**Beat repeat entry and step lock:** On first entry from off, the sequencer snaps `orbit_center` to the current player step at the moment of first fire, so the step you hear first is the step that loops. When quantize is off, first fire is immediate (SHIFT release tick). When quantize is on, first fire is at the nearest step boundary (immediate if in the first half of the step, else next clock_ticked). In both cases `orbit_center` is snapped at the actual fire moment. Slider enters pickup mode after entry; moving it takes over `orbit_center` continuously.
 
 **Orbit behavior:** The orbit position counter advances continuously; moving the slider to a new center shifts the window without resetting the position. Quantize snaps the center to the nearest step boundary if enabled. `scrub_ignore_mask` applies — ignored channels continue normal playback regardless of mode. Phase Scrub Lock is respected in all modes: when locked, the orbit center and beat repeat zone calculation use the locked slider value rather than the physical slider position.
 

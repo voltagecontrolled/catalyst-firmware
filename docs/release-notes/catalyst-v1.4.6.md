@@ -1,11 +1,5 @@
 **Note: this is a pre-release firmware, use at your own risk. This is not supported or endorsed by 4ms Company and flashing third party firmware could void your warranty or render your module inoperable. The author assumes no liability for any damage resulting from use of this firmware.**
 
-## Upgrading from v1.4.5 — recalibration may be required
-
-If you ran any v1.4.6 alpha release (alpha1–alpha5) before installing this release, your DAC calibration data was corrupted by a bug in the alpha1 migration. You may notice pitch tracks running approximately 12 cents flat per octave. If so, recalibrate: hold **Shift + Glide** while powering the module to enter the calibration screen. See `docs/CALIBRATION.md` for the full procedure.
-
-If you are upgrading directly from v1.4.5, your calibration is migrated correctly and recalibration should not be needed.
-
 ---
 
 ## Phase Scrub Performance Page (v1.4.6)
@@ -25,7 +19,7 @@ A dedicated performance page replacing the basic lock toggle combo. All settings
 
 **Page buttons:** toggle per-track scrub participation. Lit = track follows scrub, unlit = track ignores scrub and plays normally.
 
-**Quantize (Enc 1):** snaps the scrub phase to the nearest step boundary.
+**Quantize (Enc 1):** in standard/granular mode, snaps the scrub phase to the nearest step boundary. In beat repeat, controls entry timing: off = fires immediately on SHIFT release (precise, timing-dependent); on = snaps to nearest step boundary (max half-step wait, always musical).
 
 **Slider Performance Mode (Enc 2):**
 - **Off:** standard phase scrub

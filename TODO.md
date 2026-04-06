@@ -4,10 +4,9 @@ Items are grouped by target version where known, then backlog.
 
 ---
 
-## v1.4.6
+## v1.4.7
 
 ### Conditional auto-reset on firmware upgrade
-
 
 
 **Area:** `src/sequencer.hh` `Sequencer::Data::validate()`, `src/f401-drivers/saved_settings.hh`
