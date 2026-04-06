@@ -315,9 +315,29 @@ public:
 							? std::max<uint32_t>(1u, beat_period * div_num_4[zone] / div_denom_4[zone])
 							: std::max<uint32_t>(1u, beat_period * div_num_8[zone] / div_denom_8[zone]);
 						if (beat_repeat_countdown == 0) {
-							beat_repeat_phase = 0.f;
-							orbit_should_advance = true;
-							beat_repeat_countdown = safe_period;
+							// On first entry (snap_pending), quantize mode snaps to the nearest step
+							// boundary: fire immediately if in the first half of the step (current
+							// boundary was closer), or wait for the next clock tick (next boundary is
+							// closer). Non-quantized and normal cycle completions always fire immediately.
+							const bool first_entry = shared.beat_repeat_snap_pending;
+							const bool should_fire = !first_entry
+							                      || !shared.data.quantized_scrub
+							                      || clock_ticked
+							                      || seqclock.PeekPhase() < 0.5f;
+							if (should_fire) {
+								beat_repeat_phase = 0.f;
+								if (first_entry && cur_channel < Model::NumChans) {
+									const auto len = slot.settings.GetLengthOrGlobal(cur_channel);
+									if (len > 0) {
+										shared.orbit_center =
+											static_cast<float>(player.GetRelativeStep(cur_channel, 0))
+											/ static_cast<float>(len);
+									}
+									shared.beat_repeat_snap_pending = false;
+								}
+								orbit_should_advance = true;
+								beat_repeat_countdown = safe_period;
+							}
 						} else {
 							beat_repeat_phase =
 								1.f - static_cast<float>(beat_repeat_countdown) / static_cast<float>(safe_period);
@@ -326,6 +346,7 @@ public:
 					} else {
 						beat_repeat_countdown = 0;
 						beat_repeat_phase = 0.f;
+						shared.beat_repeat_snap_pending = false;
 					}
 				}
 

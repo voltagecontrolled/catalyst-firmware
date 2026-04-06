@@ -145,6 +145,7 @@ public:
 					p.shared.beat_repeat_pending = 0xFF;
 					if (!c.button.shift.is_high()) {
 						p.shared.beat_repeat_committed = 0xFF;
+						p.shared.beat_repeat_snap_pending = false;
 						orbit_pickup = false;
 					}
 				} else {
@@ -172,12 +173,10 @@ public:
 					if (p.shared.beat_repeat_committed == 0xFF) {
 						orbit_pickup = false;
 					} else if (was_off) {
-						const auto len = p.slot.settings.GetLength();
-						const auto global_step =
-							static_cast<uint32_t>(p.GetPlayheadPage()) * Model::Sequencer::Steps::PerPage
-							+ p.GetPlayheadStepOnPage();
-						p.shared.orbit_center =
-							static_cast<float>(global_step) / static_cast<float>(len > 0u ? len : 1u);
+						// Sequencer will snap orbit_center at the moment of first fire.
+						// Quantize off: fires this tick (immediate). Quantize on: fires at the
+						// nearest step boundary. Either way the looped step is the one that fires.
+						p.shared.beat_repeat_snap_pending = true;
 						orbit_pickup_slider = slider_now;
 						orbit_pickup = true;
 					}
