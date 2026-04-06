@@ -27,16 +27,16 @@ For a user-friendly guide to all added features, see the [New Features wiki page
 ## Added Features
 
 ### Phase Scrub Lock (v1.4.1)
-**Combo:** Fine + Glide (Ratchet)
+**Combo:** COPY + GLIDE (short press — release either button before 1.5s)
 
-Locks the Phase Scrub slider at its current value. A second press unlocks with pickup behavior -- the slider resumes control only after physically reaching the locked value, preventing jumps. Encoder 8 LED blinks red while locked.
+Locks the Phase Scrub slider at its current value. A second press unlocks with pickup behavior -- the slider resumes control only after physically reaching the locked value, preventing jumps. Encoder 8 LED blinks red while locked or during pickup.
 
 ### Ratchet expansion (v1.4.2)
 **Combo:** Hold Glide (Ratchet), turn step encoder CW
 
 Ratchet (subdivide) count expanded from 4x to 8x maximum. Displayed as a dim salmon to bright red gradient in Glide mode.
 
-### Repeat mode (v1.4.2)
+### Step Repeats (v1.4.2)
 **Combo:** Hold Glide (Ratchet), turn step encoder CCW
 
 A new per-step mode that fires the step N additional times at the current clock division, extending the effective pattern length. An 8-step pattern with one step set to repeat x3 becomes 11 clock ticks long. Displayed as a dim teal to blue gradient in Glide mode.
@@ -44,17 +44,36 @@ A new per-step mode that fires the step N additional times at the current clock 
 ### Sub-step mask edit mode (v1.4.3)
 **Entry:** Hold Glide (Ratchet) + Tap Tempo on a gate channel, then release both buttons
 
-Persistent mode for editing which sub-steps of a ratcheted or repeated step fire or are silenced. Page buttons show and toggle each sub-step's on/off state. Sub-step 0 cannot be silenced.
+Persistent mode for editing which sub-steps of a ratcheted or repeated step fire or are silenced. Page buttons show and toggle each sub-step's on/off state. All sub-steps including the first can be silenced.
 
-### CV track transpose follow (v1.4.4)
-**Entry:** SHIFT + Chan., then tap Glide (Ratchet) on a CV track
+### Linked Tracks: CV follow and gate clock follow (v1.4.4 / v1.4.5)
+**Entry:** SHIFT + Chan., then tap Glide (Ratchet) on a CV track. Press FINE to cycle sub-modes.
 
-A CV track can follow another CV track and use its output as a transpose offset. The source track's current pitch (relative to 0V) is added to the target track each tick.
+A CV track can follow another track as a source. Six sub-modes:
 
-### Gate track clock follow (v1.4.4)
-**Entry:** SHIFT + Chan., then tap Glide (Ratchet) -- press FINE to switch to clock sub-mode
+- **Blue** — CV add follow: source CV pitch added as a transpose offset each tick
+- **Lavender** — CV replace: target outputs source pitch at intersecting steps; 0V acts as pass-through
+- **Orange** — Gate clock, ratchets only: CV advances one step per ratchet sub-step on the gate track
+- **Yellow** — Gate clock, repeats only: CV advances once per repeat tick on the gate track
+- **Salmon** — Gate clock, ratchets + repeats: advances on both
+- **Teal** — Gate clock, step only: CV advances once per gate step, ignoring ratchets and repeats
 
-A CV track can designate a gate track as its clock source. The CV track advances one step per firing event on the gate track instead of following the master clock. Masked-off sub-steps (silenced via sub-step mask) do not trigger an advance.
+### Phase Scrub Performance Page (v1.4.6)
+**Entry:** COPY + GLIDE held 1.5 seconds. **Exit:** COPY + GLIDE or Play/Reset.
+
+A dedicated performance page for Phase Scrub. All settings survive reboots.
+
+| Encoder | Function |
+|---------|----------|
+| 1 | Quantize (standard/granular: snap to step boundary; beat repeat: snap entry to nearest beat) |
+| 2 | Slider mode: off / granular / beat repeat 8-zone / beat repeat 4-zone |
+| 3 | Granular width or beat repeat debounce delay (context-sensitive) |
+| 4 | Orbit direction (granular only): forward / backward / ping-pong / random |
+| 8 | Phase Scrub Lock |
+
+Page buttons toggle per-track scrub participation. Phase Scrub Lock now persists across power cycles.
+
+Sub-step page navigation (v1.4.6): SHIFT + PAGE button while in sub-step mask edit mode changes page without exiting.
 
 ---
 
