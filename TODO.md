@@ -4,6 +4,23 @@ Items are grouped by target version where known, then backlog.
 
 ---
 
+## v1.5.0 — VoltSeq (branch: voltseq)
+
+Full spec: `docs/planned/VOLTSEQ.md`
+
+Implementation phases (see spec for detail):
+
+1. **Foundation** — compile-time build flag, `VoltSeq::Data` struct, tag bump
+2. **Clock engine** — external clock edge detection, internal BPM timer, inter-tick interval measurement, per-channel division counters, Tap Tempo
+3. **Playback** — per-channel playheads + shadow playheads, direction state machines, output calculation (CV/Gate/Trigger), step-lock + arpeggiation, SHIFT+PLAY reset
+4. **Step editing UI** — hold page button, page navigation, channel arm state machine, x0x step editing, slider CV recording
+5. **Channel Edit + Global Settings** — enc 4 mode selector, phase rotate, all per-channel settings, global settings
+6. **Glide / Ratchet editors** — GLIDE modifier, long-press step editors for glide and ratchets
+7. **Slider performance page** — port orbit engine, beat repeat, lock + pickup
+8. **Infrastructure** — 3-button mode switch (replace `modeswitcher` in both modes), save behavior, `release.yml` three-build passes
+
+---
+
 ## v1.4.7
 
 ### Conditional auto-reset on firmware upgrade
