@@ -4,18 +4,19 @@ Replaces Macro mode in one of two release variants (see Release Strategy below).
 
 ## Release Strategy
 
-Two WAV files will be published per release:
+Three WAV files will be published per release:
 
-| Variant | Second mode | Filename |
+| Filename | Left 3 (Fine+Play+Glide) | Right 3 (Shift+Tap+Chan) |
 |---|---|---|
-| `catalyst-vX.Y.Z-voltseq.wav` | VoltSeq (this spec) | For users who want the step sequencer |
-| `catalyst-vX.Y.Z-classic.wav` | Original Macro mode | For users who want Sequencer improvements but prefer Macro |
+| `catalyst-vX.Y.Z-catseq-catcon.wav` | CatSeq | CatCon |
+| `catalyst-vX.Y.Z-catseq-voltseq.wav` | CatSeq | VoltSeq |
+| `catalyst-vX.Y.Z-voltseq-catcon.wav` | VoltSeq | CatCon |
 
-Both variants are built from the **same commit** using a compile-time flag in `conf/build_options.hh` (e.g. `SECOND_MODE_VOLTSEQ` vs `SECOND_MODE_MACRO`). `MacroSeq` in `src/app.hh` delegates to `VoltSeq::App` or `Macro::App` at compile time based on this flag. No separate branches needed.
+All three are built from the **same commit** using compile-time flags in `conf/build_options.hh` selecting which `::App` class each mode slot resolves to. `MacroSeq` in `src/app.hh` dispatches on `params.shared.mode` (still a 2-value enum — mode A or mode B); what each value maps to is determined at compile time. No separate branches needed.
 
-The GitHub Actions release workflow (`release.yml`) will need a small update to run two build passes per tag and attach both WAVs to the release.
+The GitHub Actions release workflow (`release.yml`) will need a small update to run three build passes per tag and attach all three WAVs to the release.
 
-Flash note: the two variants share the same `Macro::Data` storage slot. Switching between them (flashing one then the other) will trigger a clean init and wipe that slot's data. This is expected and acceptable — users will generally pick one variant and stay on it.
+Flash note: the three variants share the same two storage slots (`Sequencer::Data` and `Macro::Data`). Switching between builds will trigger a clean init on the affected slot. Users will generally pick one build and stay on it.
 
 Panel reference: **Sequencer panel throughout.** All button labels use Sequencer panel silkscreen.
 
@@ -37,15 +38,37 @@ Panel reference: **Sequencer panel throughout.** All button labels use Sequencer
 | Clock In jack | External clock |
 | Reset jack | Hardware reset — all playheads to step 0 |
 | Phase CV jack | Reserved (v1) |
-| Play/Reset button | Short press: play/stop; long press: soft reset all playheads to step 0 |
+| Play/Reset button | Press: play/stop; SHIFT+PLAY: reset all playheads to step 0 (matches Sequencer convention) |
 | Shift | Global settings modifier; page navigation modifier |
 | Chan. / Quantize | Arm channel modifier (CHAN + page button); Channel Edit entry (Shift + CHAN) |
-| Tap Tempo | Internal BPM (when no clock patched); 3+ taps sets tempo |
-| Glide (Ratchet) | Glide modifier |
-| Fine | Fine encoder adjustment (1-unit steps) while editing |
-| Copy | Step copy/paste |
+| Tap Tempo | Single tap: tap tempo (matches Sequencer convention — `add.just_went_high()` = tap) |
+| Glide (Ratchet) | Glide / gate-width / ratchet modifier (see Glide section) |
+| Fine / Copy | Fine encoder adjustment (1-unit steps); copy/paste steps |
 
 Encoders are **not** press encoders. All interactions are rotation only.
+
+---
+
+## Mode Switching
+
+Mode switches are triggered by holding all three buttons of either cluster simultaneously. Detected globally from any UI state (handled in the common tick, not a specific mode).
+
+| Gesture | CatSeq + CatCon (stock) | CatSeq + VoltSeq | VoltSeq + CatCon |
+|---|---|---|---|
+| Left 3 held (Fine + Play + Glide) | → CatSeq | → CatSeq | → VoltSeq |
+| Right 3 held (Shift + Tap + Chan) | → CatCon | → VoltSeq | → CatCon |
+
+VoltSeq occupies whichever slot the displaced mode was in. The cluster-to-mode mapping is **identical to stock** — no gesture relearning across builds. In the CatSeq+VoltSeq build, both modes use the Sequencer panel; the left/right distinction remains consistent even though no panel flip is involved.
+
+Replaces the previous SHIFT+CHAN long-hold modeswitcher, which only fired from within Channel Settings. The 3-button combo works from anywhere and unambiguously targets a specific mode rather than toggling.
+
+**Implementation note:** This gesture needs to be adopted in the Sequencer mode (`seq_common.hh` `Common()`) as well, replacing the `modeswitcher` in `seq_settings.hh`. Both modes should share the same detection logic.
+
+### Startup Mode Lock (Power-On)
+
+Holding either 3-button cluster **at power-on** sets that mode as the persisted startup mode (`params.shared.data.saved_mode`), exactly as the current firmware does. The boot detection lives in `src/ui.hh` before the main loop, saves if changed, then waits for buttons to release before continuing.
+
+Current mapping (`fine+play+morph` → Sequencer, `bank+add+shift` → Macro) is preserved exactly. VoltSeq takes whichever slot the displaced mode occupied — no change to the physical gesture, no user relearning.
 
 ---
 
@@ -54,7 +77,6 @@ Encoders are **not** press encoders. All interactions are rotation only.
 - **Page**: 8 steps. Navigate via **Shift + Pages button 1–8**.
 - **Global step index** (0-based): `page × 8 + step_within_page`, indices 0–63.
 - **Per-channel length**: Independent step count per channel (1–64). Channels wrap at their own length, enabling polyrhythms.
-- **Per-channel start step**: First active step, 0-based global index.
 - **Page display while Shift held**: Pages button LEDs — solid = current page, dim = page contains non-default data, off = empty page.
 
 ---
@@ -181,25 +203,97 @@ Step values for trigger channels are stored as `int8_t`-range integers within th
 
 ---
 
-## Glide
+## Glide / Gate Width / Ratchet (GLIDE button)
 
-### Per-Step Glide Toggle
+The GLIDE button works as a modifier with two variants: bare (GLIDE) and shifted (SHIFT+GLIDE). Both share the same interaction pattern; channel type determines the effect. This matches the Sequencer convention of GLIDE being the primary ratchet/glide modifier.
 
-Hold **Glide** + press a **Pages button** → toggle the glide flag for that step across all channels. Page button LED dimly lit when glide is on for that step; off = no glide.
+### Effect by channel type
 
-### Per-Channel Glide Amount
+| | CV | Gate | Trigger |
+|---|---|---|---|
+| **GLIDE** | Slew time | Gate width (all steps, relative offset) | Pulse width (`pulse_width_ms`) |
+| **SHIFT+GLIDE** | — (no effect) | — (no effect) | Ratchet/repeat (all steps, relative offset) |
 
-Hold **Glide** + turn **encoder N** → set slew time for channel N (0 = off; max ≈ several seconds). Uses one `Slew::Interface` instance per channel. When a step's glide flag is set, the channel slides from the previous value to the new value over the configured slew time instead of jumping.
+### GLIDE + encoder N (no page button held)
 
-Gate and Trigger channels ignore glide (slew is bypassed).
+Adjusts channel N's parameter destructively across all steps:
+- **CV channel**: sets `slew_time` for channel N (channel-level setting; not per-step)
+- **Gate channel**: offsets all steps' gate length by the encoder increment (destructive relative adjust)
+- **Trigger channel**: adjusts `pulse_width_ms` for channel N
+
+### SHIFT+GLIDE + encoder N (no page button held)
+
+- **Trigger channel**: offsets ratchet/repeat count on all steps by the encoder increment (destructive relative adjust; clamps at min/max)
+- **CV / Gate**: no effect
+
+### GLIDE + long-press page button N → Glide Step Editor
+
+Long-press activates a held editor "screen" so you don't need to sustain the full chord:
+- **CV channel N**: encoders 1–8 show and toggle the glide flag for steps 1–8 on the current page. Encoder LED lit = glide on for that step.
+- **Gate channel N**: encoders 1–8 set gate length for steps 1–8 individually (same as hold-step + encoder in normal mode, but channel-focused).
+- **Trigger channel**: falls through to ratchet editor (same as SHIFT+GLIDE + long-press below).
+
+Navigate pages with SHIFT + page button while in the editor. Exit: press page button N again, or press GLIDE.
+
+### SHIFT+GLIDE + long-press page button N → Ratchet Step Editor
+
+Long-press activates the ratchet editor screen for channel N:
+- **Trigger channel N**: encoders 1–8 set ratchet/repeat count for steps 1–8 on the current page. CW = add ratchets, CCW = add repeats (same direction convention as normal step editing).
+- **CV / Gate**: no effect (exits immediately).
+
+Navigate pages with SHIFT + page button. Exit: press page button N again, or press GLIDE.
+
+### Slew application
+
+When a CV step's glide flag is set, `Slew::Interface` for that channel interpolates from the previous value to the new one over `slew_time`. Gate and Trigger bypass slew entirely.
+
+---
+
+## Slider Performance Page
+
+Entered via **Fine/Copy + Glide hold 1.5s** (same entry gesture as Sequencer mode). Exit via the same combo (short press) or Play/Reset.
+
+### Mode 0 — Standard
+Slider has no effect during playback. Channels advance by clock only. Slider is only active when a CV channel is armed for recording.
+
+### Mode 1 — Granular
+`orbit_center` tracks the slider position. Each clock tick advances `orbit_pos` through a window of steps around the center, per channel. Width and direction configurable. Channels can be individually excluded from orbit (page buttons toggle per-channel follow mask, same as Sequencer).
+
+The orbit logic from `sequencer.hh` (`orbit_center`, `orbit_width`, `orbit_direction`, per-channel `orbit_step[]`) is essentially channel-type-agnostic and can be reused directly. The key adaptation: VoltSeq reads `orbit_step[ch]` instead of the clock playhead when `orbit_active && channel_follows_orbit[ch]`.
+
+### Mode 2 / 3 — Beat Repeat
+Slider divided into zones (mode 2: 8 zones with triplets; mode 3: 4 zones, no triplets). Each zone loops the current step at a beat subdivision. Shift freezes the active zone. Zone-to-subdivision tables and countdown logic are portable from `sequencer.hh`.
+
+**Additional requirement for VoltSeq:** beat period (`3000 × 60 / bpm`) requires measuring the inter-clock-tick interval for external clock. Add a running average of the last N clock edges to the clock engine. Internal clock uses `internal_bpm` directly.
+
+### Lock
+Freezes `orbit_center` (or beat repeat zone) so a slider bump doesn't shift the loop. Pickup mode activates on unlock — slider must physically reach the locked position before taking over.
+
+Also applies when a CV channel is armed: lock pauses writing to steps without disarming, so the slider can sit still between recording passes.
+
+### Performance Page Settings
+
+Entered from the performance page via the same settings gesture. Encoders:
+
+| Encoder | Silkscreen | Setting |
+|---|---|---|
+| 1 | Dir. | Quantize orbit center to step boundaries (on/off) |
+| 2 | Phase | Performance mode: off / granular / beat-repeat 8-zone / beat-repeat 4-zone |
+| 3 | Range | Granular width (% of channel length) / beat repeat debounce delay |
+| 4 | Transpose | Orbit direction: Fwd / Rev / Ping-Pong / Random |
+| 8 | Random | Lock toggle |
+
+Page buttons toggle per-channel orbit follow mask (lit = follows orbit, unlit = plays normally).
 
 ---
 
 ## Copy / Paste
 
-- Hold **Copy** + press **Pages button A** → copy all 8 channel values for step A into clipboard.
-- Hold **Copy** + press **Pages button B** → paste clipboard into step B.
-- Fine + Copy while holding a page button → paste into all currently held steps.
+Matches Sequencer mode gesture convention (`c.button.fine` = Fine/Copy):
+
+- **Fine/Copy just-pressed while page button is held** → copy all 8 channel values for that step into clipboard.
+- **Fine/Copy held, then press page button** → paste clipboard into that step.
+- **Fine/Copy held, press multiple page buttons** → paste into all pressed steps.
 
 Clipboard is volatile (lost on power cycle).
 
@@ -236,7 +330,7 @@ Encoder rotations set **per-channel settings** for the focused channel:
 | 2 | Phase | Phase rotate (destructive — see below) | Phase rotate | Phase rotate |
 | 3 | Range | Output voltage range | — (ignored) | Pulse width (1–100ms; default 10ms) |
 | 4 | Transpose | **Mode selector**: cycles CV-Off → scales → Gate → Trigger → CV-Off; LED = current mode | ← same | ← same |
-| 5 | Start | Start step (global index 0–63) | Output delay: 0–20ms (CV settles before gate fires) | Output delay: 0–20ms (CV settles before trigger fires) |
+| 5 | Start | Output delay: 0–20ms | Output delay: 0–20ms | Output delay: 0–20ms |
 | 6 | Length | Step count (1–64) | Step count | Step count |
 | 7 | Clock Div | Clock division | Clock division | Clock division |
 | 8 | Random | Random amount (0 = deterministic, max = fully random) | Step probability | Step probability |
@@ -295,7 +389,6 @@ enum class Direction : uint8_t { Forward, Reverse, PingPong, Random };
 
 struct ChannelSettings {
     uint8_t              length          = 8;     // 1..64
-    uint8_t              start           = 0;     // 0..63 global step index
     Clock::Divider::type division        = {};    // reuse existing type
     Channel::Cv::Range   range           = {};    // output range (encoder editing); CV only
     int8_t               slider_base_v   = 0;     // slider recording lower limit V: −5,0,1..10; CV only
@@ -305,7 +398,7 @@ struct ChannelSettings {
     float                random_amount   = 0.f;
     float                glide_time      = 0.f;   // seconds; 0 = disabled; CV only
     uint8_t              pulse_width_ms  = 10;    // trigger pulse width in ms; Trigger only
-    uint8_t              trig_delay_ms   = 0;     // output delay in ms; Gate and Trigger only
+    uint8_t              output_delay_ms = 0;     // output delay in ms; all channel types
 };
 
 struct StepFlags {
@@ -364,21 +457,24 @@ Current `Macro::Data` allocation: 7820 bytes. Fits comfortably.
 
 ## Things to Build
 
-1. **Clock engine**: Rising-edge detection on Clock In; internal timer at `internal_bpm` when unpatched. Master tick counter drives per-channel division counters.
+1. **Clock engine**: Rising-edge detection on Clock In; internal timer at `internal_bpm` when unpatched. Master tick counter drives per-channel division counters. Track inter-tick interval (running average of last N edges) for beat repeat beat-period calculation under external clock.
 2. **Per-channel playhead + shadow playhead**: Shadow advances unconditionally each tick; real playhead copies shadow when no steps are held. Shadow playheads are **paused** while any channel is armed or while Channel Edit / Settings mode is active — they serve no purpose in those states and pausing avoids silent drift that would surprise the user on return to normal playback.
 3. **Direction state machine**: Adds `int8_t ping_pong_dir[NumChans]` to runtime state (not stored).
 4. **Step-lock and arpeggiation**: Sorted held-step list; cycle through on each tick.
 5. **Arm state machine**: Tracks which channel (if any) is armed, which type it is, and routes page buttons / slider / encoders accordingly.
 6. **Slider-to-step recorder**: On each tick while a CV channel is armed, write `map(slider_adc, 0..4095, slider_base_v * V_scale, (slider_base_v + slider_span_v) * V_scale)` → quantize → write to `steps[page][step][ch]`. Replaces `Recorder::Interface` playback logic (buffer reused, state machine replaced).
-7. **x0x step toggle + value edit**: Short-press toggles gate/trigger step on/off; hold + encoder sets gate length or ratchet/repeat count.
+7. **x0x step toggle + value edit**: Short-press toggles gate/trigger step on/off; long-press-hold + encoder sets gate length or ratchet/repeat count (via armed channel or glide editor).
 8. **Ratchet generator**: Subdivide step window into N equal pulse slots; fire triggers at each slot boundary.
 9. **Repeat handler**: When repeat depth R > 0, hold playhead for R additional ticks before advancing.
 10. **Per-channel glide**: 8 `Slew::Interface` instances; bypassed when `glide_time == 0` or step's glide flag is off.
-11. **Phase rotation**: In Channel Edit, enc 2 detents call a `RotateChannel(ch, delta)` function that `std::rotate`s the relevant slice of `steps` for that channel across all pages.
-12. **Destructive phase rotate across pages**: `RotateChannel` treats the channel's full 64-step logical sequence as a flat array, rotates it, and writes back into the page-indexed structure.
-13. **Channel Edit UI**: New UI state class analogous to `Macro::Settings`.
-14. **Tap Tempo**: Running average of last 4 inter-tap intervals → `internal_bpm`.
-15. **Internal clock generator**: Timer ISR or tick-counter when Clock In is unpatched.
+11. **Glide step editor UI**: Long-press-activated held screen entered via GLIDE + long-press page button. Encoders show/edit per-step glide flags (CV) or gate lengths (Gate) for the focused channel.
+12. **Ratchet step editor UI**: Long-press-activated held screen entered via SHIFT+GLIDE + long-press page button. Encoders show/edit per-step ratchet/repeat counts for the focused Trigger channel.
+13. **Phase rotation**: In Channel Edit, enc 2 detents call a `RotateChannel(ch, delta)` function that `std::rotate`s the channel's full 64-step logical sequence and writes back into the page-indexed structure.
+14. **Channel Edit UI**: New UI state class analogous to `Macro::Settings`.
+15. **Tap Tempo**: Running average of last 4 inter-tap intervals → `internal_bpm`. `add.just_went_high()` = tap, matching Sequencer convention.
+16. **Internal clock generator**: Timer ISR or tick-counter when Clock In is unpatched.
+17. **SHIFT+PLAY reset**: Direct `Reset()` call (all playheads + shadow playheads to step 0). Simpler than Sequencer's Song Mode → Stop path; same end result.
+18. **Performance page**: Port orbit engine from `sequencer.hh` and `seq_common.hh`. Adapt step lookup to use `orbit_step[ch]` instead of phase-based output. Add per-channel follow mask. Entry/exit gesture matches Sequencer (Fine/Copy + Glide hold 1.5s).
 
 ---
 
@@ -387,6 +483,13 @@ Current `Macro::Data` allocation: 7820 bytes. Fits comfortably.
 | Topic | Decision |
 |---|---|
 | Save behavior | Mirror Sequencer mode save behavior exactly (same trigger events, same mechanism) |
+| Play/Reset button | Press = play/stop; SHIFT+PLAY = reset all playheads (matches Sequencer: SHIFT→global settings→PLAY→Song Mode→release SHIFT = Stop+Reset; VoltSeq shortcuts this to a direct Reset() call) |
+| BPM setting | SHIFT + enc 7 (BPM/Clock Div) = adjust internal BPM; Tap Tempo button single-tap = tap tempo. Both match Sequencer conventions. |
+| Start step | Removed from ChannelSettings. Phase rotation (enc 2, destructive) covers the use case. Enc 5 = output delay for all channel types. |
+| SHIFT+GLIDE | In Sequencer enters Probability mode. In VoltSeq enters Ratchet step editor (channel type determines effect). Intentional departure; Probability mode does not apply to VoltSeq. |
+| Copy/paste gesture | Matches Sequencer: Fine/Copy just-pressed while step held = copy; Fine/Copy held then step pressed = paste. Same `c.button.fine` button, same timing distinction. |
+| GLIDE without page button | Encoder N = destructive per-channel offset: CV → slew_time, Gate → all-step gate width, Trigger → pulse_width_ms. |
+| Mode switch | Hold all 3 left-cluster buttons (Fine+Play+Glide) = switch to Controller-panel mode; hold all 3 right-cluster buttons (Shift+Tap+Chan) = switch to Sequencer-panel mode. Works from any UI state. Replaces SHIFT+CHAN long-hold modeswitcher — that mechanism only fired from Channel Settings and gave no directional control. |
 | Gate output voltage | Fixed 10V, same as Sequencer mode. Not configurable per channel. |
 | Trigger pulse width | 10ms default; configurable per channel via enc 3 (Range) in Channel Edit (1–100ms). |
 | Trig/Gate output delay | Per-channel, 0–20ms, set via enc 5 (Start) in Channel Edit for Gate/Trigger channels. Allows CV to settle before the trig/gate fires (needed for digital voices like Akemie's Taiko, BIA, etc.). CV channels fire immediately; only Gate/Trigger outputs are delayed. |
