@@ -106,16 +106,18 @@ Hold a **Page button** and turn any **encoder** to set that step's value across 
 To record CV values from the **Phase Scrub slider** into a channel:
 
 1. Hold **Chan.** and press a **Page button** to **arm that channel** (LED blinks).
-2. While armed and playing: the slider value is recorded to the current playback step on every clock tick.
+2. While armed and playing: the slider records to the current playback step on every clock tick.
 3. While armed and stopped: the slider sets the value of the last-touched step in real time.
-4. Press **Chan.** and the same **Page button** again to disarm, or press the armed channel's Page button alone.
+4. Press **Chan.** and the same **Page button** again to disarm.
 
-You can adjust the slider's **recording window** (voltage range mapped to slider travel) while the channel is armed by turning Encoders 3 and 4:
+The slider always maps across the channel's configured **Range** (set in Channel Edit or with Shift held while armed). To change the recording range, change the Range setting — slider travel always spans [range min → range max].
 
-| Encoder | Parameter |
-|---|---|
-| Encoder 3 | Slider span (1, 2, 3, 4, 5, 10, 15 V) |
-| Encoder 4 | Slider base voltage (–5, 0–10 V) |
+While a CV channel is armed, encoder and LED behavior changes:
+
+- **Encoder LEDs:** show the CV step color for each step on the current page; the currently playing step blinks white (chaselight).
+- **Encoder N (normal):** directly edits step N's CV value on the current page. Combine with **Fine** for sub-semitone precision; fast spinning accelerates.
+- **Shift + Encoder 5 (Range):** adjusts the channel voltage range (also adjusts the slider recording window).
+- **Shift + Encoder 7 (Transpose/Scale):** cycles the quantizer scale.
 
 ### Armed Gate editing
 

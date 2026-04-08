@@ -21,6 +21,28 @@ inline void ForEachEncoderInc(Controls &c, auto func) {
 		}
 	}
 }
+
+// Per-encoder velocity tracker. Call Apply(idx, inc) to get an accelerated increment.
+// Computes the interval between successive non-zero reads and scales the increment:
+//   < 25 ms between detents → 64×   (fast sweep)
+//   < 50 ms                 → 16×
+//   < 125 ms                →  4×
+//   ≥ 125 ms                →  1×   (slow / deliberate)
+// Pass fine=true to bypass acceleration (fine-adjust mode).
+struct EncoderAccel {
+	std::array<uint32_t, Model::NumChans> last_tick{};
+
+	int32_t Apply(uint8_t idx, int32_t inc, bool fine = false) {
+		if (inc == 0 || fine) return inc;
+		const uint32_t now = Controls::TimeNow();
+		const uint32_t dt  = now - last_tick[idx];
+		last_tick[idx]     = now;
+		if      (dt < Clock::MsToTicks(25))  return inc * 64;
+		else if (dt < Clock::MsToTicks(50))  return inc * 16;
+		else if (dt < Clock::MsToTicks(125)) return inc * 4;
+		else                                 return inc;
+	}
+};
 inline void ForEachSceneButtonJustReleased(Controls &c, auto func) {
 	for (auto [i, b] : countzip(c.button.scene)) {
 		if (b.just_went_low()) {

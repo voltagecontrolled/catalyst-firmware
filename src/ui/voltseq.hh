@@ -50,12 +50,19 @@ class Main : public Abstract {
 	// Used to distinguish tap (toggle) from hold+edit (no toggle).
 	uint8_t trigger_step_enc_turned_ = 0;
 
+	// Velocity-based encoder acceleration (bypassed in fine mode).
+	EncoderAccel enc_accel_{};
+
 	// Long-press detection for GLIDE + page button entry
 	static constexpr uint8_t  kNoLongpressBtn  = 0xFF;
 	static constexpr uint32_t kLongpressMs     = 600u;
 	Clock::Timer               glide_longpress_timer_{kLongpressMs};
 	uint8_t                    glide_longpress_btn_   = kNoLongpressBtn;
 	bool                       glide_longpress_shift_ = false;
+
+	// Long-press detection in Channel Edit: hold page button to clear that channel's steps
+	Clock::Timer channel_edit_clear_timer_{kLongpressMs};
+	uint8_t      channel_edit_clear_btn_ = kNoLongpressBtn;
 
 	// ---- Slider Performance Page state ----
 	bool     perf_page_active_     = false;
@@ -133,6 +140,18 @@ class Main : public Abstract {
 		return static_cast<Direction>(((v + dir) % n + n) % n);
 	}
 
+	// ---- Clear helper ----
+	// Resets all 64 steps of a channel to the "zero" value for its type:
+	//   CV → 32768 (centre = 0V within the default bipolar range)
+	//   Gate / Trigger → 0 (all off / rest)
+	void ClearChannel(uint8_t ch) {
+		const StepValue zero = (p.GetData().channel[ch].type == ChannelType::CV) ? 32768u : 0u;
+		for (uint8_t s = 0; s < 64; s++)
+			p.SetStepValue(ch, s, zero);
+		p.shared.do_save_macro = true;
+		p.shared.blinker.Set(3, 300); // 3-flash confirmation on page buttons
+	}
+
 	// ---- Type selector helpers ----
 
 	// Map current channel state to flat type selector index.
@@ -172,11 +191,13 @@ class Main : public Abstract {
 
 	// Shift all 64 step values for channel ch forward (positive delta) or backward.
 	void RotateChannel(uint8_t ch, int32_t delta) {
+		const auto len = p.GetData().channel[ch].length;
 		std::array<StepValue, 64> flat{};
 		for (auto s = 0u; s < 64u; s++)
 			flat[s] = p.GetStepValue(ch, static_cast<uint8_t>(s));
-		const int32_t rot = ((delta % 64) + 64) % 64;
-		std::rotate(flat.begin(), flat.begin() + rot, flat.end());
+		// Only rotate the active steps [0, len-1]; unused steps beyond length are untouched.
+		const int32_t rot = ((delta % static_cast<int32_t>(len)) + len) % len;
+		std::rotate(flat.begin(), flat.begin() + rot, flat.begin() + len);
 		for (auto s = 0u; s < 64u; s++)
 			p.SetStepValue(ch, static_cast<uint8_t>(s), flat[s]);
 	}
@@ -215,12 +236,12 @@ class Main : public Abstract {
 
 	// ---- Slider recording ----
 
-	// Map 0..4095 slider ADC value to StepValue using channel's recording window.
-	// StepValue 0..65535 spans -5V..10V (15V total).
+	// Map 0..4095 slider ADC value to StepValue using the channel's Range.
+	// Slider travel maps linearly from range.Min() to range.Max().
 	StepValue SliderToStepValue(uint8_t ch, uint16_t adc) const {
-		const auto &cs  = p.GetData().channel[ch];
-		const float min_v = static_cast<float>(cs.slider_base_v);
-		const float max_v = min_v + static_cast<float>(cs.slider_span_v);
+		const auto &range = p.GetData().channel[ch].range;
+		const float min_v = range.Min();
+		const float max_v = range.Max();
 		const float v     = min_v + (static_cast<float>(adc) / 4095.f) * (max_v - min_v);
 		const float norm  = (v - Model::min_output_voltage) / (Model::max_output_voltage - Model::min_output_voltage);
 		return static_cast<StepValue>(std::clamp(norm * 65535.f, 0.f, 65535.f));
@@ -479,9 +500,13 @@ public:
 	}
 
 	void Update() override {
-		const bool shift = c.button.shift.is_high();
-		const bool fine  = c.button.fine.is_high();
-		const bool chan  = c.button.bank.is_high();
+		const bool shift    = c.button.shift.is_high();
+		const bool fine     = c.button.fine.is_high();
+		const bool chan     = c.button.bank.is_high();
+		// Pre-read rising-edge events that appear in short-circuit conditions so they are
+		// always consumed on the tick they fire (short-circuit eval would otherwise leave
+		// got_rising_edge_ set, causing a spurious Channel Edit trigger on the next Shift press).
+		const bool bank_jgh = c.button.bank.just_went_high();
 
 		// --- Play / Stop ---
 		if (c.button.play.just_went_high()) {
@@ -510,7 +535,7 @@ public:
 		}
 
 		// --- Channel Edit entry: Shift + CHAN ---
-		if (shift && c.button.bank.just_went_high()) {
+		if (shift && bank_jgh) {
 			channel_edit_active_ = true;
 			return;
 		}
@@ -604,11 +629,11 @@ private:
 					const uint8_t gs = GlobalStep(i);
 					const auto type  = p.GetData().channel[enc].type;
 					if (type == ChannelType::CV)
-						EditCvStep(enc, gs, inc, fine);
+						EditCvStep(enc, gs, enc_accel_.Apply(enc, inc, fine), fine);
 					else if (type == ChannelType::Gate)
-						EditGateStep(enc, gs, inc, fine);
+						EditGateStep(enc, gs, enc_accel_.Apply(enc, inc, fine), fine);
 					else
-						EditTrigStep(enc, gs, inc);
+						EditTrigStep(enc, gs, inc); // no accel: ±8 range
 				}
 			});
 		}
@@ -617,13 +642,6 @@ private:
 	void UpdateArmed(bool fine) {
 		const auto ch   = armed_ch_.value();
 		const auto type = p.GetData().channel[ch].type;
-
-		// Disarm when the armed channel's page button is pressed alone (not CHAN held)
-		if (c.button.scene[ch].just_went_high()) {
-			armed_ch_ = std::nullopt;
-			trigger_step_enc_turned_ = 0;
-			return;
-		}
 
 		if (type == ChannelType::CV) {
 			UpdateArmedCV(ch, fine);
@@ -637,80 +655,54 @@ private:
 
 
 	void UpdateArmedCV(uint8_t ch, bool fine) {
-		// Enc 3 (idx 2): slider span; Enc 4 (idx 3): slider base
+		auto &cs = p.GetData().channel[ch];
+
+		if (c.button.shift.is_high()) {
+			// Shift held: enc 4 (panel 5, Range) adjusts the channel voltage range;
+			//             enc 6 (panel 7, Transpose) cycles the quantizer scale.
+			// Slider range IS the recording range, so adjusting Range also changes recording.
+			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
+				if (enc == 4) cs.range.Inc(dir);
+				else if (enc == 6) CycleTypeSel(ch, dir);
+			});
+			return;
+		}
+
+		// Normal: encoder N directly edits step N's CV value on the current page.
+		// Slider recording (motion-gated) continues in Common() regardless.
 		ForEachEncoderInc(c, [&](uint8_t enc, int32_t inc) {
-			auto &cs = p.GetData().channel[ch];
-			if (enc == 2) {
-				// Span: 1,2,3,4,5,10,15
-				static constexpr std::array<uint8_t, 7> spans = {1, 2, 3, 4, 5, 10, 15};
-				uint8_t idx = 0;
-				for (auto j = 0u; j < spans.size(); j++) {
-					if (spans[j] == cs.slider_span_v) { idx = j; break; }
-				}
-				idx = static_cast<uint8_t>(std::clamp<int32_t>(idx + inc, 0, spans.size() - 1));
-				cs.slider_span_v = spans[idx];
-			} else if (enc == 3) {
-				// Base: -5,0,1,2,3,4,5,6,7,8,9,10
-				static constexpr std::array<int8_t, 12> bases = {-5, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-				uint8_t idx = 0;
-				for (auto j = 0u; j < bases.size(); j++) {
-					if (bases[j] == cs.slider_base_v) { idx = j; break; }
-				}
-				idx = static_cast<uint8_t>(std::clamp<int32_t>(idx + inc, 0, bases.size() - 1));
-				cs.slider_base_v = bases[idx];
-			}
-			(void)fine;
+			EditCvStep(ch, GlobalStep(enc), enc_accel_.Apply(enc, inc, fine), fine);
 		});
+		(void)cs;
 	}
 
 	void UpdateArmedGate(uint8_t ch, bool fine) {
 		// Tap page button → toggle step on/off
-		// Hold page button + encoder → set gate length for that step
 		for (auto [i, btn] : countzip(c.button.scene)) {
-			if (i == ch) continue; // ch's button used for disarm
 			if (btn.just_went_high()) {
 				last_touched_step_ = i;
-				if (!c.button.fine.is_high()) // tap without fine = x0x toggle
-					ToggleGateStep(ch, GlobalStep(i));
+				ToggleGateStep(ch, GlobalStep(i));
 			}
 		}
-		// Encoder while a page button is held → set gate length for that step
-		ForEachEncoderInc(c, [&](uint8_t /*enc*/, int32_t inc) {
-			for (auto [i, btn] : countzip(c.button.scene)) {
-				if (i == ch) continue;
-				if (btn.is_high())
-					EditGateStep(ch, GlobalStep(i), inc, fine);
-			}
+		// Encoder N → adjust gate length for step N on current page
+		ForEachEncoderInc(c, [&](uint8_t enc, int32_t inc) {
+			EditGateStep(ch, GlobalStep(enc), enc_accel_.Apply(enc, inc, fine), fine);
 		});
 	}
 
-	void UpdateArmedTrigger(uint8_t ch, bool fine) {
-		// Encoder while page button held → adjust ratchet/repeat count.
-		// Mark each held step so release knows not to toggle (hold-to-edit, tap-to-toggle).
-		ForEachEncoderInc(c, [&](uint8_t /*enc*/, int32_t inc) {
-			(void)fine;
-			for (auto [i, btn] : countzip(c.button.scene)) {
-				if (static_cast<uint8_t>(i) == ch) continue;
-				if (btn.is_high()) {
-					EditTrigStep(ch, GlobalStep(i), inc);
-					trigger_step_enc_turned_ |= static_cast<uint8_t>(1u << i);
-				}
-			}
-		});
-
+	void UpdateArmedTrigger(uint8_t ch, bool /*fine*/) {
+		// Tap page button → toggle step on/off
 		for (auto [i, btn] : countzip(c.button.scene)) {
-			if (static_cast<uint8_t>(i) == ch) continue;
 			if (btn.just_went_high()) {
 				last_touched_step_ = static_cast<uint8_t>(i);
-				trigger_step_enc_turned_ &= ~static_cast<uint8_t>(1u << i); // clear on fresh press
-			}
-			if (btn.just_went_low()) {
-				if (!(trigger_step_enc_turned_ & (1u << i))) {
-					ToggleTrigStep(ch, GlobalStep(i)); // tap: toggle on release
-				}
-				trigger_step_enc_turned_ &= ~static_cast<uint8_t>(1u << i); // clear on release
+				ToggleTrigStep(ch, GlobalStep(i));
 			}
 		}
+		// Encoder N → adjust ratchet/repeat count for step N on current page
+		// CW = ratchet (positive), CCW = repeat (negative), clamped to ±8
+		ForEachEncoderInc(c, [&](uint8_t enc, int32_t inc) {
+			EditTrigStep(ch, GlobalStep(enc), inc);
+		});
 	}
 
 	// --- Performance Page ---
@@ -941,10 +933,10 @@ private:
 		ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
 			const uint8_t gs = GlobalStep(enc); // enc 0-7 maps to step 0-7 on current page
 			if (type == ChannelType::CV) {
-				// CW = set glide on, CCW = set glide off
+				// CW = set glide on, CCW = set glide off (no accel: binary flag)
 				p.SetGlideFlag(ch, gs, dir > 0);
 			} else if (type == ChannelType::Gate) {
-				EditGateStep(ch, gs, dir, fine);
+				EditGateStep(ch, gs, enc_accel_.Apply(enc, dir, fine), fine);
 			} else {
 				// Trigger: transition into Ratchet Step Editor
 				glide_editor_active_   = false;
@@ -988,15 +980,15 @@ private:
 	}
 
 	// --- Channel Edit (Shift + CHAN) ---
-	// Encoder positions aligned with Model::Sequencer::EncoderAlts:
-	//   enc 0 = Direction     (StartOffset=0)
-	//   enc 1 = Phase rotate  (PlayMode=1)
-	//   enc 2 = Length        (SeqLength=2)  ← physical "Length" encoder
-	//   enc 3 = Output delay  (PhaseOffset=3)
-	//   enc 4 = Range/PW      (Range=4)
-	//   enc 5 = Clock div     (ClockDiv=5)
-	//   enc 6 = Type selector (Transpose=6)
-	//   enc 7 = Random        (Random=7)
+	// Encoder positions match physical panel labels (1-indexed on panel = 0-indexed here):
+	//   enc 0 = Output delay  (Start)
+	//   enc 1 = Direction     (Dir.)
+	//   enc 2 = Length        (Length)
+	//   enc 3 = Phase rotate  (Phase)  — rotates only active steps [0, length-1]
+	//   enc 4 = Range/PW      (Range)
+	//   enc 5 = Clock div     (BPM/Clock Div)
+	//   enc 6 = Type selector (Transpose)
+	//   enc 7 = Random        (Random)
 
 	void UpdateChannelEdit(bool fine) {
 		// Exit: Play or CHAN press → save channel settings
@@ -1016,11 +1008,31 @@ private:
 			return;
 		}
 
-		// Page button press → focus channel
+		// Page button: tap = focus channel, hold (600 ms) = clear that channel's steps
+		if (channel_edit_clear_btn_ != kNoLongpressBtn) {
+			const uint8_t btn = channel_edit_clear_btn_;
+			if (!c.button.scene[btn].is_high()) {
+				// Released before long-press: just focus
+				edit_ch_                = btn;
+				channel_edit_last_enc_  = 0xFF;
+				channel_edit_clear_btn_ = kNoLongpressBtn;
+				return;
+			}
+			if (channel_edit_clear_timer_.Check()) {
+				// Held long enough: clear all steps for this channel
+				ClearChannel(btn);
+				edit_ch_                = btn;
+				channel_edit_last_enc_  = 0xFF;
+				channel_edit_clear_btn_ = kNoLongpressBtn;
+				return;
+			}
+			return; // still waiting for timer or release
+		}
+
 		for (auto [i, btn] : countzip(c.button.scene)) {
 			if (btn.just_went_high()) {
-				edit_ch_              = static_cast<uint8_t>(i);
-				channel_edit_last_enc_ = 0xFF;
+				channel_edit_clear_btn_ = static_cast<uint8_t>(i);
+				channel_edit_clear_timer_.SetAlarm();
 				return;
 			}
 		}
@@ -1030,35 +1042,37 @@ private:
 		ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
 			channel_edit_last_enc_ = enc;
 			switch (enc) {
-			case 0: // Direction (Forward / Reverse / Ping-Pong / Random)
-				cs.direction = CycleDirection(cs.direction, dir);
-				break;
-			case 1: // Phase rotate (destructive)
-				RotateChannel(edit_ch_, dir);
-				break;
-			case 2: // Length (1–64) — auto-navigate to page containing last step
-				cs.length = static_cast<uint8_t>(
-				    std::clamp<int32_t>(cs.length + dir, 1, 64));
-				current_page_ = static_cast<uint8_t>((cs.length - 1u) / Model::NumChans);
-				break;
-			case 3: // Output delay (0–20ms)
+			case 0: // Output delay (0–20ms) — no accel: narrow range
 				cs.output_delay_ms = static_cast<uint8_t>(
 				    std::clamp<int32_t>(cs.output_delay_ms + dir, 0, 20));
 				break;
-			case 4: // Range (CV) / Pulse width (Trigger)
+			case 1: // Direction (Forward / Reverse / Ping-Pong / Random) — no accel: 4 values
+				cs.direction = CycleDirection(cs.direction, dir);
+				break;
+			case 2: { // Length (1–64) — accelerated
+				const int32_t adelta = enc_accel_.Apply(enc, dir, fine);
+				cs.length = static_cast<uint8_t>(
+				    std::clamp<int32_t>(cs.length + adelta, 1, 64));
+				current_page_ = static_cast<uint8_t>((cs.length - 1u) / Model::NumChans);
+				break;
+			}
+			case 3: // Phase rotate — rotates only active steps [0, length-1]
+				RotateChannel(edit_ch_, dir);
+				break;
+			case 4: // Range (CV) / Pulse width (Trigger) — no accel: few options
 				if (cs.type == ChannelType::CV)
 					cs.range.Inc(dir);
 				else if (cs.type == ChannelType::Trigger)
 					cs.pulse_width_ms = static_cast<uint8_t>(
 					    std::clamp<int32_t>(cs.pulse_width_ms + dir, 1, 100));
 				break;
-			case 5: // Clock division
+			case 5: // Clock division — no accel: steps are already coarse
 				cs.division.Inc(dir);
 				break;
-			case 6: // Type selector (unquantized CV → scales → Gate → Trigger, clamped)
+			case 6: // Type selector (unquantized CV → scales → Gate → Trigger, clamped) — no accel
 				CycleTypeSel(edit_ch_, dir);
 				break;
-			case 7: // Random amount (0..1 in 0.05 increments)
+			case 7: // Random amount (0..1 in 0.05 increments) — no accel: narrow range
 				cs.random_amount = std::clamp(cs.random_amount + dir * 0.05f, 0.f, 1.f);
 				break;
 			}
@@ -1082,8 +1096,8 @@ private:
 				d.default_length = static_cast<uint8_t>(
 				    std::clamp<int32_t>(d.default_length + dir, 1, 64));
 				break;
-			case 6: // Internal BPM
-				p.clock.bpm.Inc(dir, fine);
+			case 6: // Internal BPM — accelerated
+				p.clock.bpm.Inc(enc_accel_.Apply(enc, dir, fine), fine);
 				break;
 			default:
 				break;
@@ -1197,9 +1211,26 @@ public:
 					c.SetEncoderLed(i, i < steps_on_pg ? ChannelTypeColor(edit_ch_) : Palette::dim_grey);
 				}
 			} else {
+				// Encoder LEDs match panel layout:
+				//   enc 0 (Start/delay): white brightness = delay amount
+				//   enc 1 (Dir):  color = current direction
+				//   enc 6 (Transpose): type/scale color
+				//   enc 7 (Random): white brightness = random amount
+				static constexpr std::array<Color, 4> dir_col = {
+				    Palette::green,  // Forward
+				    Palette::orange, // Reverse
+				    Palette::yellow, // PingPong
+				    Palette::magenta // Random
+				};
+				const auto &cs = p.GetData().channel[edit_ch_];
 				for (auto i = 0u; i < Model::NumChans; i++) {
 					c.SetButtonLed(i, i == edit_ch_);
-					c.SetEncoderLed(i, i == edit_ch_ ? ChannelTypeColor(i) : Palette::dim_grey);
+					Color col = Palette::dim_grey;
+					if (i == 0) col = Palette::off.blend(Palette::full_white, cs.output_delay_ms / 20.f);
+					else if (i == 1) col = dir_col[static_cast<uint8_t>(cs.direction)];
+					else if (i == 6) col = ChannelTypeColor(edit_ch_);
+					else if (i == 7) col = Palette::off.blend(Palette::full_white, cs.random_amount);
+					c.SetEncoderLed(i, col);
 				}
 			}
 			return;
@@ -1218,16 +1249,18 @@ public:
 		const auto ch    = armed ? armed_ch_.value() : 0u;
 		const auto type  = armed ? p.GetData().channel[ch].type : ChannelType::CV;
 
+		const bool armed_gate_trig = armed && (type == ChannelType::Gate || type == ChannelType::Trigger);
+
 		// --- Page button LEDs ---
 		for (auto i = 0u; i < Model::NumChans; i++) {
 			bool lit = false;
-			if (armed && (type == ChannelType::Gate || type == ChannelType::Trigger)) {
-				// x0x pattern for armed Gate/Trigger channel
+			if (armed_gate_trig) {
+				// x0x on/off pattern for armed Gate/Trigger
 				const auto sv  = p.GetStepValue(ch, GlobalStep(i));
 				const auto val = static_cast<int8_t>(sv & 0xFF);
 				lit = (type == ChannelType::Gate) ? (sv > 0) : (val != 0);
 			} else {
-				// Show focused channel's playhead; also light any held buttons for editing feedback
+				// CV armed or unarmed: chaselight shows current step of focused channel
 				const auto ph = p.GetPlayhead(focused_ch_);
 				lit = (ph / Model::NumChans == current_page_ && ph % Model::NumChans == i);
 				lit = lit || c.button.scene[i].is_high();
@@ -1236,18 +1269,43 @@ public:
 		}
 
 		// --- Encoder LEDs ---
-		for (auto i = 0u; i < Model::NumChans; i++) {
-			Color col;
-			if (armed && i == ch) {
-				// Armed channel encoder pulses
-				const bool blink = (Controls::TimeNow() >> 8) & 1u;
-				col = blink ? Palette::full_white : Palette::off;
-			} else {
-				// Show each channel's value at the reference step (held or playhead)
-				const uint8_t ref_step = p.AnyStepHeld() ? p.GetOutputStep(i) : p.GetPlayhead(i);
-				col = StepColorForChannel(i, ref_step);
+		if (armed_gate_trig) {
+			// Gate/Trigger armed: each encoder shows step state for the armed channel,
+			// with the currently playing step highlighted (chaselight).
+			const auto ph       = p.GetPlayhead(ch);
+			const bool on_page  = (ph / Model::NumChans == current_page_);
+			const uint8_t chase = on_page ? static_cast<uint8_t>(ph % Model::NumChans) : 0xFF;
+			const bool blink    = (Controls::TimeNow() >> 8) & 1u;
+
+			for (auto i = 0u; i < Model::NumChans; i++) {
+				const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));
+				Color col        = StepColorForChannel(ch, gs);
+				// Chaselight: current step pulses white when on this page
+				if (i == chase)
+					col = blink ? Palette::full_white : col;
+				c.SetEncoderLed(i, col);
 			}
-			c.SetEncoderLed(i, col);
+		} else if (armed) {
+			// CV armed: each encoder shows that step's CV value color for the armed channel,
+			// with the currently playing step highlighted (chaselight).
+			const auto ph       = p.GetPlayhead(ch);
+			const bool on_page  = (ph / Model::NumChans == current_page_);
+			const uint8_t chase = on_page ? static_cast<uint8_t>(ph % Model::NumChans) : 0xFF;
+			const bool blink    = (Controls::TimeNow() >> 8) & 1u;
+
+			for (auto i = 0u; i < Model::NumChans; i++) {
+				const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));
+				Color col        = StepColorForChannel(ch, gs);
+				if (i == chase)
+					col = blink ? Palette::full_white : col;
+				c.SetEncoderLed(i, col);
+			}
+		} else {
+			// Unarmed: show each channel's value at its playhead step
+			for (auto i = 0u; i < Model::NumChans; i++) {
+				const uint8_t ref_step = p.GetPlayhead(i);
+				c.SetEncoderLed(i, StepColorForChannel(i, ref_step));
+			}
 		}
 	}
 };

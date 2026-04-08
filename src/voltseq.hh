@@ -33,9 +33,7 @@ struct ChannelSettings {
 	ChannelType          type            = ChannelType::CV;          // CV, Gate, or Trigger
 	uint8_t              length          = 8;                        // 1..64 steps
 	Clock::Divider::type division        = {};                       // clock division (1–256)
-	Channel::Cv::Range   range           = {};                       // output voltage range (CV)
-	int8_t               slider_base_v   = 0;                        // slider recording lower limit V: −5, 0, 1..10
-	uint8_t              slider_span_v   = 5;                        // slider recording span V: 1,2,3,4,5,10,15
+	Channel::Cv::Range   range           = [] { Channel::Cv::Range r; r.Inc(2); return r; }(); // default: −5V to +5V
 	Channel::Mode        scale           = {};                       // quantizer scale (CV only)
 	Direction            direction       = Direction::Forward;
 	uint8_t              pulse_width_ms  = 10;                       // trigger pulse width ms (Trigger only)
@@ -51,14 +49,22 @@ struct StepFlags {
 struct Data {
 	// Increment current_tag whenever the struct layout changes (fields added/removed/reordered).
 	// validate() checks this tag so WearLevel rejects stale or incompatible flash data gracefully.
-	static constexpr uint32_t current_tag     = 1u;
+	static constexpr uint32_t current_tag     = 3u;
 	uint32_t                  SettingsVersionTag = current_tag;
 
-	StepGrid                                       steps{};
+	static StepGrid DefaultSteps() {
+		StepGrid g{};
+		for (auto &page : g)
+			for (auto &row : page)
+				row.fill(32768); // center = 0V for default bipolar −5V to +5V range
+		return g;
+	}
+
+	StepGrid                                       steps = DefaultSteps();
 	std::array<ChannelSettings, Model::NumChans>   channel{};
 	std::array<StepFlags, Model::NumChans>         flags{};
 	Direction                                      default_direction = Direction::Forward;
-	Channel::Cv::Range                             default_range     = {};
+	Channel::Cv::Range                             default_range     = [] { Channel::Cv::Range r; r.Inc(2); return r; }();
 	uint8_t                                        default_length    = 8;
 	uint8_t                                        _reserved         = 0;
 	Clock::Bpm::Data                               bpm{};             // internal BPM
