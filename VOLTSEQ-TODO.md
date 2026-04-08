@@ -6,6 +6,21 @@ Backlog for VoltSeq firmware features, known bugs, and porting work.
 
 ## Active / Next Up
 
+### Beat Repeat Mode is Non-Functional (Blue/Cyan modes in Performance Page)
+**Root cause (diagnosed):** Beat repeat was ported from CatSeq but the core advance loop does nothing useful in VoltSeq. In beat repeat mode `window_ref` is always 1, so `orbit_pos_` = `(0+1)%1 = 0` on every advance. Therefore `orbit_step_[ch] = center_step` always — it never changes regardless of which zone the slider is in. All 8 blue zones and all 4 cyan zones are identical: they just hold the output at a fixed step. This is why blue appears to behave the same as cyan.
+
+**Zone detection and engine table are correct.** The UI correctly divides into 8 zones for blue and 4 for cyan. The `div_num_8 / div_denom_8` table has proper triplet values (2/3, 1/3, 1/6 etc.). The problem is purely that the advance produces no movement.
+
+**Design decision needed — two options:**
+
+- **Option A — Clock multiplier:** When beat repeat is active, channels following orbit have their step advance rate overridden by `1 / safe_period` ticks per step. Requires `OnChannelFired` to be callable at arbitrary rates independent of clock divider, or a separate timer per following-channel that fires at `safe_period`. This produces actual rhythmic gate/trigger subdivision.
+
+- **Option B — Metered window loop (preferred):** Keep the granular orbit window concept but advance it at the beat-repeat subdivision rate rather than every master clock tick. Set `window_ref = some_steps` driven by the zone index, and `orbit_should_adv` fires at `safe_period`. Following channels cycle through that window at the metered rate. This maps naturally onto VoltSeq's step-address model.
+
+**Also fix:** `scrub_ignore_mask` changes in the normal perf page (page button toggles) are not calling `p.shared.do_save_shared = true`, so the follow mask doesn't persist across power cycles. Easy one-liner fix.
+
+---
+
 ### Live Encoder Recording in Normal View
 **Desired:** In normal view (unarmed, not in any editor), turning an encoder while NOT holding a page button live-records a value into the current playing step for that channel. Encoder movement should be fast — coarse increments relative to the channel's configured Range — unless Fine is held, which switches to fine sub-semitone steps.
 
