@@ -17,8 +17,6 @@ Backlog for VoltSeq firmware features, known bugs, and porting work.
 
 - **Option B — Metered window loop (preferred):** Keep the granular orbit window concept but advance it at the beat-repeat subdivision rate rather than every master clock tick. Set `window_ref = some_steps` driven by the zone index, and `orbit_should_adv` fires at `safe_period`. Following channels cycle through that window at the metered rate. This maps naturally onto VoltSeq's step-address model.
 
-**Also fix:** `scrub_ignore_mask` changes in the normal perf page (page button toggles) are not calling `p.shared.do_save_shared = true`, so the follow mask doesn't persist across power cycles. Easy one-liner fix.
-
 ---
 
 ### Live Encoder Recording in Normal View

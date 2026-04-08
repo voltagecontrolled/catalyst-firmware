@@ -99,7 +99,8 @@ class Interface {
 	uint32_t cnt;
 	uint32_t peek_cnt;
 
-	bool did_trig = false;
+	bool     did_trig  = false;
+	uint8_t  tap_count = 0; // consecutive taps; BPM only updates on 3rd+ tap
 
 public:
 	bool external;
@@ -164,7 +165,15 @@ public:
 		if (external) {
 			return;
 		}
-		UpdateBpm();
+		const auto now = Controls::TimeNow();
+		// Reset streak if gap since last tap exceeds the slowest valid BPM period
+		if (now - prev_tap_time > static_cast<uint32_t>(absolute_max_ticks))
+			tap_count = 0;
+		tap_count = static_cast<uint8_t>(std::min<uint32_t>(tap_count + 1u, 255u));
+		if (tap_count >= 3)
+			UpdateBpm();
+		else
+			prev_tap_time = now; // keep prev_tap_time fresh so 3rd tap measures correctly
 	}
 
 	float GetPhase() const {

@@ -61,7 +61,7 @@ Default range for new channels is **−5V to +5V** (bipolar). Change channel typ
 VoltSeq can run from an external clock or an internal clock:
 
 - **External clock:** patch a clock signal into the **Clock In** jack. When a signal is detected, VoltSeq uses it automatically.
-- **Internal clock:** tap **Tap Tempo** to set BPM. You can also adjust BPM with Encoder 7 while holding **Shift** (see Global Settings).
+- **Internal clock:** tap **Tap Tempo** to set BPM. Tap at least 3 times — the first two taps are ignored so a stray tap does not alter tempo. You can also adjust BPM with Encoder 6 while holding **Shift** (see Global Settings).
 - **Reset:** a trigger at the **Reset jack** resets all channels to step 1.
 
 ---
@@ -71,9 +71,21 @@ VoltSeq can run from an external clock or an internal clock:
 | Action | Result |
 |---|---|
 | Press **Play/Reset** | Toggle play/stop |
-| Press **Shift + Play/Reset** | Reset all channels to step 1 |
+| Short-press **Shift + Play/Reset** (< 600 ms) | Reset all channels to step 1 |
+| Hold **Shift + Play/Reset** (≥ 600 ms) | Enter **Clear mode** (see below) |
+| Press **Play/Reset** while a channel is armed | Disarm the channel (playback continues) |
 
 Settings are saved to flash when play/stop is toggled.
+
+### Clear Mode
+
+Hold **Shift + Play/Reset** for 600 ms. All page button LEDs and the Play LED slow-blink to confirm entry.
+
+| Action | Result |
+|---|---|
+| Tap **Page button N** | Clear all 64 steps of channel N (CV → center/0V; Gate/Trigger → all off) |
+| Tap **Play/Reset** | Clear all 8 channels |
+| Any other button | Exit without clearing |
 
 ---
 
@@ -95,7 +107,7 @@ Hold a **Page button** and turn any **encoder** to set that step's value across 
 
 - **Encoder N** sets the value for **channel N** at the held step.
 - For CV channels: coarse steps ≈ 1 semitone; hold **Fine** for sub-semitone adjustment. Fast spinning accelerates.
-- For Gate channels: adjusts gate length (0–100%).
+- For Gate channels: adjusts gate length (0–100%). No acceleration.
 - For Trigger channels: adjusts ratchet/repeat count (±8).
 - You can hold **multiple Page buttons** simultaneously to edit the same position across multiple channels at once.
 
@@ -105,7 +117,7 @@ Hold a **Page button** and turn any **encoder** to set that step's value across 
 
 ## Arming a Channel
 
-**CHAN + Page button N** arms channel N for focused editing. The encoder LED for that channel blinks to indicate armed state. Press **CHAN + same Page button** again to disarm.
+**CHAN + Page button N** arms channel N for focused editing. The encoder LED for that channel blinks to indicate armed state. Press **CHAN + same Page button** again to disarm, or press **Play/Reset** to disarm without affecting playback.
 
 While a channel is armed, encoder and LED behavior changes depending on channel type (see sections below).
 
@@ -120,7 +132,7 @@ The **Phase Scrub slider** records in real time:
 
 The slider maps across the channel's configured **Range** — full left = range minimum, full right = range maximum.
 
-**Encoder LEDs:** show the CV step color for each step on the current page; the currently playing step blinks white (chaselight).
+**Encoder LEDs:** show the CV step color for each step on the current page; the currently playing step blinks white (chaselight). The blink is suppressed on any step whose Page button is currently held, so the color is visible while editing.
 
 **Encoder N (normal):** directly edits step N's CV value on the current page. Fine = sub-semitone; fast spinning accelerates.
 
@@ -213,10 +225,10 @@ Encoder LED feedback while in Channel Edit:
 | 4 | Phase | Phase rotate (destructive) | Rotates active steps only |
 | 5 | Range | Voltage range (CV) / Pulse width (Trigger) | CV: range preset; Trigger: 1–100 ms |
 | 6 | BPM/Clock Div | Clock division | Per-channel clock divisor |
-| 7 | Transpose | Channel type / scale | CV scales → Gate → Trigger (clamped) |
+| 7 | Transpose | Channel type / scale | CV scales (built-in only) → Gate → Trigger |
 | 8 | Random | Random amount | 0–100% |
 
-**Exit:** press **Chan.** or **Play** to save channel settings and return to normal mode.
+**Exit:** press **Shift + Chan.** (same combo that entered) or **Play/Reset** to save and return.
 
 > Phase rotate is destructive and only rotates active steps (within the channel's configured length). There is no undo.
 
@@ -224,14 +236,14 @@ Encoder LED feedback while in Channel Edit:
 
 ## Global Settings
 
-Hold **Shift** in normal mode and turn encoders to set sequencer-wide defaults:
+Hold **Shift** in normal mode and turn encoders to set sequencer-wide defaults. Encoder LEDs light to show the current value of each parameter.
 
 | Encoder | Panel label | Parameter |
 |---|---|---|
-| 1 | Dir. | Default direction |
-| 3 | Range | Default voltage range |
-| 6 | Length | Default step length (1–64) |
-| 7 | BPM/Clock Div | Internal BPM |
+| 2 | Dir. | Default direction (green = Forward, orange = Reverse, yellow = Ping-Pong, magenta = Random) |
+| 3 | Length | Default step length (1–64) |
+| 5 | Range | Default voltage range |
+| 6 | BPM/Clock Div | Internal BPM |
 
 ---
 
@@ -285,7 +297,7 @@ From the Performance Page, hold **Fine + Glide** for another 1.5 seconds.
 VoltSeq saves automatically at the following moments:
 
 - Play/Stop toggled
-- Channel Edit exited (Chan. or Play)
+- Channel Edit exited (Shift+Chan. or Play/Reset)
 - Glide Step Editor exited
 - Ratchet Step Editor exited
 - Performance Page Settings exited

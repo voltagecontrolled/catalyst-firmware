@@ -101,6 +101,12 @@ class Main : public Abstract {
 	static constexpr int32_t  kSliderMoveThreshold = 8;
 	static constexpr uint32_t kSliderActiveTicks   = Clock::MsToTicks(400);
 	static constexpr uint32_t kToggleFeedbackTicks = Clock::MsToTicks(600);
+	static constexpr uint32_t kClearHoldTicks      = Clock::MsToTicks(600);
+
+	// Clear mode: SHIFT+PLAY held > kClearHoldTicks → enter; tap page N = clear ch N; PLAY = clear all
+	bool     clear_mode_active_   = false;
+	bool     shift_play_pending_  = false;   // armed while we wait for long/short distinction
+	uint32_t shift_play_press_t_  = 0;
 
 	// Beat repeat debounce table (matches sequencer)
 	static constexpr std::array<uint32_t, 8> kBeatRepeatDebounce = {
@@ -127,14 +133,13 @@ class Main : public Abstract {
 	// ---- Type selector constants ----
 	// Flat index mapping for enc 3 (Transpose) in Channel Edit.
 	// Indices 0..kTypeSelGateIdx-1 : CV with built-in scales (Channel::Mode val 0..gate_idx-1)
-	// Indices kTypeSelGateIdx..kTypeSelMax-1 : CV with custom scales (val gate_idx+1..max)
-	// Index kTypeSelMax     : Gate
-	// Index kTypeSelMax + 1 : Trigger
+	// Index kTypeSelGateIdx        : Gate
+	// Index kTypeSelGateIdx+1      : Trigger
+	// Custom scales are intentionally excluded from the selector (duplicate colors, not yet distinct).
 	static constexpr uint8_t kTypeSelGateIdx = static_cast<uint8_t>(Quantizer::scale.size());
-	static constexpr uint8_t kTypeSelMax     = kTypeSelGateIdx + static_cast<uint8_t>(Model::num_custom_scales);
-	static constexpr uint8_t kTypeSelGate    = kTypeSelMax;
-	static constexpr uint8_t kTypeSelTrigger = static_cast<uint8_t>(kTypeSelMax + 1u);
-	static constexpr uint8_t kTypeSelTotal   = static_cast<uint8_t>(kTypeSelMax + 2u);
+	static constexpr uint8_t kTypeSelGate    = kTypeSelGateIdx;
+	static constexpr uint8_t kTypeSelTrigger = static_cast<uint8_t>(kTypeSelGateIdx + 1u);
+	static constexpr uint8_t kTypeSelTotal   = static_cast<uint8_t>(kTypeSelGateIdx + 2u);
 
 	// ---- Direction helper ----
 	static Direction CycleDirection(Direction d, int32_t dir) {
@@ -155,15 +160,47 @@ class Main : public Abstract {
 		p.shared.blinker.Set(3, 300); // 3-flash confirmation on page buttons
 	}
 
+	// ---- Clear mode ----
+	// Entered via SHIFT+PLAY held ≥600ms. Page button N = clear channel N; PLAY = clear all;
+	// any other button exits. LED: all 8 page buttons + play slow-blink.
+	void UpdateClearMode() {
+		// Any button other than page buttons and PLAY exits
+		if (c.button.shift.just_went_high() || c.button.fine.just_went_high() ||
+		    c.button.morph.just_went_high() || c.button.bank.just_went_high() ||
+		    c.button.add.just_went_high())
+		{
+			clear_mode_active_ = false;
+			return;
+		}
+
+		// Page button N: clear channel N and exit
+		for (auto [i, btn] : countzip(c.button.scene)) {
+			if (btn.just_went_high()) {
+				ClearChannel(static_cast<uint8_t>(i));
+				clear_mode_active_ = false;
+				return;
+			}
+		}
+
+		// PLAY: clear all channels and exit
+		if (c.button.play.just_went_high()) {
+			for (uint8_t ch = 0; ch < Model::NumChans; ch++)
+				ClearChannel(ch);
+			clear_mode_active_ = false;
+			return;
+		}
+	}
+
 	// ---- Type selector helpers ----
 
 	// Map current channel state to flat type selector index.
 	uint8_t TypeSelIndex(const ChannelSettings &cs) const {
 		if (cs.type == ChannelType::Gate)    return kTypeSelGate;
 		if (cs.type == ChannelType::Trigger) return kTypeSelTrigger;
-		// CV: map raw scale index, skipping Channel::Mode's gate slot (kTypeSelGateIdx)
+		// CV built-in scales: raw 0..kTypeSelGateIdx-1 map directly to flat index.
+		// Custom scales (raw > kTypeSelGateIdx) are not in the selector; show as unquantized (0).
 		const uint8_t raw = cs.scale.RawIndex();
-		return raw < kTypeSelGateIdx ? raw : static_cast<uint8_t>(raw - 1u);
+		return raw < kTypeSelGateIdx ? raw : 0u;
 	}
 
 	// Apply flat type selector index to channel, updating ChannelType and scale.
@@ -177,10 +214,9 @@ class Main : public Abstract {
 			cs.type = ChannelType::Trigger;
 			return;
 		}
-		// CV: remap flat index back to raw scale val (skip kTypeSelGateIdx slot)
+		// CV built-in scale: flat idx == raw idx for 0..kTypeSelGateIdx-1
 		cs.type = ChannelType::CV;
-		const uint8_t raw = idx < kTypeSelGateIdx ? idx : static_cast<uint8_t>(idx + 1u);
-		cs.scale.SetRaw(raw);
+		cs.scale.SetRaw(idx);
 	}
 
 	void CycleTypeSel(uint8_t ch, int32_t dir) {
@@ -519,13 +555,57 @@ public:
 		// got_rising_edge_ set, causing a spurious Channel Edit trigger on the next Shift press).
 		const bool bank_jgh = c.button.bank.just_went_high();
 
-		// --- Play / Stop ---
+		// --- Play / Stop / Clear-mode entry ---
+		// SHIFT+PLAY: short release (<600ms) = Reset; held ≥600ms = enter Clear mode.
+		// Plain PLAY while in an edit mode: exit that mode (no playback change).
+		// Plain PLAY while armed: disarm (no playback change).
+		// Plain PLAY otherwise: Toggle play/stop.
 		if (c.button.play.just_went_high()) {
-			if (shift)
-				p.Reset();
-			else
+			if (shift) {
+				shift_play_pending_ = true;
+				shift_play_press_t_ = Controls::TimeNow();
+			} else if (channel_edit_active_) {
+				channel_edit_active_   = false;
+				channel_edit_last_enc_ = 0xFF;
+				length_display_until_  = 0;
+				p.shared.do_save_macro = true;
+			} else if (glide_editor_active_) {
+				glide_editor_active_   = false;
+				p.shared.do_save_macro = true;
+			} else if (ratchet_editor_active_) {
+				ratchet_editor_active_ = false;
+				p.shared.do_save_macro = true;
+			} else if (armed_ch_.has_value()) {
+				armed_ch_                = std::nullopt;
+				trigger_step_enc_turned_ = 0;
+			} else {
 				p.Toggle();
-			p.shared.do_save_macro = true;
+				p.shared.do_save_macro = true;
+			}
+		}
+		if (shift_play_pending_) {
+			if (!c.button.shift.is_high()) {
+				// Shift released before play: cancel (treat as no-op)
+				shift_play_pending_ = false;
+			} else if (c.button.play.just_went_low()) {
+				// Play released while shift still held
+				if (Controls::TimeNow() - shift_play_press_t_ < kClearHoldTicks) {
+					// Short press: reset
+					p.Reset();
+					p.shared.do_save_macro = true;
+				}
+				// Long press released before threshold: nothing (clear_mode_active_ not set yet)
+				shift_play_pending_ = false;
+			} else if (Controls::TimeNow() - shift_play_press_t_ >= kClearHoldTicks) {
+				// Held long enough: enter clear mode
+				shift_play_pending_ = false;
+				clear_mode_active_  = true;
+				p.shared.blinker.Set(3, 300);
+				// Consume all button edges so nothing fires when we return
+				for (auto &b : c.button.scene)
+					b.clear_events();
+				c.button.play.clear_events();
+			}
 		}
 
 		// --- Mode switch: if mode was changed externally, yield to sequencer ---
@@ -535,7 +615,15 @@ public:
 			channel_edit_active_   = false;
 			glide_editor_active_   = false;
 			ratchet_editor_active_ = false;
+			clear_mode_active_     = false;
+			shift_play_pending_    = false;
 			SwitchUiMode(main_ui);
+			return;
+		}
+
+		// --- Clear mode ---
+		if (clear_mode_active_) {
+			UpdateClearMode();
 			return;
 		}
 
@@ -545,9 +633,14 @@ public:
 			return;
 		}
 
-		// --- Channel Edit entry: Shift + CHAN ---
+		// --- Channel Edit entry/exit: Shift + CHAN toggles ---
 		if (shift && bank_jgh) {
-			channel_edit_active_ = true;
+			channel_edit_active_ = !channel_edit_active_;
+			if (!channel_edit_active_) {
+				channel_edit_last_enc_ = 0xFF;
+				length_display_until_  = 0;
+			}
+			p.shared.do_save_macro = true;
 			return;
 		}
 
@@ -601,13 +694,17 @@ public:
 			}
 			// CHAN + encoder N: cycle channel N's output type (unquantized CV → scales → Gate → Trigger).
 			// Accelerated so fast spin jumps quickly through many scales.
+			// Save is deferred to CHAN release to avoid a flash write on every encoder detent.
 			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
-				CycleTypeSel(enc, enc_accel_.Apply(enc, dir));
+				CycleTypeSel(enc, dir);
 				focused_ch_ = enc;
-				p.shared.do_save_macro = true;
 			});
 			return;
 		}
+
+		// Save channel type changes when CHAN is released (deferred from CHAN+encoder handler above).
+		if (c.button.bank.just_went_low())
+			p.shared.do_save_macro = true;
 
 		// --- Dispatch to arm mode or normal step editing ---
 		if (armed_ch_.has_value()) {
@@ -643,7 +740,7 @@ private:
 					if (type == ChannelType::CV)
 						EditCvStep(enc, gs, enc_accel_.Apply(enc, inc, fine), fine);
 					else if (type == ChannelType::Gate)
-						EditGateStep(enc, gs, enc_accel_.Apply(enc, inc, fine), fine);
+						EditGateStep(enc, gs, inc, fine);
 					else
 						EditTrigStep(enc, gs, inc); // no accel: ±8 range
 				}
@@ -698,7 +795,7 @@ private:
 		}
 		// Encoder N → adjust gate length for step N on current page
 		ForEachEncoderInc(c, [&](uint8_t enc, int32_t inc) {
-			EditGateStep(ch, GlobalStep(enc), enc_accel_.Apply(enc, inc, fine), fine);
+			EditGateStep(ch, GlobalStep(enc), inc, fine);
 		});
 	}
 
@@ -746,6 +843,7 @@ private:
 		for (auto [i, btn] : countzip(c.button.scene)) {
 			if (btn.just_went_high()) {
 				p.shared.data.scrub_ignore_mask ^= static_cast<uint8_t>(1u << i);
+				p.shared.do_save_shared = true;
 			}
 		}
 
@@ -825,6 +923,7 @@ private:
 		for (auto [i, btn] : countzip(c.button.scene)) {
 			if (btn.just_went_high()) {
 				p.shared.data.scrub_ignore_mask ^= static_cast<uint8_t>(1u << i);
+				p.shared.do_save_shared = true;
 			}
 		}
 	}
@@ -918,9 +1017,9 @@ private:
 	// --- Glide Step Editor ---
 
 	void UpdateGlideEditor(bool fine) {
-		// Exit: Play or GLIDE press only.  Do NOT exit on bare page button press — for channel 0,
-		// page button 0 is also step 1, so a page-button exit would make step 1 unreachable.
-		if (c.button.play.just_went_high() || c.button.morph.just_went_high()) {
+		// Exit: Play (handled at top of Update) or GLIDE press.  Do NOT exit on bare page button
+		// press — for channel 0, page button 0 is also step 1, making step 1 unreachable.
+		if (c.button.morph.just_went_high()) {
 			glide_editor_active_   = false;
 			p.shared.do_save_macro = true;
 			return;
@@ -944,7 +1043,7 @@ private:
 				// CW = set glide on, CCW = set glide off (no accel: binary flag)
 				p.SetGlideFlag(ch, gs, dir > 0);
 			} else if (type == ChannelType::Gate) {
-				EditGateStep(ch, gs, enc_accel_.Apply(enc, dir, fine), fine);
+				EditGateStep(ch, gs, dir, fine);
 			} else {
 				// Trigger: transition into Ratchet Step Editor
 				glide_editor_active_   = false;
@@ -957,9 +1056,9 @@ private:
 	// --- Ratchet Step Editor ---
 
 	void UpdateRatchetEditor(bool /*fine*/) {
-		// Exit: Play or GLIDE press only.  Same reason as Glide Step Editor: bare page button
-		// exit is unreachable for step 1 on channel 0.
-		if (c.button.play.just_went_high() || c.button.morph.just_went_high()) {
+		// Exit: Play (handled at top of Update) or GLIDE press.  Same reason as Glide Step Editor:
+		// bare page button exit is unreachable for step 1 on channel 0.
+		if (c.button.morph.just_went_high()) {
 			ratchet_editor_active_ = false;
 			p.shared.do_save_macro = true;
 			return;
@@ -995,14 +1094,9 @@ private:
 	//   enc 7 = Random        (Random)
 
 	void UpdateChannelEdit(bool fine) {
-		// Exit: Play or CHAN press → save channel settings
-		if (c.button.play.just_went_high() || c.button.bank.just_went_high()) {
-			channel_edit_active_    = false;
-			channel_edit_last_enc_  = 0xFF;
-			length_display_until_   = 0;
-			p.shared.do_save_macro  = true;
-			return;
-		}
+		// Exit: Play is handled at the top of Update() before we get here.
+		// CHAN (bank) press is also consumed before reaching here via bank_jgh; exit is handled
+		// by the SHIFT+CHAN toggle in Update() instead.
 
 		// Shift + page button: page navigation
 		if (c.button.shift.is_high()) {
@@ -1056,8 +1150,8 @@ private:
 			case 1: // Direction (Forward / Reverse / Ping-Pong / Random) — no accel: 4 values
 				cs.direction = CycleDirection(cs.direction, dir);
 				break;
-			case 2: { // Length (1–64) — accelerated
-				const int32_t adelta = enc_accel_.Apply(enc, dir, fine);
+			case 2: { // Length (1–64)
+				const int32_t adelta = dir;
 				cs.length = static_cast<uint8_t>(
 				    std::clamp<int32_t>(cs.length + adelta, 1, 64));
 				current_page_ = static_cast<uint8_t>((cs.length - 1u) / Model::NumChans);
@@ -1095,18 +1189,18 @@ private:
 		auto &d = p.GetData();
 		ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
 			switch (enc) {
-			case 0: // Default direction
+			case 1: // Default direction  (Dir.)
 				d.default_direction = CycleDirection(d.default_direction, dir);
 				break;
-			case 2: // Default range
-				d.default_range.Inc(dir);
-				break;
-			case 5: // Default length
+			case 2: // Default length     (Length)
 				d.default_length = static_cast<uint8_t>(
 				    std::clamp<int32_t>(d.default_length + dir, 1, 64));
 				break;
-			case 6: // Internal BPM — accelerated
-				p.clock.bpm.Inc(enc_accel_.Apply(enc, dir, fine), fine);
+			case 4: // Default range      (Range)
+				d.default_range.Inc(dir);
+				break;
+			case 5: // Internal BPM       (BPM/Clock Div)
+				p.clock.bpm.Inc(dir, fine);
 				break;
 			default:
 				break;
@@ -1116,6 +1210,17 @@ private:
 
 public:
 	void PaintLeds(const Model::Output::Buffer & /*outs*/) override {
+		// --- Clear mode: all page buttons + play LED slow-blink ---
+		if (clear_mode_active_) {
+			for (auto i = 0u; i < Model::NumChans; i++)
+				c.SetEncoderLed(i, Palette::off);
+			const bool blink = (Controls::TimeNow() >> 10u) & 0x01u; // ~3 Hz
+			for (auto i = 0u; i < Model::NumChans; i++)
+				c.SetButtonLed(i, blink);
+			c.SetPlayLed(blink);
+			return;
+		}
+
 		// --- Performance Page Settings ---
 		if (perf_page_active_ && perf_settings_active_) {
 			// Encoder LEDs mirror ScrubSettings display
@@ -1246,6 +1351,28 @@ public:
 			return;
 		}
 
+		// --- SHIFT held (not in any mode): global settings feedback ---
+		// Enc 0 = default direction (color), enc 2 = default range (orange ramp),
+		// enc 5 = default length (white ramp), enc 6 = BPM (yellow, pulses with clock).
+		if (c.button.shift.is_high() && !channel_edit_active_ && !glide_editor_active_ && !ratchet_editor_active_) {
+			static constexpr std::array<Color, 4> dir_col = {
+			    Palette::green, Palette::orange, Palette::yellow, Palette::magenta};
+			const auto &d = p.GetData();
+			for (auto i = 0u; i < Model::NumChans; i++) {
+				c.SetButtonLed(i, false);
+				Color col = Palette::dim_grey;
+				switch (i) {
+				case 1: col = dir_col[static_cast<uint8_t>(d.default_direction)]; break;
+				case 2: col = Palette::off.blend(Palette::full_white, d.default_length / 64.f); break;
+				case 4: col = Palette::off.blend(Palette::orange, d.default_range.PosAmount()); break;
+				case 5: col = Palette::off.blend(Palette::yellow, p.clock.bpm.GetPhase()); break;
+				default: break;
+				}
+				c.SetEncoderLed(i, col);
+			}
+			return;
+		}
+
 		// --- CHAN held (no page button pressed): show channel types on encoders ---
 		if (c.button.bank.is_high() && !armed_ch_.has_value()) {
 			for (auto i = 0u; i < Model::NumChans; i++) {
@@ -1282,6 +1409,7 @@ public:
 		if (armed_gate_trig) {
 			// Gate/Trigger armed: each encoder shows step state for the armed channel,
 			// with the currently playing step highlighted (chaselight).
+			// A held page button suppresses the chase blink so the static color is visible while editing.
 			const auto ph       = p.GetPlayhead(ch);
 			const bool on_page  = (ph / Model::NumChans == current_page_);
 			const uint8_t chase = on_page ? static_cast<uint8_t>(ph % Model::NumChans) : 0xFF;
@@ -1294,14 +1422,15 @@ public:
 			for (auto i = 0u; i < Model::NumChans; i++) {
 				const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));
 				Color col        = StepColorForChannel(ch, gs);
-				// Chaselight: current step pulses white when on this page
-				if (i == chase)
+				// Chaselight: current step pulses white, unless that step's button is held (editing)
+				if (i == chase && !c.button.scene[i].is_high())
 					col = blink ? Palette::full_white : col;
 				c.SetEncoderLed(i, col);
 			}
 		} else if (armed) {
 			// CV armed: each encoder shows that step's CV value color for the armed channel,
 			// with the currently playing step highlighted (chaselight).
+			// A held page button suppresses the chase blink so the static color is visible while editing.
 			const auto ph       = p.GetPlayhead(ch);
 			const bool on_page  = (ph / Model::NumChans == current_page_);
 			const uint8_t chase = on_page ? static_cast<uint8_t>(ph % Model::NumChans) : 0xFF;
@@ -1310,7 +1439,7 @@ public:
 			for (auto i = 0u; i < Model::NumChans; i++) {
 				const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));
 				Color col        = StepColorForChannel(ch, gs);
-				if (i == chase)
+				if (i == chase && !c.button.scene[i].is_high())
 					col = blink ? Palette::full_white : col;
 				c.SetEncoderLed(i, col);
 			}
