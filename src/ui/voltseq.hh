@@ -63,6 +63,9 @@ class Main : public Abstract {
 	// Long-press detection in Channel Edit: hold page button to clear that channel's steps
 	Clock::Timer channel_edit_clear_timer_{kLongpressMs};
 	uint8_t      channel_edit_clear_btn_ = kNoLongpressBtn;
+	// Deadline (Controls::TimeNow) until the length-feedback display is shown in Channel Edit.
+	// Starts when encoder 2 (Length) is turned; display reverts to normal after ~600 ms.
+	uint32_t     length_display_until_ = 0;
 
 	// ---- Slider Performance Page state ----
 	bool     perf_page_active_     = false;
@@ -211,7 +214,14 @@ class Main : public Abstract {
 	Color ChannelTypeColor(uint8_t ch) const {
 		const auto &cs = p.GetData().channel[ch];
 		switch (cs.type) {
-		case ChannelType::CV:      return cs.scale.GetColor();
+		case ChannelType::CV: {
+			auto col = cs.scale.GetColor();
+			// Unquantized CV (scale index 0) maps to Palette::very_dim_grey which is nearly
+			// invisible (Color(3,3,3)).  Use a visible grey so the LED is readable.
+			if (col == Palette::very_dim_grey)
+				col = Palette::grey;
+			return col;
+		}
 		case ChannelType::Gate:    return GateColor();
 		case ChannelType::Trigger: return TriggerColor();
 		}
@@ -485,6 +495,7 @@ public:
 				scrub_hold_pending_ = false;
 				if (!perf_page_active_) {
 					perf_page_active_ = true;
+					p.shared.blinker.Set(3, 300); // entry confirmation flash
 				} else if (!perf_settings_active_) {
 					perf_settings_active_ = true;
 				}
@@ -588,9 +599,10 @@ public:
 					return;
 				}
 			}
-			// CHAN + encoder N: cycle channel N's output type (unquantized CV → scales → Gate → Trigger)
+			// CHAN + encoder N: cycle channel N's output type (unquantized CV → scales → Gate → Trigger).
+			// Accelerated so fast spin jumps quickly through many scales.
 			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
-				CycleTypeSel(enc, dir);
+				CycleTypeSel(enc, enc_accel_.Apply(enc, dir));
 				focused_ch_ = enc;
 				p.shared.do_save_macro = true;
 			});
@@ -906,13 +918,9 @@ private:
 	// --- Glide Step Editor ---
 
 	void UpdateGlideEditor(bool fine) {
-		// Exit: Play, GLIDE press, or re-press the editor's page button
+		// Exit: Play or GLIDE press only.  Do NOT exit on bare page button press — for channel 0,
+		// page button 0 is also step 1, so a page-button exit would make step 1 unreachable.
 		if (c.button.play.just_went_high() || c.button.morph.just_went_high()) {
-			glide_editor_active_   = false;
-			p.shared.do_save_macro = true;
-			return;
-		}
-		if (c.button.scene[glide_editor_ch_].just_went_high()) {
 			glide_editor_active_   = false;
 			p.shared.do_save_macro = true;
 			return;
@@ -949,13 +957,9 @@ private:
 	// --- Ratchet Step Editor ---
 
 	void UpdateRatchetEditor(bool /*fine*/) {
-		// Exit: Play, GLIDE press, or re-press the editor's page button
+		// Exit: Play or GLIDE press only.  Same reason as Glide Step Editor: bare page button
+		// exit is unreachable for step 1 on channel 0.
 		if (c.button.play.just_went_high() || c.button.morph.just_went_high()) {
-			ratchet_editor_active_ = false;
-			p.shared.do_save_macro = true;
-			return;
-		}
-		if (c.button.scene[ratchet_editor_ch_].just_went_high()) {
 			ratchet_editor_active_ = false;
 			p.shared.do_save_macro = true;
 			return;
@@ -995,6 +999,7 @@ private:
 		if (c.button.play.just_went_high() || c.button.bank.just_went_high()) {
 			channel_edit_active_    = false;
 			channel_edit_last_enc_  = 0xFF;
+			length_display_until_   = 0;
 			p.shared.do_save_macro  = true;
 			return;
 		}
@@ -1015,6 +1020,7 @@ private:
 				// Released before long-press: just focus
 				edit_ch_                = btn;
 				channel_edit_last_enc_  = 0xFF;
+				length_display_until_   = 0;
 				channel_edit_clear_btn_ = kNoLongpressBtn;
 				return;
 			}
@@ -1023,6 +1029,7 @@ private:
 				ClearChannel(btn);
 				edit_ch_                = btn;
 				channel_edit_last_enc_  = 0xFF;
+				length_display_until_   = 0;
 				channel_edit_clear_btn_ = kNoLongpressBtn;
 				return;
 			}
@@ -1054,6 +1061,8 @@ private:
 				cs.length = static_cast<uint8_t>(
 				    std::clamp<int32_t>(cs.length + adelta, 1, 64));
 				current_page_ = static_cast<uint8_t>((cs.length - 1u) / Model::NumChans);
+				// Keep length feedback visible for 600 ms after the last turn.
+				length_display_until_ = Controls::TimeNow() + Clock::MsToTicks(600);
 				break;
 			}
 			case 3: // Phase rotate — rotates only active steps [0, length-1]
@@ -1201,8 +1210,9 @@ public:
 
 		// --- Channel Edit mode ---
 		if (channel_edit_active_) {
-			if (channel_edit_last_enc_ == 2) {
-				// Length feedback: page buttons = page count, encoder LEDs = step fill on last page
+			if (Controls::TimeNow() <= length_display_until_) {
+				// Length feedback: page buttons = page count, encoder LEDs = step fill on last page.
+				// Shown for 600 ms after the last encoder 2 (Length) turn, then reverts.
 				const auto len          = p.GetData().channel[edit_ch_].length;
 				const auto last_page    = static_cast<uint8_t>((len - 1u) / Model::NumChans);
 				const auto steps_on_pg  = static_cast<uint8_t>((len - 1u) % Model::NumChans + 1u);
@@ -1275,7 +1285,11 @@ public:
 			const auto ph       = p.GetPlayhead(ch);
 			const bool on_page  = (ph / Model::NumChans == current_page_);
 			const uint8_t chase = on_page ? static_cast<uint8_t>(ph % Model::NumChans) : 0xFF;
-			const bool blink    = (Controls::TimeNow() >> 8) & 1u;
+			// Blink faster when the step is repeating (playhead frozen, extra pulses pending).
+			const bool repeating = p.IsRepeating(ch);
+			const bool blink     = repeating
+			    ? ((Controls::TimeNow() >> 6) & 1u)  // ~47 Hz during repeat
+			    : ((Controls::TimeNow() >> 8) & 1u); // ~12 Hz normal
 
 			for (auto i = 0u; i < Model::NumChans; i++) {
 				const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));

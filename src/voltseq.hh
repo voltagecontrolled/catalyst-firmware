@@ -191,6 +191,9 @@ class Interface {
 	std::array<uint8_t, Model::NumChans>      playhead{};
 	std::array<uint8_t, Model::NumChans>      shadow{};
 	std::array<int8_t,  Model::NumChans>      pingpong_dir{};
+	// primed[ch]: false until the first OnChannelFired after Reset().  When false, the advance
+	// is skipped so the first step output after Reset is step 0, not step 1.
+	std::array<bool,    Model::NumChans>      primed{};
 
 	// Step-lock + arpeggiation — global step indices (0..63)
 	uint8_t                                   held_count_ = 0;
@@ -472,7 +475,13 @@ class Interface {
 				FirePulse(ch);
 			return;
 		}
-		AdvanceShadow(ch);
+		// Skip the advance on the very first fire after Reset() so that step 0 plays first.
+		// On all subsequent fires, advance normally.
+		if (primed[ch]) {
+			AdvanceShadow(ch);
+		} else {
+			primed[ch] = true;
+		}
 		if (!AnyStepHeld())
 			playhead[ch] = shadow[ch];
 		const auto step = GetOutputStep(ch);
@@ -520,6 +529,7 @@ public:
 		playhead.fill(0);
 		shadow.fill(0);
 		pingpong_dir.fill(1);
+		primed.fill(false);
 		held_count_ = 0;
 		arp_index_  = 0;
 		gate_state    = {};
@@ -596,7 +606,9 @@ public:
 
 	// ---- Output state accessors (called from App::Update()) ----
 
-	bool IsGateHigh(uint8_t ch) const { return gate_state[ch].high; }
+	bool IsGateHigh(uint8_t ch)  const { return gate_state[ch].high; }
+	// True while a trigger channel is holding a step repeat (playhead frozen, extra pulses pending).
+	bool IsRepeating(uint8_t ch) const { return ratchet_state[ch].repeat_remaining > 0; }
 	bool IsTrigHigh(uint8_t ch) const { return ratchet_state[ch].pulse_high; }
 
 	// ---- Playhead accessors (called from UI for display and recording) ----

@@ -205,7 +205,7 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 
 **GLIDE modifier:** Hold Glide and turn an encoder to adjust per-channel: CV glide time (0–10s), gate length offset, or trigger pulse width (1–100ms). Shift + Glide + encoder offsets all ratchet/repeat counts for a Trigger channel.
 
-**Glide Step Editor:** Hold Glide, long-press a Page button (600ms) on a CV or Gate channel. Encoder N toggles the per-step glide flag (CV) or adjusts gate length (Gate). Shift + Page navigates pages. Exit with Glide or channel's Page button.
+**Glide Step Editor:** Hold Glide, long-press a Page button (600ms) on a CV or Gate channel. Encoder N toggles the per-step glide flag (CV) or adjusts gate length (Gate). Shift + Page navigates pages. Exit with Glide or Play/Reset.
 
 **Ratchet Step Editor:** Hold Glide, long-press a Page button (600ms) on a Trigger channel. Encoder N adjusts per-step ratchet/repeat count. Same navigation and exit as Glide Step Editor.
 
@@ -228,6 +228,15 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 
 **Save behavior:** Saves automatically on play/stop toggle, Channel Edit exit, Glide/Ratchet editor exit, and Performance Page settings exit.
 
+**Alpha build history:**
+
+| Build | Key changes / bugs fixed |
+|-------|--------------------------|
+| alpha1 | Initial implementation: full 8-channel engine, CV/Gate/Trigger types, x0x editing, GLIDE editor, Channel Edit, orbit/Performance Page, mode switch |
+| alpha2 | Slider recording (motion-gated); trigger repeat infinite-loop fix (`FirePulse` helper); chaselight on page buttons (CV); channel type UX; Play/Reset exits all modal states |
+| alpha3 | Default range corrected to −5V..+5V (bipolar); all default steps centered at 0V (32768); Channel Edit encoder order matches panel silkscreen; armed CV redesign (encoder N = step N, slider records to range, Shift+enc 5/7 for range/scale); step-1 inaccessible in armed Gate/Trig fixed (bare disarm removed); Shift debounce fix (pre-read `bank_jgh` to prevent spurious Channel Edit entry); phase rotate scoped to active steps only; encoder acceleration (`EncoderAccel`); chaselight on encoder LEDs in armed mode; direction feedback in Channel Edit; clear channel (long-press page button in Channel Edit) |
+| alpha4 | Step 1 exits Glide/Ratchet Step Editor fixed (removed bare page-button exit; exit now Glide or Play only); step 2 fires first after Reset+Play fixed (`primed[]` array skips advance on first `OnChannelFired`); CHAN+encoder type cycling accelerated (`enc_accel_`); repeat chaselight blinks at ~47 Hz (vs 12 Hz) while `repeat_remaining > 0`; Performance Page entry now flashes page buttons as confirmation (blinker); Channel Edit length display reverts after 600 ms of enc 2 inactivity; unquantized CV encoder LEDs now show visible grey (was `very_dim_grey` = nearly off) |
+
 **Deviations from spec (`docs/planned/VOLTSEQ.md`):**
 - Slider recording uses the channel Range parameter directly; separate `slider_base_v`/`slider_span_v` fields were removed.
 - Armed Gate/Trigger: encoder N edits step N directly (no hold-page-button required). The old hold+page+encoder mechanism was replaced.
@@ -235,7 +244,7 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 - Phase rotate operates only on active steps (0 to length-1); unused steps beyond length are untouched.
 - Disarming requires Chan. + Page button (bare page-button disarm removed to allow all steps to be edited while armed, including step 1 of the armed channel).
 - Only two WAV builds per release (catseq-catcon, catseq-voltseq); the voltseq-catcon variant is deferred.
-- `VoltSeq::Data::current_tag = 3u` as of alpha3.
+- `VoltSeq::Data::current_tag = 3u` (unchanged through alpha4; no persistent struct layout changes in alpha4).
 
 **Implementation notes:**
 

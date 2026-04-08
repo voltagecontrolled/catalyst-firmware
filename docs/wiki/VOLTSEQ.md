@@ -178,7 +178,7 @@ In the Glide Step Editor:
   - Turn **CCW** = glide off for that step
 - For Gate channels: encoders adjust the gate length for each step individually.
 - Hold **Shift + Page button** to navigate pages while staying in the editor.
-- Press **Glide** or the focused channel's **Page button** to exit and save.
+- Press **Glide** or **Play/Reset** to exit and save.
 
 ### Entering Ratchet Step Editor
 
@@ -189,7 +189,7 @@ In the Ratchet Step Editor:
   - Positive = ratchet (subdivide; green)
   - Negative = repeat (extend; teal)
 - Hold **Shift + Page button** to navigate pages.
-- Press **Glide** or the focused channel's **Page button** to exit and save.
+- Press **Glide** or **Play/Reset** to exit and save.
 
 ---
 
@@ -333,8 +333,8 @@ There is no manual save step required.
 | Channel Edit + long-press Page N | Clear all steps for channel N |
 | Hold Glide + turn Encoder N | Set glide time / gate length offset / pulse width for channel N |
 | Hold Shift + Glide + turn Encoder N | Offset all ratchet counts for Trigger channel N |
-| Hold Glide + long-press Page N (600 ms) | Enter Glide Step Editor for channel N |
-| Hold Glide + long-press Page N on Trigger (600 ms) | Enter Ratchet Step Editor for channel N |
+| Hold Glide + long-press Page N (600 ms) | Enter Glide Step Editor for channel N; exit with Glide or Play |
+| Hold Glide + long-press Page N on Trigger (600 ms) | Enter Ratchet Step Editor for channel N; exit with Glide or Play |
 | Fine + Glide (hold 1.5 s) | Enter/exit Performance Page |
 | Shift + Tap + Chan. (hold 1 s) | Switch to VoltSeq mode |
 | Fine + Play + Glide (hold 1 s) | Switch to Sequencer mode |
