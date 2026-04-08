@@ -30,19 +30,25 @@ class Main : public Abstract {
 
 	uint8_t                current_page_  = 0;
 	std::optional<uint8_t> armed_ch_      = std::nullopt; // which channel (0-7) is armed
+	uint8_t                focused_ch_    = 0;            // channel shown on page-button chaselight
 
 	// Last step index (in-page 0-7) held or touched for display reference
 	uint8_t last_touched_step_ = 0;
 
 	// Channel Edit mode state
-	bool    channel_edit_active_ = false;
-	uint8_t edit_ch_             = 0; // focused channel (0-7) in Channel Edit
+	bool    channel_edit_active_  = false;
+	uint8_t edit_ch_              = 0;    // focused channel (0-7) in Channel Edit
+	uint8_t channel_edit_last_enc_ = 0xFF; // last encoder turned (drives feedback display)
 
 	// Glide / Ratchet step editor state
 	bool    glide_editor_active_   = false;
 	bool    ratchet_editor_active_ = false;
 	uint8_t glide_editor_ch_       = 0;
 	uint8_t ratchet_editor_ch_     = 0;
+
+	// Bitmask: bit i set if an encoder was turned while step i was held (armed Trigger editing).
+	// Used to distinguish tap (toggle) from hold+edit (no toggle).
+	uint8_t trigger_step_enc_turned_ = 0;
 
 	// Long-press detection for GLIDE + page button entry
 	static constexpr uint8_t  kNoLongpressBtn  = 0xFF;
@@ -73,6 +79,12 @@ class Main : public Abstract {
 	// Slider movement tracking (for lock indicator)
 	uint16_t last_slider_raw_        = 0;
 	uint32_t last_slider_move_time_  = 0;
+
+	// Slider-record movement gate: record only while slider is in motion + brief hold-off.
+	uint16_t record_slider_prev_   = 0xFFFF;           // invalid sentinel
+	uint32_t record_active_until_  = 0;
+	static constexpr int32_t  kRecordMoveThreshold  = 8;
+	static constexpr uint32_t kRecordActiveTicks    = Clock::MsToTicks(80);
 
 	static constexpr uint32_t kScrubHoldTicks     = Clock::MsToTicks(1500);
 	static constexpr int32_t  kPickupThreshold     = 80;
@@ -150,9 +162,9 @@ class Main : public Abstract {
 	}
 
 	void CycleTypeSel(uint8_t ch, int32_t dir) {
-		const auto &cs   = p.GetData().channel[ch];
+		const auto &cs  = p.GetData().channel[ch];
 		const int32_t cur  = TypeSelIndex(cs);
-		const int32_t next = ((cur + dir) % kTypeSelTotal + kTypeSelTotal) % kTypeSelTotal;
+		const int32_t next = std::clamp<int32_t>(cur + dir, 0, static_cast<int32_t>(kTypeSelTotal - 1));
 		ApplyTypeSel(ch, static_cast<uint8_t>(next));
 	}
 
@@ -170,13 +182,17 @@ class Main : public Abstract {
 	}
 
 	// ---- Channel type color for display ----
+	// Gate = dim green matching Palette::Scales::color.back() (same as Gate in sequencer).
+	// Trigger = dimmer green, visually distinct from Gate.
+	static Color GateColor()    { return Palette::Scales::color.back(); }
+	static Color TriggerColor() { return Palette::off.blend(Palette::green, 0.25f); }
 
 	Color ChannelTypeColor(uint8_t ch) const {
 		const auto &cs = p.GetData().channel[ch];
 		switch (cs.type) {
 		case ChannelType::CV:      return cs.scale.GetColor();
-		case ChannelType::Gate:    return Palette::yellow;
-		case ChannelType::Trigger: return Palette::green;
+		case ChannelType::Gate:    return GateColor();
+		case ChannelType::Trigger: return TriggerColor();
 		}
 		return Palette::off;
 	}
@@ -193,6 +209,7 @@ class Main : public Abstract {
 			if (c.button.scene[i].is_high())
 				p.SetStepHeld(GlobalStep(i), false);
 		}
+		trigger_step_enc_turned_ = 0;
 		current_page_ = page;
 	}
 
@@ -265,21 +282,22 @@ class Main : public Abstract {
 		return Palette::Cv::fromLevel(p.shared.data.palette[ch], cv_val, cs.range);
 	}
 
-	// Color representing a gate step's gate length (0=off dim, non-zero=yellow brightness)
+	// Color representing a gate step's gate length (0=off, non-zero=dim→bright green).
 	Color GateStepColor(uint8_t ch, uint8_t global_step) const {
 		const auto sv = p.GetStepValue(ch, global_step);
 		if (sv == 0) return Palette::off;
 		const float frac = static_cast<float>(sv) / 65535.f;
-		return Palette::yellow.blend(Palette::dim_grey, 1.f - frac);
+		return Palette::off.blend(GateColor(), 0.3f + 0.7f * frac);
 	}
 
-	// Color representing a trigger step
+	// Color representing a trigger step — brightness scales with ratchet/repeat count (1–8).
 	Color TrigStepColor(uint8_t ch, uint8_t global_step) const {
 		const auto raw = p.GetStepValue(ch, global_step);
 		const auto val = static_cast<int8_t>(raw & 0xFF);
 		if (val == 0) return Palette::off;
-		if (val > 0) return Palette::green; // ratchet
-		return Palette::teal;               // repeat
+		const float brightness = std::clamp(static_cast<float>(std::abs(val)) / 8.f, 0.f, 1.f);
+		if (val > 0) return Palette::off.blend(Palette::green, brightness); // ratchet
+		return Palette::off.blend(Palette::teal, brightness);               // repeat
 	}
 
 	Color StepColorForChannel(uint8_t ch, uint8_t global_step) const {
@@ -327,10 +345,22 @@ public:
 			}
 		}
 
-		// Slider recording: on each master tick while a CV channel is armed (standard mode only)
+		// Slider movement gate: track whether slider is in motion.
+		{
+			const auto slider_now = c.ReadSlider();
+			if (record_slider_prev_ == 0xFFFF) record_slider_prev_ = slider_now;
+			if (std::abs(static_cast<int32_t>(slider_now) - static_cast<int32_t>(record_slider_prev_)) >= kRecordMoveThreshold) {
+				record_slider_prev_  = slider_now;
+				record_active_until_ = Controls::TimeNow() + kRecordActiveTicks;
+			}
+		}
+		const bool record_active = Controls::TimeNow() < record_active_until_;
+
+		// Slider recording: on each master tick while a CV channel is armed and slider is moving.
 		const bool armed_cv = armed_ch_.has_value()
 		                   && p.GetData().channel[armed_ch_.value()].type == ChannelType::CV
-		                   && p.shared.data.slider_perf_mode == 0;
+		                   && !perf_page_active_
+		                   && record_active;
 		if (armed_cv) {
 			const auto ch = armed_ch_.value();
 			if (ticked && p.IsPlaying()) {
@@ -519,19 +549,27 @@ public:
 			return;
 		}
 
-		// --- Channel arm: CHAN + page button → arm channel ---
+		// --- Channel arm / type select: CHAN held ---
 		if (chan) {
 			for (auto [i, btn] : countzip(c.button.scene)) {
 				if (btn.just_went_high()) {
 					if (armed_ch_ == std::optional<uint8_t>{i}) {
 						armed_ch_ = std::nullopt;
+						trigger_step_enc_turned_ = 0;
 					} else {
-						armed_ch_ = i;
+						armed_ch_   = i;
+						focused_ch_ = static_cast<uint8_t>(i);
 					}
 					return;
 				}
 			}
-			return; // consume CHAN ticks so they don't trigger step-hold
+			// CHAN + encoder N: cycle channel N's output type (unquantized CV → scales → Gate → Trigger)
+			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
+				CycleTypeSel(enc, dir);
+				focused_ch_ = enc;
+				p.shared.do_save_macro = true;
+			});
+			return;
 		}
 
 		// --- Dispatch to arm mode or normal step editing ---
@@ -583,6 +621,7 @@ private:
 		// Disarm when the armed channel's page button is pressed alone (not CHAN held)
 		if (c.button.scene[ch].just_went_high()) {
 			armed_ch_ = std::nullopt;
+			trigger_step_enc_turned_ = 0;
 			return;
 		}
 
@@ -594,6 +633,8 @@ private:
 			UpdateArmedTrigger(ch, fine);
 		}
 	}
+
+
 
 	void UpdateArmedCV(uint8_t ch, bool fine) {
 		// Enc 3 (idx 2): slider span; Enc 4 (idx 3): slider base
@@ -644,23 +685,32 @@ private:
 	}
 
 	void UpdateArmedTrigger(uint8_t ch, bool fine) {
-		// Tap page button → toggle rest/trigger
-		for (auto [i, btn] : countzip(c.button.scene)) {
-			if (i == ch) continue;
-			if (btn.just_went_high()) {
-				last_touched_step_ = i;
-				ToggleTrigStep(ch, GlobalStep(i));
-			}
-		}
-		// Encoder while page button held → adjust ratchet/repeat count
+		// Encoder while page button held → adjust ratchet/repeat count.
+		// Mark each held step so release knows not to toggle (hold-to-edit, tap-to-toggle).
 		ForEachEncoderInc(c, [&](uint8_t /*enc*/, int32_t inc) {
 			(void)fine;
 			for (auto [i, btn] : countzip(c.button.scene)) {
-				if (i == ch) continue;
-				if (btn.is_high())
+				if (static_cast<uint8_t>(i) == ch) continue;
+				if (btn.is_high()) {
 					EditTrigStep(ch, GlobalStep(i), inc);
+					trigger_step_enc_turned_ |= static_cast<uint8_t>(1u << i);
+				}
 			}
 		});
+
+		for (auto [i, btn] : countzip(c.button.scene)) {
+			if (static_cast<uint8_t>(i) == ch) continue;
+			if (btn.just_went_high()) {
+				last_touched_step_ = static_cast<uint8_t>(i);
+				trigger_step_enc_turned_ &= ~static_cast<uint8_t>(1u << i); // clear on fresh press
+			}
+			if (btn.just_went_low()) {
+				if (!(trigger_step_enc_turned_ & (1u << i))) {
+					ToggleTrigStep(ch, GlobalStep(i)); // tap: toggle on release
+				}
+				trigger_step_enc_turned_ &= ~static_cast<uint8_t>(1u << i); // clear on release
+			}
+		}
 	}
 
 	// --- Performance Page ---
@@ -864,8 +914,8 @@ private:
 	// --- Glide Step Editor ---
 
 	void UpdateGlideEditor(bool fine) {
-		// Exit: GLIDE press, or re-press the editor's page button
-		if (c.button.morph.just_went_high()) {
+		// Exit: Play, GLIDE press, or re-press the editor's page button
+		if (c.button.play.just_went_high() || c.button.morph.just_went_high()) {
 			glide_editor_active_   = false;
 			p.shared.do_save_macro = true;
 			return;
@@ -907,8 +957,8 @@ private:
 	// --- Ratchet Step Editor ---
 
 	void UpdateRatchetEditor(bool /*fine*/) {
-		// Exit: GLIDE press, or re-press the editor's page button
-		if (c.button.morph.just_went_high()) {
+		// Exit: Play, GLIDE press, or re-press the editor's page button
+		if (c.button.play.just_went_high() || c.button.morph.just_went_high()) {
 			ratchet_editor_active_ = false;
 			p.shared.do_save_macro = true;
 			return;
@@ -938,12 +988,22 @@ private:
 	}
 
 	// --- Channel Edit (Shift + CHAN) ---
+	// Encoder positions aligned with Model::Sequencer::EncoderAlts:
+	//   enc 0 = Direction     (StartOffset=0)
+	//   enc 1 = Phase rotate  (PlayMode=1)
+	//   enc 2 = Length        (SeqLength=2)  ← physical "Length" encoder
+	//   enc 3 = Output delay  (PhaseOffset=3)
+	//   enc 4 = Range/PW      (Range=4)
+	//   enc 5 = Clock div     (ClockDiv=5)
+	//   enc 6 = Type selector (Transpose=6)
+	//   enc 7 = Random        (Random=7)
 
 	void UpdateChannelEdit(bool fine) {
-		// Exit: CHAN press → save channel settings
-		if (c.button.bank.just_went_high()) {
-			channel_edit_active_       = false;
-			p.shared.do_save_macro     = true;
+		// Exit: Play or CHAN press → save channel settings
+		if (c.button.play.just_went_high() || c.button.bank.just_went_high()) {
+			channel_edit_active_    = false;
+			channel_edit_last_enc_  = 0xFF;
+			p.shared.do_save_macro  = true;
 			return;
 		}
 
@@ -959,7 +1019,8 @@ private:
 		// Page button press → focus channel
 		for (auto [i, btn] : countzip(c.button.scene)) {
 			if (btn.just_went_high()) {
-				edit_ch_ = static_cast<uint8_t>(i);
+				edit_ch_              = static_cast<uint8_t>(i);
+				channel_edit_last_enc_ = 0xFF;
 				return;
 			}
 		}
@@ -967,33 +1028,35 @@ private:
 		// Encoder editing for focused channel
 		auto &cs = p.GetData().channel[edit_ch_];
 		ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
+			channel_edit_last_enc_ = enc;
 			switch (enc) {
-			case 0: // Dir
+			case 0: // Direction (Forward / Reverse / Ping-Pong / Random)
 				cs.direction = CycleDirection(cs.direction, dir);
 				break;
 			case 1: // Phase rotate (destructive)
 				RotateChannel(edit_ch_, dir);
 				break;
-			case 2: // Range (CV) / Pulse width (Trigger)
+			case 2: // Length (1–64) — auto-navigate to page containing last step
+				cs.length = static_cast<uint8_t>(
+				    std::clamp<int32_t>(cs.length + dir, 1, 64));
+				current_page_ = static_cast<uint8_t>((cs.length - 1u) / Model::NumChans);
+				break;
+			case 3: // Output delay (0–20ms)
+				cs.output_delay_ms = static_cast<uint8_t>(
+				    std::clamp<int32_t>(cs.output_delay_ms + dir, 0, 20));
+				break;
+			case 4: // Range (CV) / Pulse width (Trigger)
 				if (cs.type == ChannelType::CV)
 					cs.range.Inc(dir);
 				else if (cs.type == ChannelType::Trigger)
 					cs.pulse_width_ms = static_cast<uint8_t>(
 					    std::clamp<int32_t>(cs.pulse_width_ms + dir, 1, 100));
 				break;
-			case 3: // Type selector (cycles CV-Off → scales → Gate → Trigger → CV-Off)
-				CycleTypeSel(edit_ch_, dir);
-				break;
-			case 4: // Output delay (0–20ms, all types)
-				cs.output_delay_ms = static_cast<uint8_t>(
-				    std::clamp<int32_t>(cs.output_delay_ms + dir, 0, 20));
-				break;
-			case 5: // Length (1–64)
-				cs.length = static_cast<uint8_t>(
-				    std::clamp<int32_t>(cs.length + dir, 1, 64));
-				break;
-			case 6: // Clock division
+			case 5: // Clock division
 				cs.division.Inc(dir);
+				break;
+			case 6: // Type selector (unquantized CV → scales → Gate → Trigger, clamped)
+				CycleTypeSel(edit_ch_, dir);
 				break;
 			case 7: // Random amount (0..1 in 0.05 increments)
 				cs.random_amount = std::clamp(cs.random_amount + dir * 0.05f, 0.f, 1.f);
@@ -1124,11 +1187,29 @@ public:
 
 		// --- Channel Edit mode ---
 		if (channel_edit_active_) {
+			if (channel_edit_last_enc_ == 2) {
+				// Length feedback: page buttons = page count, encoder LEDs = step fill on last page
+				const auto len          = p.GetData().channel[edit_ch_].length;
+				const auto last_page    = static_cast<uint8_t>((len - 1u) / Model::NumChans);
+				const auto steps_on_pg  = static_cast<uint8_t>((len - 1u) % Model::NumChans + 1u);
+				for (auto i = 0u; i < Model::NumChans; i++) {
+					c.SetButtonLed(i, i <= last_page);
+					c.SetEncoderLed(i, i < steps_on_pg ? ChannelTypeColor(edit_ch_) : Palette::dim_grey);
+				}
+			} else {
+				for (auto i = 0u; i < Model::NumChans; i++) {
+					c.SetButtonLed(i, i == edit_ch_);
+					c.SetEncoderLed(i, i == edit_ch_ ? ChannelTypeColor(i) : Palette::dim_grey);
+				}
+			}
+			return;
+		}
+
+		// --- CHAN held (no page button pressed): show channel types on encoders ---
+		if (c.button.bank.is_high() && !armed_ch_.has_value()) {
 			for (auto i = 0u; i < Model::NumChans; i++) {
-				// Page buttons: focused channel solid, others off
-				c.SetButtonLed(i, i == edit_ch_);
-				// Encoder LEDs: focused channel = type color; others dim
-				c.SetEncoderLed(i, i == edit_ch_ ? ChannelTypeColor(i) : Palette::dim_grey);
+				c.SetButtonLed(i, false);
+				c.SetEncoderLed(i, ChannelTypeColor(i));
 			}
 			return;
 		}
@@ -1146,14 +1227,10 @@ public:
 				const auto val = static_cast<int8_t>(sv & 0xFF);
 				lit = (type == ChannelType::Gate) ? (sv > 0) : (val != 0);
 			} else {
-				// Show playhead position on current page
-				for (auto k = 0u; k < Model::NumChans; k++) {
-					const auto ph = p.GetPlayhead(k);
-					if (ph / Model::NumChans == current_page_ && ph % Model::NumChans == i) {
-						lit = true;
-						break;
-					}
-				}
+				// Show focused channel's playhead; also light any held buttons for editing feedback
+				const auto ph = p.GetPlayhead(focused_ch_);
+				lit = (ph / Model::NumChans == current_page_ && ph % Model::NumChans == i);
+				lit = lit || c.button.scene[i].is_high();
 			}
 			c.SetButtonLed(i, lit);
 		}

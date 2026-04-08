@@ -404,6 +404,16 @@ class Interface {
 		gate_state[ch].off_tick  = now + delay + (dur > 0 ? dur : 1u);
 	}
 
+	// Fire a single trigger pulse on channel ch without modifying ratchet/repeat counters.
+	// Used by OnChannelFired when consuming repeat_remaining ticks.
+	void FirePulse(uint8_t ch) {
+		auto          &rs          = ratchet_state[ch];
+		const uint32_t pulse_ticks = Clock::MsToTicks(
+		    data.channel[ch].pulse_width_ms > 0 ? data.channel[ch].pulse_width_ms : 1u);
+		rs.pulse_high     = true;
+		rs.pulse_off_tick = Controls::TimeNow() + pulse_ticks;
+	}
+
 	// Set up ratchet/repeat output for channel ch when its step fires
 	void FireTrigger(uint8_t ch, uint8_t step_idx) {
 		const auto &cs  = data.channel[ch];
@@ -446,13 +456,14 @@ class Interface {
 	// Called when channel ch's divider fires and we are playing
 	void OnChannelFired(uint8_t ch) {
 		if (ratchet_state[ch].repeat_remaining > 0) {
-			// Repeat: hold playhead, decrement counter, re-fire same step
+			// Repeat: hold playhead, decrement counter, fire pulse without re-arming repeat.
+			// (FireTrigger must NOT be called here — it would reset repeat_remaining, looping forever.)
 			ratchet_state[ch].repeat_remaining--;
 			const auto step = GetOutputStep(ch);
 			if (data.channel[ch].type == ChannelType::Gate)
 				FireGate(ch, step);
 			else if (data.channel[ch].type == ChannelType::Trigger)
-				FireTrigger(ch, step);
+				FirePulse(ch);
 			return;
 		}
 		AdvanceShadow(ch);
