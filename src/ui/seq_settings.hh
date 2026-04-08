@@ -20,16 +20,11 @@ public:
 		if (!p.IsChannelSelected()) {
 			p.SelectChannel();
 		}
-		p.shared.modeswitcher.SetAlarm();
 		glide_armed = false;
 	}
 	void Update() override {
 		ForEachEncoderInc(c, [this](uint8_t encoder, int32_t inc) { OnEncoderInc(encoder, inc); });
 		ForEachSceneButtonJustReleased(c, [this](uint8_t button) { OnSceneButtonRelease(button); });
-
-		if (!c.button.add.is_high()) {
-			p.shared.modeswitcher.SetAlarm();
-		}
 
 		if (!c.button.morph.is_high())
 			glide_armed = true;
@@ -42,15 +37,6 @@ public:
 		}
 
 		if (!c.button.shift.is_high() || !c.button.bank.is_high()) {
-			SwitchUiMode(main_ui);
-			return;
-		}
-
-		if (p.shared.modeswitcher.Check()) {
-			p.shared.mode = Model::Mode::Macro;
-			for (auto i = 0u; i < Model::NumChans; i++) {
-				p.shared.blinker.Set(i, 1, 200, 100 * i + 250);
-			}
 			SwitchUiMode(main_ui);
 			return;
 		}

@@ -5,12 +5,18 @@
 #include "conf/board_conf.hh"
 #include "conf/model.hh"
 #include "controls.hh"
+#include "conf/build_options.hh"
 #include "params.hh"
 #include "saved_settings.hh"
 #include "ui/abstract.hh"
 #include "ui/dac_calibration.hh"
-#include "ui/macro.hh"
 #include "ui/seq.hh"
+
+#if CATALYST_SECOND_MODE == CATALYST_MODE_VOLTSEQ
+#include "ui/voltseq.hh"
+#else
+#include "ui/macro.hh"
+#endif
 #include "util/countzip.hh"
 
 namespace Catalyst2::Ui
@@ -27,10 +33,25 @@ class Interface {
 
 	Abstract *ui;
 
+#if CATALYST_SECOND_MODE == CATALYST_MODE_VOLTSEQ
+	Ui::VoltSeq::Main macro{params.macro, controls, sequencer};
+#else
 	Macro::Main macro{params.macro, controls, sequencer};
+#endif
 	Sequencer::Main sequencer{params.sequencer, controls, macro};
 
+	// 3-button cluster mode-switch timers (1 s hold)
+	static constexpr uint32_t kClusterHoldMs = 1000u;
+	Clock::Timer left_cluster_timer_{kClusterHoldMs};   // Fine + Play + Glide → Sequencer
+	Clock::Timer right_cluster_timer_{kClusterHoldMs};  // Shift + Tap  + Chan  → Macro/VoltSeq
+	bool left_cluster_pending_  = false;
+	bool right_cluster_pending_ = false;
+
+#if CATALYST_SECOND_MODE == CATALYST_MODE_VOLTSEQ
+	SavedSettings<Catalyst2::Sequencer::Data, Catalyst2::VoltSeq::Data, Catalyst2::Shared::Data> settings;
+#else
 	SavedSettings<Catalyst2::Sequencer::Data, Catalyst2::Macro::Data, Catalyst2::Shared::Data> settings;
+#endif
 
 public:
 	Interface(Params &params)
@@ -56,6 +77,44 @@ public:
 		controls.Update();
 		params.shared.blinker.Update();
 		params.shared.youngest_scene_button.Update(controls);
+
+		// --- 3-button cluster mode switch (works from any UI state) ---
+		{
+			const auto &b = controls.button;
+			const bool left_held  = b.fine.is_high() && b.play.is_high() && b.morph.is_high();
+			const bool right_held = b.shift.is_high() && b.add.is_high() && b.bank.is_high();
+
+			if (left_held && !left_cluster_pending_) {
+				left_cluster_pending_ = true;
+				left_cluster_timer_.SetAlarm();
+			}
+			if (!left_held) left_cluster_pending_ = false;
+
+			if (right_held && !right_cluster_pending_) {
+				right_cluster_pending_ = true;
+				right_cluster_timer_.SetAlarm();
+			}
+			if (!right_held) right_cluster_pending_ = false;
+
+			if (left_cluster_pending_ && left_cluster_timer_.Check()) {
+				left_cluster_pending_ = false;
+				if (params.shared.mode != Model::Mode::Sequencer) {
+					params.shared.mode = Model::Mode::Sequencer;
+					params.shared.do_save_shared = true;
+					for (auto i = 0u; i < Model::NumChans; i++)
+						params.shared.blinker.Set(i, 1, 200, 100 * i + 250);
+				}
+			}
+			if (right_cluster_pending_ && right_cluster_timer_.Check()) {
+				right_cluster_pending_ = false;
+				if (params.shared.mode != Model::Mode::Macro) {
+					params.shared.mode = Model::Mode::Macro;
+					params.shared.do_save_shared = true;
+					for (auto i = 0u; i < Model::NumChans; i++)
+						params.shared.blinker.Set(i, 1, 200, 100 * i + 250);
+				}
+			}
+		}
 
 		ui->Common();
 		ui->Update();
@@ -127,13 +186,19 @@ private:
 			new (&params.data.sequencer) Catalyst2::Sequencer::Data{};
 		}
 		if (!settings.read(params.data.macro)) {
+#if CATALYST_SECOND_MODE == CATALYST_MODE_VOLTSEQ
+			new (&params.data.macro) Catalyst2::VoltSeq::Data{};
+#else
 			new (&params.data.macro) Catalyst2::Macro::Data{};
+#endif
 		}
 		params.data.sequencer.PostLoad();
 		params.data.macro.PostLoad();
 
 		params.sequencer.Load();
+#if CATALYST_SECOND_MODE != CATALYST_MODE_VOLTSEQ
 		params.macro.bank.SelectBank(0);
+#endif
 
 		const auto saved_mode = params.shared.data.saved_mode;
 

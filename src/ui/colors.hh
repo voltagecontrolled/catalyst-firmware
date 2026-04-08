@@ -1,11 +1,15 @@
 #pragma once
 
+#include "conf/build_options.hh"
 #include "conf/model.hh"
 #include "conf/palette.hh"
 #include "controls.hh"
-#include "macro_common.hh"
 #include "params.hh"
 #include "seq_common.hh"
+
+#if CATALYST_SECOND_MODE != CATALYST_MODE_VOLTSEQ
+#include "macro_common.hh"
+#endif
 #include <algorithm>
 
 namespace Catalyst2::Ui
@@ -52,6 +56,8 @@ public:
 };
 
 using SeqColors = Colors<Sequencer::Usual>;
+#if CATALYST_SECOND_MODE != CATALYST_MODE_VOLTSEQ
 using MacroColors = Colors<Macro::Usual>;
+#endif
 
 } // namespace Catalyst2::Ui

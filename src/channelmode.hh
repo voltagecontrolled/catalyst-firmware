@@ -58,6 +58,13 @@ public:
 	void ToggleMute() {
 		val ^= 0x80;
 	}
+	// Raw scale index (0..max), preserving mute bit.
+	uint8_t RawIndex() const {
+		return Val();
+	}
+	void SetRaw(uint8_t v) {
+		val = (val & 0x80u) | (v & 0x7fu);
+	}
 
 private:
 	uint8_t Val() const {

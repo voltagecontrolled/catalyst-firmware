@@ -32,6 +32,12 @@ set(WAV_ENCODE_PYTHON_CMD
 set_hal_sources(HAL_SOURCES stm32f4)
 create_target(${target} stm32f4xx)
 
+# Pass CATALYST_SECOND_MODE to the compiler if set via cmake -DCATALYST_SECOND_MODE=<value>
+if(DEFINED CATALYST_SECOND_MODE)
+    message(STATUS "CATALYST_SECOND_MODE = ${CATALYST_SECOND_MODE}")
+    target_compile_definitions(${target}.elf PRIVATE CATALYST_SECOND_MODE=${CATALYST_SECOND_MODE})
+endif()
+
 
 set(TARGET_BOOTLOADER_LINK_SCRIPT ${CMAKE_SOURCE_DIR}/linker/STM32F401CEUx_FLASH_BOOTLOADER.ld)
 set(TARGET_BOOTLOADER_INCLUDES

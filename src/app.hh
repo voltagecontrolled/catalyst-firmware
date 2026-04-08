@@ -3,9 +3,13 @@
 #include "channel.hh"
 #include "conf/build_options.hh"
 #include "conf/model.hh"
-#include "macro.hh"
 #include "params.hh"
 #include "trigger.hh"
+
+#if CATALYST_SECOND_MODE != CATALYST_MODE_VOLTSEQ
+#include "macro.hh"
+#endif
+#include "quantizer.hh"
 #include "ui/dac_calibration.hh"
 #include "util/countzip.hh"
 #include "util/math.hh"
@@ -43,6 +47,7 @@ constexpr float seqmorph(float phase, float ratio) {
 
 namespace Catalyst2
 {
+#if CATALYST_SECOND_MODE != CATALYST_MODE_VOLTSEQ
 namespace Macro
 {
 class App {
@@ -168,6 +173,7 @@ private:
 	}
 };
 } // namespace Macro
+#endif // CATALYST_SECOND_MODE != CATALYST_MODE_VOLTSEQ
 
 namespace Sequencer
 {
@@ -355,10 +361,96 @@ private:
 };
 } // namespace Sequencer
 
+#if CATALYST_SECOND_MODE == CATALYST_MODE_VOLTSEQ
+namespace VoltSeq
+{
+class App {
+	Interface &p;
+
+	// Per-channel slew state: current output value in Channel::Cv::type units (0..Cv::max)
+	std::array<Channel::Cv::type, Model::NumChans> slew_val{};
+
+	const Quantizer::Scale &GetScale(uint8_t ch) const {
+		const auto &mode = p.GetData().channel[ch].scale;
+		if (mode.IsCustomScale()) {
+			const auto idx = mode.GetScaleIdx() - Quantizer::scale.size();
+			return p.shared.data.custom_scale[idx];
+		}
+		return Quantizer::scale[mode.GetScaleIdx()];
+	}
+
+	// Map a VoltSeq StepValue (0..65535) into Channel::Cv::type (0..Cv::max) within the channel range.
+	Channel::Cv::type MapStepValue(uint8_t ch, StepValue raw) const {
+		const auto &range   = p.GetData().channel[ch].range;
+		const auto  cv_min  = Channel::Cv::RangeToMin(range);
+		const auto  cv_max  = Channel::Cv::RangeToMax(range);
+		const float t       = static_cast<float>(raw) / 65535.f;
+		return static_cast<Channel::Cv::type>(
+			std::clamp<float>(t * static_cast<float>(cv_max - cv_min) + cv_min,
+			                  static_cast<float>(cv_min),
+			                  static_cast<float>(cv_max)));
+	}
+
+	Model::Output::type CvOutput(uint8_t ch) {
+		const auto step     = p.GetOutputStep(ch);
+		const auto raw      = p.GetStepValue(ch, step);
+		const auto &range   = p.GetData().channel[ch].range;
+		const auto mapped   = MapStepValue(ch, raw);
+		const auto quantized = Quantizer::Process(GetScale(ch), mapped);
+
+		// Apply exponential glide if the step's glide flag is set and glide_time > 0
+		Channel::Cv::type out_cv;
+		const float glide_time = p.GetData().channel[ch].glide_time;
+		if (glide_time > 0.f && p.GlideFlag(ch, step)) {
+			constexpr float sample_rate = static_cast<float>(Model::sample_rate_hz);
+			const float coef = 1.f / (glide_time * sample_rate + 1.f);
+			const float slewed = static_cast<float>(slew_val[ch]) +
+			                     (static_cast<float>(quantized) - static_cast<float>(slew_val[ch])) * coef;
+			out_cv = static_cast<Channel::Cv::type>(std::clamp<float>(slewed, 0.f, Channel::Cv::max));
+		} else {
+			out_cv = quantized;
+		}
+		slew_val[ch] = out_cv;
+
+		const auto scaled = Channel::Output::ScaleCv(out_cv, range);
+		return Calibration::Dac::Process(p.shared.data.dac_calibration.channel[ch], scaled);
+	}
+
+public:
+	App(Interface &p)
+		: p{p} {
+		slew_val.fill(Channel::Cv::zero);
+	}
+
+	Model::Output::Buffer Update() {
+		Model::Output::Buffer buf{};
+		for (auto ch = 0u; ch < Model::NumChans; ch++) {
+			switch (p.GetData().channel[ch].type) {
+			case ChannelType::CV:
+				buf[ch] = CvOutput(ch);
+				break;
+			case ChannelType::Gate:
+				buf[ch] = p.IsGateHigh(ch) ? Channel::Output::gate_high : Channel::Output::gate_off;
+				break;
+			case ChannelType::Trigger:
+				buf[ch] = p.IsTrigHigh(ch) ? Channel::Output::gate_high : Channel::Output::gate_off;
+				break;
+			}
+		}
+		return buf;
+	}
+};
+} // namespace VoltSeq
+#endif // CATALYST_SECOND_MODE == CATALYST_MODE_VOLTSEQ
+
 class MacroSeq {
 	Params &params;
 	Sequencer::App sequencer{params.sequencer};
+#if CATALYST_SECOND_MODE == CATALYST_MODE_VOLTSEQ
+	VoltSeq::App macro{params.macro};
+#else
 	Macro::App macro{params.macro};
+#endif
 
 public:
 	MacroSeq(Params &params)

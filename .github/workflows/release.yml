@@ -20,21 +20,36 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-arm-none-eabi ninja-build python3-numpy
 
-      - name: Configure
-        run: cmake -B build -GNinja
-
       - name: Run tests
         run: make -f tests/Makefile
 
-      - name: Build firmware
+      # ── Build 1: CatSeq + CatCon (default, no flag) ──────────────────────
+      - name: Configure (catseq-catcon)
+        run: cmake -B build -GNinja
+
+      - name: Build firmware (catseq-catcon)
         run: cmake --build build
 
-      - name: Build WAV
+      - name: Build WAV (catseq-catcon)
         run: cmake --build build --target f401.wav
 
-      - name: Rename WAV
-        run: cp build/f401/f401.wav ${{ github.ref_name }}.wav
+      - name: Rename WAV (catseq-catcon)
+        run: cp build/f401/f401.wav ${{ github.ref_name }}-catseq-catcon.wav
 
+      # ── Build 2: CatSeq + VoltSeq (CATALYST_SECOND_MODE=1) ───────────────
+      - name: Configure (catseq-voltseq)
+        run: cmake -B build_voltseq -GNinja -DCATALYST_SECOND_MODE=1
+
+      - name: Build firmware (catseq-voltseq)
+        run: cmake --build build_voltseq
+
+      - name: Build WAV (catseq-voltseq)
+        run: cmake --build build_voltseq --target f401.wav
+
+      - name: Rename WAV (catseq-voltseq)
+        run: cp build_voltseq/f401/f401.wav ${{ github.ref_name }}-catseq-voltseq.wav
+
+      # ── Release ───────────────────────────────────────────────────────────
       - name: Resolve release notes path
         id: notes
         run: |
@@ -44,6 +59,8 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ github.ref_name }}.wav
+          files: |
+            ${{ github.ref_name }}-catseq-catcon.wav
+            ${{ github.ref_name }}-catseq-voltseq.wav
           fail_on_unmatched_files: true
           body_path: ${{ steps.notes.outputs.path }}
