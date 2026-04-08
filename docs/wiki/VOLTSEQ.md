@@ -48,11 +48,11 @@ Each channel has a **type**:
 
 | Type | Output | LED color |
 |---|---|---|
-| **CV** | Stepped or slewed voltage (–5V to +10V range, per-channel) | Scale color (e.g. yellow = chromatic, blue = custom) |
-| **Gate** | Gate signal with variable length (0–100%) | Yellow; brightness = gate length |
-| **Trigger** | Short trigger pulse with variable width; ratchet/repeat | Green = ratchet, teal = repeat |
+| **CV** | Stepped or slewed voltage (configurable range, per-channel) | Scale color (dim = unquantized, pink = chromatic, etc.) |
+| **Gate** | Gate signal with variable length (0–100%) | Dim green; brightness = gate length |
+| **Trigger** | Short trigger pulse with ratchet/repeat | Green = ratchet, teal = repeat, off = rest |
 
-Change channel type in **Channel Edit** (see below).
+Default range for new channels is **−5V to +5V** (bipolar). Change channel type and range in **Channel Edit**.
 
 ---
 
@@ -61,7 +61,7 @@ Change channel type in **Channel Edit** (see below).
 VoltSeq can run from an external clock or an internal clock:
 
 - **External clock:** patch a clock signal into the **Clock In** jack. When a signal is detected, VoltSeq uses it automatically.
-- **Internal clock:** tap **Tap Tempo** to set BPM. You can also adjust BPM precisely with Encoder 7 while holding **Shift** (see Global Settings).
+- **Internal clock:** tap **Tap Tempo** to set BPM. You can also adjust BPM with Encoder 7 while holding **Shift** (see Global Settings).
 - **Reset:** a trigger at the **Reset jack** resets all channels to step 1.
 
 ---
@@ -94,42 +94,65 @@ The current page determines which 8 steps are visible and editable.
 Hold a **Page button** and turn any **encoder** to set that step's value across channels:
 
 - **Encoder N** sets the value for **channel N** at the held step.
-- For CV channels: coarse steps ≈ 1 semitone; hold **Fine** for fine adjustment.
+- For CV channels: coarse steps ≈ 1 semitone; hold **Fine** for sub-semitone adjustment. Fast spinning accelerates.
 - For Gate channels: adjusts gate length (0–100%).
 - For Trigger channels: adjusts ratchet/repeat count (±8).
-- You can hold **multiple Page buttons** simultaneously to edit the same position across channels at once.
+- You can hold **multiple Page buttons** simultaneously to edit the same position across multiple channels at once.
 
 > Encoders map directly to channels: Encoder 1 = Channel 1, Encoder 8 = Channel 8.
 
-### Armed CV recording (slider)
+---
 
-To record CV values from the **Phase Scrub slider** into a channel:
+## Arming a Channel
 
-1. Hold **Chan.** and press a **Page button** to **arm that channel** (LED blinks).
-2. While armed and playing: the slider records to the current playback step on every clock tick.
-3. While armed and stopped: the slider sets the value of the last-touched step in real time.
-4. Press **Chan.** and the same **Page button** again to disarm.
+**CHAN + Page button N** arms channel N for focused editing. The encoder LED for that channel blinks to indicate armed state. Press **CHAN + same Page button** again to disarm.
 
-The slider always maps across the channel's configured **Range** (set in Channel Edit or with Shift held while armed). To change the recording range, change the Range setting — slider travel always spans [range min → range max].
+While a channel is armed, encoder and LED behavior changes depending on channel type (see sections below).
 
-While a CV channel is armed, encoder and LED behavior changes:
+---
 
-- **Encoder LEDs:** show the CV step color for each step on the current page; the currently playing step blinks white (chaselight).
-- **Encoder N (normal):** directly edits step N's CV value on the current page. Combine with **Fine** for sub-semitone precision; fast spinning accelerates.
-- **Shift + Encoder 5 (Range):** adjusts the channel voltage range (also adjusts the slider recording window).
-- **Shift + Encoder 7 (Transpose/Scale):** cycles the quantizer scale.
+### Armed CV Channel
 
-### Armed Gate editing
+The **Phase Scrub slider** records in real time:
 
-1. Arm a Gate channel as above.
-2. **Tap a Page button** to toggle that step on/off (x0x style).
-3. **Hold a Page button and turn any encoder** to adjust the gate length for that step.
+- While **playing**: the slider value is written to the current playback step on every clock tick.
+- While **stopped**: the slider continuously sets the last-touched step.
 
-### Armed Trigger editing
+The slider maps across the channel's configured **Range** — full left = range minimum, full right = range maximum.
 
-1. Arm a Trigger channel as above.
-2. **Tap a Page button** to toggle that step between rest and trigger.
-3. **Hold a Page button and turn any encoder** to adjust ratchet/repeat count for that step.
+**Encoder LEDs:** show the CV step color for each step on the current page; the currently playing step blinks white (chaselight).
+
+**Encoder N (normal):** directly edits step N's CV value on the current page. Fine = sub-semitone; fast spinning accelerates.
+
+**Shift held:** quick access to recording-relevant settings:
+
+| Encoder | Panel label | Parameter |
+|---|---|---|
+| 5 | Range | Channel voltage range (also adjusts the slider recording window) |
+| 7 | Transpose | Quantizer scale |
+
+**Page buttons:** show the chaselight (current playing step lit).
+
+---
+
+### Armed Gate Channel
+
+**Encoder LEDs:** show each step's gate state on the current page (gate color, brightness = length). The currently playing step blinks white (chaselight).
+
+- **Tap a Page button** → toggle that step on/off (x0x style).
+- **Encoder N** → adjust gate length for step N on the current page (0 = off, 100% = full step).
+- **Page buttons** show the x0x on/off pattern for the armed channel.
+
+---
+
+### Armed Trigger Channel
+
+**Encoder LEDs:** show each step's ratchet/repeat state on the current page (green = ratchet, teal = repeat, off = rest). The currently playing step blinks white (chaselight).
+
+- **Tap a Page button** → toggle that step between rest and a single trigger.
+- **Encoder N CW** → increase ratchet count for step N (subdivide; 1–8).
+- **Encoder N CCW** → increase repeat count for step N (extend; negative values).
+- **Page buttons** show the x0x on/off pattern for the armed channel.
 
 ---
 
@@ -140,7 +163,7 @@ Hold **Glide (Ratchet)** to access per-channel live parameters:
 | Encoder | Channel type | Parameter |
 |---|---|---|
 | Any encoder N | CV | Glide time for channel N (0–10 s) |
-| Any encoder N | Gate | Offset all gate lengths for channel N (+/– 1% per step) |
+| Any encoder N | Gate | Offset all gate lengths for channel N (+/– per step) |
 | Any encoder N | Trigger | Trigger pulse width for channel N (1–100 ms) |
 
 Hold **Shift + Glide** and turn an encoder to offset all ratchet/repeat counts for a Trigger channel.
@@ -153,7 +176,7 @@ In the Glide Step Editor:
 - **Encoder N** on the current page sets the glide flag for step N of the focused channel:
   - Turn **CW** = glide on for that step
   - Turn **CCW** = glide off for that step
-- For Gate channels: encoders adjust the gate length for each step.
+- For Gate channels: encoders adjust the gate length for each step individually.
 - Hold **Shift + Page button** to navigate pages while staying in the editor.
 - Press **Glide** or the focused channel's **Page button** to exit and save.
 
@@ -174,35 +197,41 @@ In the Ratchet Step Editor:
 
 **Combo:** Shift + Chan.
 
-Enters per-channel settings. Press a **Page button** to focus that channel. Encoders then edit settings for the focused channel:
+Enters per-channel settings. Press a **Page button** to focus that channel. Encoders then edit settings for the focused channel. **Long-press** (600 ms) a Page button to **clear all steps** for that channel (CV → center/0V, Gate/Trigger → all off).
 
-| Encoder | Parameter | Range |
-|---|---|---|
-| 1 | Direction | Forward → Reverse → Ping-Pong → Random |
-| 2 | Phase rotate (destructive) | Rotates all 64 steps forward or backward |
-| 3 | Range (CV) / Pulse width (Trigger) | CV: voltage output range; Trigger: 1–100 ms |
-| 4 | Channel type | CV scales → Gate → Trigger (cycles) |
-| 5 | Output delay | 0–20 ms (delays the CV/gate output for this channel) |
-| 6 | Step length | 1–64 steps |
-| 7 | Clock division | Per-channel clock divisor |
-| 8 | Random amount | 0–100% (adds random variation to output values) |
+Encoder LED feedback while in Channel Edit:
+- **Enc 1 (Start):** brightness = current delay amount
+- **Enc 2 (Dir.):** color = current direction (green = Forward, orange = Reverse, yellow = Ping-Pong, magenta = Random)
+- **Enc 7 (Transpose):** type/scale color
+- **Enc 8 (Random):** brightness = current random amount
 
-**Exit:** press **Chan.** to save channel settings and return to normal mode.
+| Encoder | Panel label | Parameter | Range |
+|---|---|---|---|
+| 1 | Start | Output delay | 0–20 ms |
+| 2 | Dir. | Direction | Forward → Reverse → Ping-Pong → Random |
+| 3 | Length | Step length | 1–64 steps |
+| 4 | Phase | Phase rotate (destructive) | Rotates active steps only |
+| 5 | Range | Voltage range (CV) / Pulse width (Trigger) | CV: range preset; Trigger: 1–100 ms |
+| 6 | BPM/Clock Div | Clock division | Per-channel clock divisor |
+| 7 | Transpose | Channel type / scale | CV scales → Gate → Trigger (clamped) |
+| 8 | Random | Random amount | 0–100% |
 
-> Phase rotate is destructive — it permanently shifts all step values for the channel. There is no undo.
+**Exit:** press **Chan.** or **Play** to save channel settings and return to normal mode.
+
+> Phase rotate is destructive and only rotates active steps (within the channel's configured length). There is no undo.
 
 ---
 
 ## Global Settings
 
-Hold **Shift** in normal mode and turn encoders to set sequencer-wide defaults used when creating new channels or resetting:
+Hold **Shift** in normal mode and turn encoders to set sequencer-wide defaults:
 
-| Encoder | Parameter |
-|---|---|
-| 1 | Default direction |
-| 3 | Default voltage range |
-| 6 | Default step length (1–64) |
-| 7 | Internal BPM (Fine for fine adjustment) |
+| Encoder | Panel label | Parameter |
+|---|---|---|
+| 1 | Dir. | Default direction |
+| 3 | Range | Default voltage range |
+| 6 | Length | Default step length (1–64) |
+| 7 | BPM/Clock Div | Internal BPM |
 
 ---
 
@@ -212,7 +241,7 @@ Hold **Shift** in normal mode and turn encoders to set sequencer-wide defaults u
 
 **Exit:** Hold **Fine + Glide** briefly (release before 1.5 s), or press **Play/Reset**.
 
-The Performance Page puts the Phase Scrub slider in control of an **orbit engine** that manipulates playback positions across channels — similar to the Sequencer's Phase Scrub Performance Page.
+The Performance Page puts the Phase Scrub slider in control of an **orbit engine** that manipulates playback positions across channels.
 
 ### Performance Page controls
 
@@ -256,7 +285,7 @@ From the Performance Page, hold **Fine + Glide** for another 1.5 seconds.
 VoltSeq saves automatically at the following moments:
 
 - Play/Stop toggled
-- Channel Edit exited (Chan.)
+- Channel Edit exited (Chan. or Play)
 - Glide Step Editor exited
 - Ratchet Step Editor exited
 - Performance Page Settings exited
@@ -270,12 +299,17 @@ There is no manual save step required.
 
 | Situation | Encoder LED |
 |---|---|
-| CV channel, normal | Scale color (chromatic = yellow, etc.) |
-| Gate channel, normal | Yellow; brightness = gate length |
-| Trigger channel, normal | Green (ratchet on), teal (repeat on), off (rest) |
-| Channel armed | Blinks |
-| Glide Step Editor active | Active channel encoder blinks |
-| Ratchet Step Editor active | Active channel encoder blinks |
+| CV channel, normal | Scale color (dim = unquantized, pink = chromatic, etc.) |
+| Gate channel, normal | Dim green; brightness = gate length |
+| Trigger channel, normal | Green (ratchet), teal (repeat), off (rest) |
+| CV channel armed (normal) | Each enc shows step CV color; playing step blinks white |
+| Gate/Trigger channel armed (normal) | Each enc shows step state; playing step blinks white |
+| Glide Step Editor active | Active channel page button blinks |
+| Ratchet Step Editor active | Active channel page button blinks |
+| Channel Edit — enc 1 | Brightness = output delay |
+| Channel Edit — enc 2 | Green/Orange/Yellow/Magenta = direction |
+| Channel Edit — enc 7 | Type/scale color |
+| Channel Edit — enc 8 | Brightness = random amount |
 | Performance Page | Each encoder shows current output step color |
 | Phase Scrub Lock active | Encoder 8 red |
 | Phase Scrub pickup in progress | Encoder 8 blinks red |
@@ -287,9 +321,16 @@ There is no manual save step required.
 | Combo | Action |
 |---|---|
 | Shift + Page N | Navigate to page N |
-| Chan. + Page N | Arm channel N (arm/disarm) |
+| Chan. + Page N | Arm channel N |
+| Chan. + same Page N | Disarm channel N |
 | Shift + Chan. | Enter Channel Edit |
-| Hold Page N + turn Encoder M | Edit channel M's value at step N |
+| Hold Page N + turn Encoder M | Edit channel M's value at step N (normal mode) |
+| Armed CV + Encoder N | Edit step N's CV value directly |
+| Armed CV + Shift + Enc 5 | Adjust channel range (and slider recording range) |
+| Armed CV + Shift + Enc 7 | Adjust quantizer scale |
+| Armed Gate/Trig + Encoder N | Edit gate length / ratchet-repeat for step N |
+| Armed Gate/Trig + tap Page N | Toggle step N on/off |
+| Channel Edit + long-press Page N | Clear all steps for channel N |
 | Hold Glide + turn Encoder N | Set glide time / gate length offset / pulse width for channel N |
 | Hold Shift + Glide + turn Encoder N | Offset all ratchet counts for Trigger channel N |
 | Hold Glide + long-press Page N (600 ms) | Enter Glide Step Editor for channel N |

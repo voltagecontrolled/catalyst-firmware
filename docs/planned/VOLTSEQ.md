@@ -1,5 +1,16 @@
 # VoltSeq — Catalyst as a Step Sequencer
 
+> **Implementation status (as of v1.5.0-alpha3):** Core feature is complete and in active alpha testing. See `CHANGELOG.md` for the full implemented description. The sections below are the original design spec; known deviations from what shipped are noted inline.
+>
+> **Key deviations from this spec:**
+> - `slider_base_v` / `slider_span_v` removed — slider recording uses the channel `Range` directly.
+> - Armed Gate/Trigger: encoder N directly edits step N (no hold-page-button required).
+> - Channel Edit encoder order matches physical panel silkscreen (Start/Dir/Length/Phase/Range/ClockDiv/Transpose/Random), not EncoderAlts enum order.
+> - Phase rotate operates only on active steps within `length`, not all 64.
+> - Bare page-button disarm removed; disarm requires Chan. + Page button.
+> - Only two WAV builds per release (catseq-catcon, catseq-voltseq); voltseq-catcon deferred.
+> - `VoltSeq::Data::current_tag = 3u` as of alpha3.
+
 Replaces Macro mode in one of two release variants (see Release Strategy below). The mode-switch shortcut (Sequencer ↔ Macro) becomes Sequencer ↔ VoltSeq. All existing Macro data is abandoned on first boot; bump `Macro::Data::current_tag` (or rename it) to force a clean init. Consider renaming the `Macro` enum value in `params.shared.mode` to `VoltSeq` in place — same underlying integer, no flash migration needed.
 
 ## Release Strategy

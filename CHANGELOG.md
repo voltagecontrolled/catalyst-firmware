@@ -177,59 +177,76 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 **Mode switching (in-firmware, no reflash):**
 - VoltSeq → Sequencer: hold Fine + Play/Reset + Glide 1 second. All channel LEDs blink to confirm.
 - Sequencer → VoltSeq: hold Shift + Tap Tempo + Chan. 1 second. All channel LEDs blink to confirm.
-- Active mode is saved to flash and recalled on boot. Switching does not erase the other mode's data (independent flash sectors).
+- Active mode saved to flash; switching does not erase the other mode's data (independent flash sectors).
 
 **Channel types:** Each of the 8 channels is independently set to CV, Gate, or Trigger.
-- CV: stepped or slewed voltage (−5V to +10V, per-channel range). Quantizable to built-in or custom scales.
+- CV: stepped or slewed voltage, per-channel configurable range (default −5V to +5V). Quantizable to built-in or custom scales. Encoder acceleration (faster spin = larger steps).
 - Gate: variable-length gate (0–100%), x0x-style step editing.
-- Trigger: short pulse (1–100ms), ratchet (subdivide, positive count) or repeat (extend, negative count) per step.
+- Trigger: short pulse (1–100ms), ratchet (subdivide, 1–8×, green) or repeat (extend, 1–8×, teal) per step.
 
-**Step editing:**
+**Step editing (normal mode):**
 - Hold a Page button, turn Encoder N to set channel N's value at that step. Multiple Page buttons can be held simultaneously.
 - 8 pages × 8 steps = 64 total steps per channel.
 - Shift + Page button navigates pages.
 
-**CV recording:** Arm a CV channel (Chan. + Page button N), then the Phase Scrub slider writes into the channel in real time — on each clock tick while playing, or directly to the last-touched step while stopped. Slider span (1–15V) and base voltage (−5V to +10V) are per-channel.
+**Armed CV channel:**
+- Chan. + Page button N arms that channel; encoder LEDs show each step's CV color plus a white chaselight on the playing step.
+- Encoder N directly edits step N's value on the current page. Fine = sub-semitone; acceleration applies.
+- Slider records into the channel in real time (motion-gated). Slider maps to the channel's configured Range.
+- Shift + Enc 5 (Range) adjusts the channel voltage range (also sets the slider recording window). Shift + Enc 7 (Transpose) cycles the quantizer scale.
 
-**Gate / Trigger armed editing:** Arm a Gate or Trigger channel; Page buttons toggle steps on/off (x0x). Hold a Page button and turn any encoder to adjust gate length or ratchet/repeat count for that step.
+**Armed Gate channel:**
+- Encoder LEDs show step gate state (brightness = length) + white chaselight on playing step.
+- Tap a Page button to toggle step on/off. Encoder N directly adjusts gate length for step N.
 
-**GLIDE modifier:** Hold Glide (Ratchet) and turn an encoder to adjust: CV glide time (0–10s), gate length offset for all active steps, or trigger pulse width (1–100ms). Hold Shift + Glide and turn to offset all ratchet/repeat counts across a Trigger channel.
+**Armed Trigger channel:**
+- Encoder LEDs show step state (green = ratchet, teal = repeat, off = rest) + white chaselight on playing step.
+- Tap a Page button to toggle step on/off. Encoder N CW = ratchet, CCW = repeat for step N.
 
-**Glide Step Editor:** Hold Glide, long-press a Page button (600ms) on a CV or Gate channel. Encoder N on the current page sets/clears the glide flag for step N (CV) or adjusts gate length per step (Gate). Shift + Page navigates pages. Press Glide or the channel's Page button to exit.
+**GLIDE modifier:** Hold Glide and turn an encoder to adjust per-channel: CV glide time (0–10s), gate length offset, or trigger pulse width (1–100ms). Shift + Glide + encoder offsets all ratchet/repeat counts for a Trigger channel.
 
-**Ratchet Step Editor:** Hold Glide, long-press a Page button (600ms) on a Trigger channel. Encoder N adjusts ratchet/repeat count for step N. Same page navigation and exit as Glide Step Editor.
+**Glide Step Editor:** Hold Glide, long-press a Page button (600ms) on a CV or Gate channel. Encoder N toggles the per-step glide flag (CV) or adjusts gate length (Gate). Shift + Page navigates pages. Exit with Glide or channel's Page button.
 
-**Channel Edit (Shift + Chan.):** Per-channel settings for the focused channel (press a Page button to focus):
+**Ratchet Step Editor:** Hold Glide, long-press a Page button (600ms) on a Trigger channel. Encoder N adjusts per-step ratchet/repeat count. Same navigation and exit as Glide Step Editor.
 
-| Encoder | Parameter |
-|---|---|
-| 1 | Direction: Forward / Reverse / Ping-Pong / Random |
-| 2 | Phase rotate (destructive — shifts all 64 steps) |
-| 3 | Voltage range (CV) or trigger pulse width (Trigger) |
-| 4 | Channel type (CV scales → Gate → Trigger, cycles) |
-| 5 | Output delay (0–20ms) |
-| 6 | Step length (1–64) |
-| 7 | Clock division |
-| 8 | Random amount (0–100%) |
+**Channel Edit (Shift + Chan.):** Per-channel settings; encoders aligned to panel silkscreen labels. Press a Page button to focus a channel. Long-press a Page button (600ms) to clear all steps for that channel. Exit with Chan. or Play.
 
-**Global Settings (Shift + encoders in normal mode):** Default direction (Enc 1), default range (Enc 3), default length (Enc 6), internal BPM (Enc 7; Fine for fine adjustment).
+| Encoder | Panel label | Parameter |
+|---|---|---|
+| 1 | Start | Output delay (0–20 ms) |
+| 2 | Dir. | Direction: Forward / Reverse / Ping-Pong / Random |
+| 3 | Length | Step length (1–64, accelerated) |
+| 4 | Phase | Phase rotate (destructive; rotates only active steps within length) |
+| 5 | Range | Voltage range (CV) / Pulse width (Trigger, 1–100ms) |
+| 6 | BPM/Clock Div | Clock division |
+| 7 | Transpose | Channel type / quantizer scale (CV scales → Gate → Trigger, clamped) |
+| 8 | Random | Random amount (0–100%) |
 
-**Performance Page (Fine + Glide held 1.5s):** Ports the Phase Scrub orbit engine (granular sequencing + beat repeat) from CatSeq to VoltSeq. Slider controls orbit center; Page buttons toggle per-channel orbit follow. Sub-page of settings (Fine + Glide held 1.5s again) exposes mode, width/debounce, direction, and Phase Scrub Lock — identical controls to the CatSeq scrub settings page.
+**Global Settings (Shift + encoders in normal mode):** Default direction (Enc 1), default range (Enc 3), default length (Enc 6), internal BPM (Enc 7).
 
-**Save behavior:** Saves automatically on play/stop toggle, Channel Edit exit, Glide/Ratchet editor exit, and Performance Page settings exit. No manual save step required.
+**Performance Page (Fine + Glide held 1.5s):** Phase Scrub orbit engine ported from CatSeq. Slider controls orbit center; Page buttons toggle per-channel orbit follow. Settings sub-page (Fine + Glide held 1.5s again) exposes mode, width/debounce, direction, and Phase Scrub Lock — same as CatSeq scrub settings.
+
+**Save behavior:** Saves automatically on play/stop toggle, Channel Edit exit, Glide/Ratchet editor exit, and Performance Page settings exit.
+
+**Deviations from spec (`docs/planned/VOLTSEQ.md`):**
+- Slider recording uses the channel Range parameter directly; separate `slider_base_v`/`slider_span_v` fields were removed.
+- Armed Gate/Trigger: encoder N edits step N directly (no hold-page-button required). The old hold+page+encoder mechanism was replaced.
+- Channel Edit encoder order matches physical panel labels, not EncoderAlts enum order.
+- Phase rotate operates only on active steps (0 to length-1); unused steps beyond length are untouched.
+- Disarming requires Chan. + Page button (bare page-button disarm removed to allow all steps to be edited while armed, including step 1 of the armed channel).
+- Only two WAV builds per release (catseq-catcon, catseq-voltseq); the voltseq-catcon variant is deferred.
+- `VoltSeq::Data::current_tag = 3u` as of alpha3.
 
 **Implementation notes:**
 
 - `src/conf/build_options.hh` — `CATALYST_SECOND_MODE` flag; `CATALYST_MODE_VOLTSEQ = 1`.
-- `src/voltseq.hh` — `VoltSeq::Data` (step storage, channel settings, defaults, version tag `current_tag = 1u`), `VoltSeq::Interface` (clock engine, per-channel playheads + shadow playheads, direction state machines, output calculation, orbit engine port). Version tag added to prevent Macro::Data bytes from accidentally passing validation on first boot after firmware switch.
-- `src/ui/voltseq.hh` — `VoltSeq::Main` UI class: all edit modes, encoders, page navigation, GLIDE modifier, step editors, Channel Edit, Global Settings, Performance Page (orbit + beat repeat + lock), mode switch detection.
-- `src/channelmode.hh` — `Channel::Mode::RawIndex()` and `SetRaw()` accessors for type-selector cycling in Channel Edit.
-- `src/app.hh` — `VoltSeq::Interface` integrated into `MacroSeq` under `CATALYST_SECOND_MODE == CATALYST_MODE_VOLTSEQ`.
-- `src/params.hh` — `VoltSeq::Interface` added to `Params` under same flag.
-- `src/ui.hh` — 3-button cluster mode switch: Fine+Play+Glide (1s) → Sequencer; Shift+Tap+Chan. (1s) → VoltSeq/Macro. Replaces the old `modeswitcher` timer in `seq_settings.hh`.
-- `src/ui/seq_settings.hh` — removed old `modeswitcher` timer calls; mode switching is now handled at `Ui::Interface` level for both modes.
-- `src/f401-drivers/CMakeLists.txt` — `src/ui/voltseq.hh` added to build.
-- `.github/workflows/release.yml` — two-build release: default build produces `catseq-catcon.wav`; `CATALYST_SECOND_MODE=1` build produces `catseq-voltseq.wav`. Both attached to GitHub release.
+- `src/voltseq.hh` — `VoltSeq::Data` (`current_tag = 3u`), `VoltSeq::Interface` (clock engine, playheads, direction state machines, output calculation, orbit engine, trigger/repeat engine).
+- `src/ui/voltseq.hh` — `VoltSeq::Main`: all edit modes, GLIDE modifier, step editors, Channel Edit, Global Settings, Performance Page, mode switch detection.
+- `src/ui/helper_functions.hh` — `EncoderAccel` struct (velocity-based acceleration; 4×/16×/64× multipliers based on inter-detent interval).
+- `src/channelmode.hh` — `Channel::Mode::RawIndex()` and `SetRaw()` accessors for type-selector cycling.
+- `src/app.hh` — VoltSeq output path: `MapStepValue`, `CvOutput`, `GateOutput`, `TriggerOutput`.
+- `src/params.hh` / `src/ui.hh` / `src/app.hh` — VoltSeq integrated under `CATALYST_SECOND_MODE == CATALYST_MODE_VOLTSEQ`.
+- `.github/workflows/release.yml` — two-build release: catseq-catcon and catseq-voltseq WAVs both attached.
 
 ---
 
