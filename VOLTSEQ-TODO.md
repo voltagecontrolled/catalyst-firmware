@@ -177,9 +177,73 @@ Saving to flash (`SaveMacro` / `SaveShared`) is synchronous and blocks the CPU f
 
 ---
 
+## UX Cleanup
+
+Items identified during the alpha13 mode-state audit (`docs/VOLTSEQ-MODES.md`). All are candidates for cleanup but none have been acted on — do a full review before changing anything.
+
+### Modal entry timers fire in any active mode
+
+The SHIFT+CHAN hold timer (`shift_chan_hold_pending_`) and the Fine+Glide hold timer (`scrub_hold_pending_` in `Common()`) both run unconditionally regardless of which mode is currently active. This means:
+
+- SHIFT+CHAN held 2s while in Perf Page → enters Global Settings (Perf Page dormant in background)
+- SHIFT+CHAN short tap while in Glide Step Editor → Channel Edit and Glide Editor both flagged active simultaneously; Channel Edit wins by priority; Glide Editor resumes on Channel Edit exit
+- Fine+Glide 1.5s while in Channel Edit → enters Perf Page; Channel Edit dormant in background, resumes on Perf Page exit
+
+Decide: should these entry combos be blocked while any other modal is active, or is the "stack and resume" behavior acceptable/desirable?
+
+---
+
+### Glide Step Editor — consider removing
+
+The Glide Step Editor (entered via Glide + long-press page button 600ms) provides:
+- CV channels: per-step glide flag editing
+- Gate channels: gate step length editing
+
+Both are also accessible without this editor:
+- Per-step CV glide flags: armed CV + Glide held + enc N
+- Gate step lengths: armed Gate + enc N
+
+The editor's only ergonomic advantage is persistence (no button to hold). Its cost: it creates a 600ms timing cliff in the GLIDE modifier where holding a page button too long switches from Gate ratchet editing (the useful path) to editor entry. Removing it would make the short Glide+page-button gesture unambiguous. The `glide_longpress_timer_` and related state could also be simplified.
+
+If removed, the stale-timer collision (mode map collision #10) goes away with it.
+
+---
+
+### GLIDE modifier inaccessible while armed Trigger
+
+When a Trigger channel is armed, the GLIDE modifier block is skipped (`morph held && !armed`). `UpdateArmedTrigger` has no Glide handling. Result: pulse width adjustment (Glide + enc N for Trigger channels) is inaccessible while armed. The user must disarm to adjust pulse width.
+
+Options: (a) add a Glide-held sub-state to `UpdateArmedTrigger` matching the unarmed GLIDE modifier behavior for Trigger; (b) document as intentional and add a note to the wiki.
+
+---
+
+### Step editing in Performance Page is unreachable
+
+`UpdatePerfPage` has a `ForEachEncoderInc` block guarded by `p.AnyStepHeld()`. But `AnyStepHeld()` tracks logical holds set by `p.SetStepHeld()`, which is never called in Perf Page — page button presses only toggle the orbit follow mask. `AnyStepHeld()` is always false in this context. The encoder step-edit block is dead code.
+
+The wiki documents "Hold Page + turn Encoder" as working in Perf Page. Either fix it (call `SetStepHeld` on page button press before the mask toggle) or remove the dead block and update the wiki.
+
+---
+
+### Channel Edit long-press clear is easy to trigger accidentally
+
+600ms is short — pressing a page button to focus a channel and pausing before releasing can clear all 64 steps with no undo. The 3-flash blinker fires after the clear, not before.
+
+Options: (a) increase the threshold (e.g., 1000–1500ms); (b) require a second confirmation gesture (turn an encoder, or press again); (c) add a "pending clear" visual warning during the hold window so the user knows what's about to happen.
+
+---
+
+### current_page_ bleeds between modes
+
+`current_page_` is a single shared value. Navigating to page 3 in any mode leaves the display on page 3 when entering the next mode. Channel Edit entry now resets it to the focused channel's playhead page (alpha13), but no other mode does. Navigating in Glide Step Editor or Perf Page affects what Normal mode shows on return.
+
+Low-severity in practice (SHIFT+PAGE always lets you recover), but worth being intentional about which mode transitions should and shouldn't reset the page.
+
+---
+
 ## Known Quirks / Low Priority
 
 - **Wholetone scale and unquantized CV show the same grey** — both map to `Palette::grey` in the type selector. Low-priority color collision; needs a distinct color for wholetone.
-- In the Glide Step Editor and Ratchet Step Editor, page navigation requires Shift+Page. There is no way to navigate without Shift while in the editor. Consider allowing bare page presses to navigate (since exit is now Glide/Play only, there is no conflict).
-- Phase rotate (Channel Edit enc 4) is destructive with no undo. Add a brief "rotate pending" state where the user must confirm (second turn = commit), or document clearly.
-- Trigger pulse width (Channel Edit enc 5) has no display feedback. Consider a brightness ramp on enc 5 LED (dim = short pulse, bright = long pulse).
+- **Glide Step Editor page navigation requires Shift+Page.** Bare page presses are blocked to avoid making step 1 of channel 0 unreachable (page button 0 = step 1 of the channel). Consider whether bare page presses could be allowed since exit is Glide or Play only.
+- **Phase rotate (Channel Edit enc 4) is destructive with no undo.** Add a "rotate pending" visual before committing, or document clearly.
+- **Trigger pulse width (Channel Edit enc 5) has no display feedback.** Consider a brightness ramp on enc 5 LED (dim = short pulse, bright = long pulse).
