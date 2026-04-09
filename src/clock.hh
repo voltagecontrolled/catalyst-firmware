@@ -127,6 +127,9 @@ public:
 	float GetBpm() const {
 		return Clock::TicksToBpm(bpm_in_ticks);
 	}
+	uint32_t GetBpmInTicks() const {
+		return static_cast<uint32_t>(bpm_in_ticks);
+	}
 
 	bool Update() {
 		const uint32_t bpm = bpm_in_ticks;

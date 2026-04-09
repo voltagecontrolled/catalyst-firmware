@@ -97,6 +97,16 @@ struct Data {
 };
 
 // Clock engine — drives master tick, per-channel dividers, and inter-tick interval tracking.
+//
+// Step resolution: channels fire at 16th-note rate (bpm_in_ticks / 4 per step at div=1).
+// The master BPM clock (bpm.Update()) fires at quarter-note rate and is used for:
+//   - BPM display and tap tempo calibration
+//   - Beat-repeat period calculation (UpdateOrbit)
+//   - Master-reset counter and arp tick
+// Channel step advances are driven by a 16th-note sub-clock: sub_counter_ counts up and
+// fires channel dividers every (bpm_in_ticks / 4) ticks regardless of the master tick.
+// Channel divisions then further sub-divide (div=1 → 16th, div=2 → 8th, div=4 → quarter, …).
+// StepPeriodTicks() = bpm_in_ticks × div / 4, which matches the channel fire period exactly.
 class ClockEngine {
 	static constexpr uint32_t NumIntervalSamples = 4;
 
@@ -106,6 +116,9 @@ class ClockEngine {
 
 	std::array<Clock::Divider, Model::NumChans> dividers{};
 	std::array<bool, Model::NumChans>           channel_fired_{};
+
+	// 16th-note sub-clock: counts up; resets and fires channel dividers every sub_period ticks.
+	uint32_t sub_counter_ = 0;
 
 public:
 	Clock::Bpm::Interface bpm;
@@ -139,15 +152,25 @@ public:
 		return static_cast<float>(sum) / NumIntervalSamples;
 	}
 
-	// Advance clock and per-channel dividers.  Returns true if the master clock ticked.
+	// Advance clock and per-channel dividers.  Returns true if the master (quarter-note) clock ticked.
+	// Channel step advances fire at 16th-note rate via sub_counter_ regardless of master tick.
 	bool Update(const std::array<ChannelSettings, Model::NumChans> &channels) {
 		const bool master_ticked = bpm.Update();
+		if (master_ticked)
+			sub_counter_ = 0; // re-sync sub-clock to master on each quarter note
+
 		channel_fired_.fill(false);
-		if (master_ticked) {
+
+		// 16th-note sub-clock: fire channel dividers every bpm_in_ticks/4 ticks.
+		const uint32_t sub_period = std::max<uint32_t>(1u, bpm.GetBpmInTicks() / 4u);
+		sub_counter_++;
+		if (sub_counter_ >= sub_period) {
+			sub_counter_ = 0;
 			for (auto ch = 0u; ch < Model::NumChans; ch++) {
 				channel_fired_[ch] = dividers[ch].Update(channels[ch].division);
 			}
 		}
+
 		return master_ticked;
 	}
 
@@ -159,6 +182,7 @@ public:
 		for (auto &d : dividers)
 			d.Reset();
 		channel_fired_.fill(false);
+		sub_counter_ = 0;
 	}
 };
 
