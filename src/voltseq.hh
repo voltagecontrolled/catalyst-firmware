@@ -642,6 +642,26 @@ public:
 		clock.SyncStepClock();
 	}
 
+	// Like Reset() but does not clear primed[].  Used for the external reset jack:
+	// if the pattern just naturally wrapped to step 0 (primed=true), keeping primed true
+	// prevents a double-fire of step 0 on the clock pulse that follows the reset pulse.
+	// Manual resets (SHIFT+PLAY, play/stop reset mode) use Reset() and clear primed so that
+	// step 0 plays correctly on the first clock after the restart.
+	void ResetExternal() {
+		playhead.fill(0);
+		shadow.fill(0);
+		pingpong_dir.fill(1);
+		// primed intentionally NOT cleared
+		just_wrapped_.fill(false);
+		held_count_           = 0;
+		arp_index_            = 0;
+		master_reset_counter_ = 0;
+		gate_state    = {};
+		ratchet_state = {};
+		clock.ResetDividers();
+		clock.SyncStepClock();
+	}
+
 	// ---- Step-lock / arpeggiation API (called from UI) ----
 	// global_step is the full step index 0..63 (page * 8 + step_in_page)
 
