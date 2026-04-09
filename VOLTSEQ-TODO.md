@@ -6,6 +6,32 @@ Backlog for VoltSeq firmware features, known bugs, and porting work.
 
 ## Active / Next Up
 
+### BPM Snap Indicators Not Working (Global Settings enc 6)
+**Observed:** The solid-white snap at 80/100/120/140 BPM is not visible. The current approach snaps to `full_white` only when `GetBpm()` rounds to exactly one of those values, which may be too narrow — the BPM stored as ticks may never land exactly on those integers after conversion.
+
+**Suggested approach:** Replace exact-match with a small range (e.g. ±1 BPM) centered on each snap value, so the indicator lights up in a zone rather than a pinpoint. Also worth checking that `PeekPhase()` is advancing correctly and that the non-snap yellow pulse is actually visible during testing (to confirm the LED is working at all).
+
+---
+
+### Phase Scrub Lock — No Indicator in VoltSeq Mode
+**Observed:** In CatSeq, locking the slider lights encoder 8 red, and wiggling the locked slider blinks it during pickup. Neither of these indicators is present in VoltSeq mode. The lock toggle (short Fine+Glide) works, but there is no visual confirmation.
+
+**Fix:** Port the encoder 8 LED logic from the CatSeq Performance Page / scrub settings to VoltSeq's PaintLeds. When locked, enc 8 (Panel 8, Random) should show red. During pickup (slider not yet reached the locked position), it should blink red. Reference: `src/ui/seq_scrub_settings.hh` and the Phase Scrub lock display in CatSeq's PaintLeds.
+
+---
+
+### Glide Direction — Possible One-Way Slew Bug
+**Observed:** Glide appears to only work from higher pitch to lower pitch (downward slew). Upward slew may not be audible or may be instant.
+
+**Suspected cause:** The exponential slew in `CvOutput` (`app.hh`) uses:
+```cpp
+const float coef = 1.f / (glide_time * sample_rate + 1.f);
+slewed = slew_val[ch] + (quantized - slew_val[ch]) * coef;
+```
+This is symmetric on paper, but `slew_val[ch]` is always set to `out_cv` after each tick. If there is a condition where `slew_val` is not initialized (e.g. first tick after reset, or after a step change with no prior output), it could snap rather than slew in one direction. Needs testing: program a low→high step transition with glide enabled and confirm slew is audible in both directions.
+
+---
+
 ### Beat Repeat Mode is Non-Functional (Blue/Cyan modes in Performance Page)
 **Root cause (diagnosed):** Beat repeat was ported from CatSeq but the core advance loop does nothing useful in VoltSeq. In beat repeat mode `window_ref` is always 1, so `orbit_pos_` = `(0+1)%1 = 0` on every advance. Therefore `orbit_step_[ch] = center_step` always — it never changes regardless of which zone the slider is in. All 8 blue zones and all 4 cyan zones are identical: they just hold the output at a fixed step. This is why blue appears to behave the same as cyan.
 
