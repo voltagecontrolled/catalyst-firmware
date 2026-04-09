@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - voltseq
     paths:
       - 'docs/wiki/NEW_FEATURES.md'
       - 'docs/wiki/VOLTSEQ.md'
