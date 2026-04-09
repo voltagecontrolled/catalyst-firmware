@@ -7,7 +7,7 @@ Backlog for VoltSeq firmware features, known bugs, and porting work.
 ## Active / Next Up
 
 ### Step Probability / Random Amount — Needs Investigation
-**Observed:** Random amount (Channel Edit enc 8) has not been confirmed working. The Shift+Glide global settings entry bug blocked proper testing (Shift held for any purpose could accidentally enter the menu). Once the global settings entry fix is verified, test Random amount on CV, Gate, and Trigger channels at various amounts and confirm steps are being skipped/randomized as expected.
+**Observed:** Random amount (Channel Edit enc 8) has not been confirmed working. Test on CV, Gate, and Trigger channels at various amounts and confirm steps are being skipped/randomized as expected.
 
 **Where to look:** `src/voltseq.hh` — search for `random_amount` to find where it is applied in the engine. Verify the randomization fires on step advance, not on every tick, and that 0% = no randomization, 100% = fully random on every step.
 
@@ -130,14 +130,17 @@ These features exist in the firmware but have not been user-tested yet. Each ite
 - **CHAN+encoder no longer causes clock stumble** (alpha6): test type cycling while sequence is running.
 - **Tap tempo requires 3 taps** (alpha5+6, both CatSeq and VoltSeq): confirm first two taps are ignored, third takes effect.
 - **Custom scale fallback** (alpha6): channel saved with a custom scale type should load as unquantized without corrupting step data.
-- **Global Settings modal entry** (alpha9): Shift held 1.5 s alone — any other button during hold must cancel entry. Confirm Shift+Play, Shift+Chan, and Shift+other combos still work normally (they cancel the hold, do not enter settings).
-- **Global Settings — Play/Stop reset mode** (alpha9): enc 1 toggles on/off; when on, Stop resets all channels to step 1. Confirm enc 1 LED is red when on, off when off. Confirm normal Play/Stop behavior is unchanged when off.
+- **Global Settings modal entry** (alpha10): SHIFT+CHAN held 2 s alone — any other button during hold must cancel entry. Confirm Shift+Play, and other Shift combos still work normally (they interrupt the hold timer).
+- **Global Settings — Play/Stop reset mode** (alpha9): enc 1 toggles on/off; when on, Stop resets all channels to step 1. Confirm enc 1 LED is red when on, off when off.
 - **Global Settings — Master reset steps** (alpha9): enc 3 sets 0–64 steps; LED off at 0, orange at non-snap values, red at 8/16/32/64. Confirm all channels reset to step 1 every N master ticks when non-zero. Confirm overrides reset leader.
 - **Global Settings — Reset leader** (alpha9): page buttons radio-select leader channel; tap lit button to deselect. Confirm leader channel wrap resets all other channels. Confirm no reset when master_reset_steps is non-zero (master takes priority).
-- **Global Settings — BPM snap indicators** (alpha9): enc 6 pulse is yellow; turns white at exactly 80/100/120/140 BPM. Confirm Fine modifier gives 1 BPM steps, non-Fine gives 10 BPM steps.
+- **Global Settings — BPM color zones** (alpha10): enc 6 pulse color changes with BPM range (red <50, orange 50–79, yellow 80–99, green 100–119, blue 120–149, teal 150–179, lavender 180+).
 - **GetOutputStep wrap fix** (alpha9): short channels repeat correctly on later pages. Test: 8-step trigger on ch 1, 16-step CV on ch 2. Go to page 2, hold a page button — trigger steps should repeat (step 0–7 map to page-2 positions), not be silent.
-- **Chaselight focus** (alpha9): in main mode (unarmed, no step held), chaselight tracks whichever channel's encoder was last turned during step editing. Confirm it does not jump when other encoders are idle.
 - **Direction selector clamped** (alpha9): in Channel Edit enc 2, direction should stop at Forward (CW limit) and Random (CCW limit), not wrap.
+- **Gate ratchets** (alpha11): Gate step encoding uses high byte = gate length, low byte = ratchet count. Confirm armed Gate + Glide held + enc N sets ratchet count (0 = single gate, 2–8 = N pulses per step). Confirm unarmed Glide + page-button held + enc N also works. Confirm gate ratchet LED display when Glide held (dim grey = no ratchet, bright green = high count).
+- **SHIFT+PAGE navigation** (alpha13): confirm page navigation works in normal mode, armed mode (all channel types), and Channel Edit. While Shift held: page buttons should show current page lit (not chaselight); encoder LEDs should show playhead colors with focused channel blinking. After navigating, chaselight should track the new page correctly.
+- **Chaselight focus from encoder wiggle** (alpha13): in main mode (unarmed, no step held), wiggling an encoder without holding a page button should update which channel's chaselight is shown on the page buttons. Confirm no steps are edited during this wiggle.
+- **Channel Edit page sync** (alpha13): on entering Channel Edit, the page buttons chaselight should be visible immediately (no "chaselight gone" after cross-mode page navigation). Test: go to Performance Page, navigate to page 2, exit, enter Channel Edit — chaselight should show on the correct page for the focused channel.
 
 ### Core features never formally tested
 - **External clock sync**: patch a clock into Clock In; confirm VoltSeq locks to it, Reset jack resets all channels.
