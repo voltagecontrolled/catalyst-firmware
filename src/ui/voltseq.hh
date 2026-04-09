@@ -555,9 +555,12 @@ public:
 		const bool chan     = c.button.bank.is_high();
 		// Pre-read rising-edge events that appear in short-circuit conditions so they are
 		// always consumed on the tick they fire (short-circuit eval would otherwise leave
-		// got_rising_edge_ set, causing a spurious trigger on the next Shift press).
-		const bool bank_jgh = c.button.bank.just_went_high();
-		const bool play_jgh = c.button.play.just_went_high();
+		// got_rising_edge_ set, causing spurious triggers on the next button press).
+		// morph/fine are also consumed in Common() before Update() runs, so must be pre-read here.
+		const bool bank_jgh  = c.button.bank.just_went_high();
+		const bool play_jgh  = c.button.play.just_went_high();
+		const bool morph_jgh = c.button.morph.just_went_high();
+		const bool fine_jgh  = c.button.fine.just_went_high();
 
 		// --- Shift long-hold: global settings entry ---
 		// Shift held alone for 1.5 s (no other button pressed during the hold) enters the
@@ -570,8 +573,8 @@ public:
 			const bool cancelled = !shift
 			    || bank_jgh
 			    || play_jgh
-			    || c.button.morph.just_went_high()
-			    || c.button.fine.just_went_high()
+			    || morph_jgh
+			    || fine_jgh
 			    || c.button.add.just_went_high();
 			if (cancelled) {
 				shift_hold_pending_ = false;

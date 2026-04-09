@@ -6,6 +6,22 @@ Backlog for VoltSeq firmware features, known bugs, and porting work.
 
 ## Active / Next Up
 
+### Step Probability / Random Amount — Needs Investigation
+**Observed:** Random amount (Channel Edit enc 8) has not been confirmed working. The Shift+Glide global settings entry bug blocked proper testing (Shift held for any purpose could accidentally enter the menu). Once the global settings entry fix is verified, test Random amount on CV, Gate, and Trigger channels at various amounts and confirm steps are being skipped/randomized as expected.
+
+**Where to look:** `src/voltseq.hh` — search for `random_amount` to find where it is applied in the engine. Verify the randomization fires on step advance, not on every tick, and that 0% = no randomization, 100% = fully random on every step.
+
+---
+
+### Global Settings Entry — Pressing Other Buttons While Holding Shift Does Not Cancel
+**Observed:** Holding Shift then pressing Glide (or Fine) enters global settings anyway — the cancel check doesn't see those button presses.
+
+**Root cause:** `c.button.morph.just_went_high()` and `c.button.fine.just_went_high()` are consumed in `Common()` which runs before `Update()` every tick. By the time the shift-hold cancel check reads them, the events are already cleared. **Fixed in alpha10** by pre-reading `morph_jgh` and `fine_jgh` at the top of `Update()` alongside `bank_jgh` and `play_jgh`.
+
+**Still open:** The timer also starts if other buttons are *already held* when Shift goes high (e.g. holding Fine then pressing Shift). Should add `is_high()` checks on the `just_went_high()` guard line to prevent that case too.
+
+---
+
 ### BPM Snap Indicators Not Working (Global Settings enc 6)
 **Observed:** The solid-white snap at 80/100/120/140 BPM is not visible. The current approach snaps to `full_white` only when `GetBpm()` rounds to exactly one of those values, which may be too narrow — the BPM stored as ticks may never land exactly on those integers after conversion.
 
