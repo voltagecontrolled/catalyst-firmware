@@ -26,10 +26,20 @@ This is natural (same modifier, deeper hold = deeper menu), avoids all conflicts
 
 ---
 
-### BPM Snap Indicators Not Working (Global Settings enc 6)
-**Observed:** The solid-white snap at 80/100/120/140 BPM is not visible. The current approach snaps to `full_white` only when `GetBpm()` rounds to exactly one of those values, which may be too narrow — the BPM stored as ticks may never land exactly on those integers after conversion.
+### BPM Color Ranges (Global Settings enc 6)
+**Redesign:** Replace snap-point indicators with a continuous color gradient across the BPM range (ROYGBIV), so the tempo zone is immediately readable:
 
-**Suggested approach:** Replace exact-match with a small range (e.g. ±1 BPM) centered on each snap value, so the indicator lights up in a zone rather than a pinpoint. Also worth checking that `PeekPhase()` is advancing correctly and that the non-snap yellow pulse is actually visible during testing (to confirm the LED is working at all).
+| BPM range | Color |
+|-----------|-------|
+| < 50 | `red` |
+| 50–79 | `orange` |
+| 80–99 | `yellow` |
+| 100–119 | `green` |
+| 120–149 | `blue` |
+| 150–179 | `teal` |
+| 180+ | `lavender` |
+
+The encoder LED pulses with the clock phase (`PeekPhase()`), blending from `off` to the zone color. This gives both tempo feedback (color zone) and clock-running feedback (pulse).
 
 ---
 

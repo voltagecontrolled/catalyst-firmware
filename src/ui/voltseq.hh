@@ -102,17 +102,17 @@ class Main : public Abstract {
 	static constexpr uint32_t kSliderActiveTicks   = Clock::MsToTicks(400);
 	static constexpr uint32_t kToggleFeedbackTicks = Clock::MsToTicks(600);
 	static constexpr uint32_t kClearHoldTicks         = Clock::MsToTicks(600);
-	static constexpr uint32_t kGlobalSettingsHoldTicks = Clock::MsToTicks(1500);
+	static constexpr uint32_t kGlobalSettingsHoldTicks = Clock::MsToTicks(2000);
 
 	// Clear mode: SHIFT+PLAY held > kClearHoldTicks → enter; tap page N = clear ch N; PLAY = clear all
 	bool     clear_mode_active_   = false;
 	bool     shift_play_pending_  = false;   // armed while we wait for long/short distinction
 	uint32_t shift_play_press_t_  = 0;
 
-	// Global settings modal: Shift held alone ≥1.5 s → enter; Play exits.
-	bool     global_settings_active_ = false;
-	bool     shift_hold_pending_     = false;  // Shift pressed, waiting for 1.5s or cancellation
-	uint32_t shift_hold_start_       = 0;
+	// Global settings modal: SHIFT+CHAN held ≥2 s → enter; short SHIFT+CHAN → Channel Edit; Play exits.
+	bool     global_settings_active_  = false;
+	bool     shift_chan_hold_pending_  = false;
+	uint32_t shift_chan_hold_start_    = 0;
 
 	// Beat repeat debounce table (matches sequencer)
 	static constexpr std::array<uint32_t, 8> kBeatRepeatDebounce = {
@@ -556,30 +556,32 @@ public:
 		// Pre-read rising-edge events that appear in short-circuit conditions so they are
 		// always consumed on the tick they fire (short-circuit eval would otherwise leave
 		// got_rising_edge_ set, causing spurious triggers on the next button press).
-		// morph/fine are also consumed in Common() before Update() runs, so must be pre-read here.
-		const bool bank_jgh  = c.button.bank.just_went_high();
-		const bool play_jgh  = c.button.play.just_went_high();
-		const bool morph_jgh = c.button.morph.just_went_high();
-		const bool fine_jgh  = c.button.fine.just_went_high();
+		const bool bank_jgh = c.button.bank.just_went_high();
+		const bool play_jgh = c.button.play.just_went_high();
 
-		// --- Shift long-hold: global settings entry ---
-		// Shift held alone for 1.5 s (no other button pressed during the hold) enters the
-		// global settings modal.  Any other button press while Shift is down cancels the timer.
-		if (c.button.shift.just_went_high() && !global_settings_active_) {
-			shift_hold_pending_ = true;
-			shift_hold_start_   = Controls::TimeNow();
+		// --- SHIFT+CHAN hold: global settings (≥2 s) or channel edit (short tap) ---
+		// Timer starts when CHAN goes high while Shift is already held (or simultaneously).
+		// Held ≥2 s → Global Settings.  Released before 2 s → toggle Channel Edit as before.
+		if (shift && bank_jgh && !global_settings_active_) {
+			shift_chan_hold_pending_ = true;
+			shift_chan_hold_start_   = Controls::TimeNow();
 		}
-		if (shift_hold_pending_) {
-			const bool cancelled = !shift
-			    || bank_jgh
-			    || play_jgh
-			    || morph_jgh
-			    || fine_jgh
-			    || c.button.add.just_went_high();
-			if (cancelled) {
-				shift_hold_pending_ = false;
-			} else if (Controls::TimeNow() - shift_hold_start_ >= kGlobalSettingsHoldTicks) {
-				shift_hold_pending_      = false;
+		if (shift_chan_hold_pending_) {
+			if (!shift || c.button.bank.just_went_low()) {
+				// Released before 2 s: short tap → toggle Channel Edit
+				shift_chan_hold_pending_ = false;
+				channel_edit_active_ = !channel_edit_active_;
+				if (channel_edit_active_) {
+					// Show focused channel's length passively on entry
+					channel_edit_last_enc_ = 2;
+					length_display_until_  = Controls::TimeNow() + Clock::MsToTicks(600);
+				} else {
+					channel_edit_last_enc_ = 0xFF;
+					length_display_until_  = 0;
+					if (!p.IsPlaying()) p.shared.do_save_macro = true;
+				}
+			} else if (Controls::TimeNow() - shift_chan_hold_start_ >= kGlobalSettingsHoldTicks) {
+				shift_chan_hold_pending_ = false;
 				global_settings_active_  = true;
 				for (auto &b : c.button.scene) b.clear_events();
 			}
@@ -657,9 +659,9 @@ public:
 			glide_editor_active_     = false;
 			ratchet_editor_active_   = false;
 			clear_mode_active_       = false;
-			global_settings_active_  = false;
-			shift_hold_pending_      = false;
-			shift_play_pending_      = false;
+			global_settings_active_   = false;
+			shift_chan_hold_pending_  = false;
+			shift_play_pending_       = false;
 			SwitchUiMode(main_ui);
 			return;
 		}
@@ -682,17 +684,7 @@ public:
 			return;
 		}
 
-		// --- Channel Edit entry/exit: Shift + CHAN toggles ---
-		if (shift && bank_jgh) {
-			channel_edit_active_ = !channel_edit_active_;
-			if (!channel_edit_active_) {
-				channel_edit_last_enc_ = 0xFF;
-				length_display_until_  = 0;
-				if (!p.IsPlaying()) p.shared.do_save_macro = true;
-				// else: save deferred to next play-stop toggle
-			}
-			return;
-		}
+		// Channel Edit entry/exit is handled by the SHIFT+CHAN hold timer above.
 
 
 		// --- Channel Edit mode ---
@@ -1159,10 +1151,10 @@ private:
 		if (channel_edit_clear_btn_ != kNoLongpressBtn) {
 			const uint8_t btn = channel_edit_clear_btn_;
 			if (!c.button.scene[btn].is_high()) {
-				// Released before long-press: just focus
+				// Released before long-press: focus channel and show length passively for 600 ms
 				edit_ch_                = btn;
-				channel_edit_last_enc_  = 0xFF;
-				length_display_until_   = 0;
+				channel_edit_last_enc_  = 2; // pre-select length encoder for passive display
+				length_display_until_   = Controls::TimeNow() + Clock::MsToTicks(600);
 				channel_edit_clear_btn_ = kNoLongpressBtn;
 				return;
 			}
@@ -1449,13 +1441,20 @@ public:
 					break;
 				}
 				case 5: {
-					// Pulses yellow with clock phase (PeekPhase advances even when stopped).
-					// Snaps to solid white at 80/100/120/140 BPM so the reference is unmissable.
-					const auto bpm_round = static_cast<uint32_t>(p.clock.bpm.GetBpm() + 0.5f);
-					const bool bpm_snap  = (bpm_round == 80 || bpm_round == 100
-					                     || bpm_round == 120 || bpm_round == 140);
-					col = bpm_snap ? Palette::full_white
-					               : Palette::off.blend(Palette::yellow, p.clock.bpm.PeekPhase());
+					// Pulses with clock phase (PeekPhase advances even when stopped).
+					// Color zone indicates BPM range (ROYGBIV):
+					//   <50 red | 50-79 orange | 80-99 yellow | 100-119 green |
+					//   120-149 blue | 150-179 teal | 180+ lavender
+					const auto bpm = static_cast<uint32_t>(p.clock.bpm.GetBpm() + 0.5f);
+					Color zone;
+					if      (bpm < 50)  zone = Palette::red;
+					else if (bpm < 80)  zone = Palette::orange;
+					else if (bpm < 100) zone = Palette::yellow;
+					else if (bpm < 120) zone = Palette::green;
+					else if (bpm < 150) zone = Palette::blue;
+					else if (bpm < 180) zone = Palette::teal;
+					else                zone = Palette::lavender;
+					col = Palette::off.blend(zone, p.clock.bpm.PeekPhase());
 					break;
 				}
 				default: break;
@@ -1553,6 +1552,16 @@ public:
 			for (auto i = 0u; i < Model::NumChans; i++) {
 				const uint8_t ref_step = p.GetPlayhead(i);
 				c.SetEncoderLed(i, StepColorForChannel(i, ref_step));
+			}
+		}
+
+		// --- Phase Scrub Lock indicator: enc 7 (panel 8) ---
+		// Shown in all states except Performance Page (which has its own enc 7 display).
+		// Red = locked; blinks red during pickup (slider not yet reached locked position).
+		if (!perf_page_active_) {
+			if (phase_locked_) {
+				const bool blink = (Controls::TimeNow() >> 8) & 1u;
+				c.SetEncoderLed(7, picking_up_ ? (blink ? Palette::red : Palette::off) : Palette::red);
 			}
 		}
 	}
