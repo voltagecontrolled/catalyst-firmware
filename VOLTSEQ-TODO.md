@@ -4,6 +4,13 @@ Backlog for VoltSeq firmware features, known bugs, and porting work.
 
 ---
 
+## Feature Ideas
+
+### Iterative Probability — Per-Step Cycle Filter
+See `docs/planned/VOLTSEQ-ITERATIVE-PROBABILITY.md`.
+
+---
+
 ## Active / Next Up
 
 ### Step Probability / Random Amount — Needs Investigation
@@ -26,15 +33,7 @@ This is symmetric on paper, but `slew_val[ch]` is always set to `out_cv` after e
 ---
 
 ### Beat Repeat Mode is Non-Functional (Blue/Cyan modes in Performance Page)
-**Root cause (diagnosed):** Beat repeat was ported from CatSeq but the core advance loop does nothing useful in VoltSeq. In beat repeat mode `window_ref` is always 1, so `orbit_pos_` = `(0+1)%1 = 0` on every advance. Therefore `orbit_step_[ch] = center_step` always — it never changes regardless of which zone the slider is in. All 8 blue zones and all 4 cyan zones are identical: they just hold the output at a fixed step. This is why blue appears to behave the same as cyan.
-
-**Zone detection and engine table are correct.** The UI correctly divides into 8 zones for blue and 4 for cyan. The `div_num_8 / div_denom_8` table has proper triplet values (2/3, 1/3, 1/6 etc.). The problem is purely that the advance produces no movement.
-
-**Design decision needed — two options:**
-
-- **Option A — Clock multiplier:** When beat repeat is active, channels following orbit have their step advance rate overridden by `1 / safe_period` ticks per step. Requires `OnChannelFired` to be callable at arbitrary rates independent of clock divider, or a separate timer per following-channel that fires at `safe_period`. This produces actual rhythmic gate/trigger subdivision.
-
-- **Option B — Metered window loop (preferred):** Keep the granular orbit window concept but advance it at the beat-repeat subdivision rate rather than every master clock tick. Set `window_ref = some_steps` driven by the zone index, and `orbit_should_adv` fires at `safe_period`. Following channels cycle through that window at the metered rate. This maps naturally onto VoltSeq's step-address model.
+Root cause diagnosed and design options documented. See `docs/planned/VOLTSEQ-BEAT-REPEAT.md`.
 
 ---
 
@@ -60,41 +59,7 @@ This is symmetric on paper, but `slew_val[ch]` is always set to `out_cv` after e
 ---
 
 ### Clock Division Redesign — multipliers + triplets
-**Current state:** `Clock::Divider::type` is a `uint8_t` 0–255; `Read()` = v+1 (pure integer division by 1–256). No support for multipliers or fractional ratios.
-
-**Desired:** CCW from unity adds clock multipliers (×2, ×3, ×4); divisions include triplet-friendly values (÷3, ÷6, ÷12, ÷24) so channels can run at ⅓, ⅙, etc. of the master clock.
-
-**Proposed design:**
-Replace `Divider::type` storage with a **table index** into a fixed list of ratios:
-
-```
-Index  Ratio   Label
-  0    ×4      ×4
-  1    ×3      ×3
-  2    ×2      ×2
-  3    ×1      ×1   ← default (v=3)
-  4    ÷2      /2
-  5    ÷3      /3
-  6    ÷4      /4
-  7    ÷6      /6
-  8    ÷8      /8
-  9    ÷12     /12
- 10    ÷16     /16
- 11    ÷24     /24
- 12    ÷32     /32
-```
-
-For multipliers (ratio < 1), `Divider::Update()` must fire more than once per master tick. Replace bool return with int8 fire-count. Caller (`OnChannelFired`) loops on the count. Internally use a **phase accumulator** (float 0..1) for clean sub-integer handling:
-
-```cpp
-int Update(float ratio):
-    phase_acc += 1.0f / ratio
-    fires = 0
-    while (phase_acc >= 1.0f) { fires++; phase_acc -= 1.0f; }
-    return fires
-```
-
-**Persistent layout change:** bump `VoltSeq::Data::current_tag` when the stored index replaces the raw uint8.
+Full design (table, phase accumulator, persistent layout notes) in `docs/planned/VOLTSEQ-CLOCK-DIVISIONS.md`.
 
 ---
 
@@ -109,13 +74,7 @@ int Update(float ratio):
 ---
 
 ### Presets / Scene Save-Load
-**No current implementation.** Users need a way to save and recall entire VoltSeq states (all 8 channels, steps, settings) as named presets — analogous to the sequencer's slot/scene system.
-
-**Open questions:**
-- How many presets? 8 (matching scene buttons)? 16?
-- Flash budget: `sizeof(VoltSeq::Data)` ≈ 1.1 KB × 8 = ~9 KB. Needs flash-layout review.
-- UX: long-press page button = save to that slot, short press = load? Or Shift+page = save, page = load?
-- Does scene-switch happen instantaneously or on next step boundary?
+See `docs/planned/VOLTSEQ-PRESETS.md`.
 
 ---
 
