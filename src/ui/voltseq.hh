@@ -573,13 +573,14 @@ public:
 				channel_edit_active_   = false;
 				channel_edit_last_enc_ = 0xFF;
 				length_display_until_  = 0;
-				p.shared.do_save_macro = true;
+				if (!p.IsPlaying()) p.shared.do_save_macro = true;
+				// else: save deferred to next play-stop toggle
 			} else if (glide_editor_active_) {
 				glide_editor_active_   = false;
-				p.shared.do_save_macro = true;
+				if (!p.IsPlaying()) p.shared.do_save_macro = true;
 			} else if (ratchet_editor_active_) {
 				ratchet_editor_active_ = false;
-				p.shared.do_save_macro = true;
+				if (!p.IsPlaying()) p.shared.do_save_macro = true;
 			} else if (armed_ch_.has_value()) {
 				armed_ch_                = std::nullopt;
 				trigger_step_enc_turned_ = 0;
@@ -644,8 +645,9 @@ public:
 			if (!channel_edit_active_) {
 				channel_edit_last_enc_ = 0xFF;
 				length_display_until_  = 0;
+				if (!p.IsPlaying()) p.shared.do_save_macro = true;
+				// else: save deferred to next play-stop toggle
 			}
-			p.shared.do_save_macro = true;
 			return;
 		}
 

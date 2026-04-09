@@ -135,6 +135,19 @@ VoltSeq now exits all modes on Play press. The main sequencer has modal states t
 
 ---
 
+## Flash Save Latency
+
+Saving to flash (`SaveMacro` / `SaveShared`) is synchronous and blocks the CPU for the duration of the write — long enough to stall the 3kHz clock and cause an audible glitch. Currently mitigated by deferring saves to moments when the clock is stopped or the user releases a control:
+
+- **CHAN+encoder type change:** deferred to CHAN button release
+- **Channel Edit / Glide editor / Ratchet editor exit:** deferred to next play-stop toggle when playing; saves immediately if stopped
+
+**Known limitation:** settings changed while playing (channel type, length, range, etc.) will not persist if the module is power-cycled before the next play-stop press.
+
+**Long-term fix:** async flash write using a background DMA or interrupt-driven page write, so the save does not block the main loop. Alternatively, a dedicated "save on idle" timer that fires when no buttons have been pressed for N seconds.
+
+---
+
 ## Known Quirks / Low Priority
 
 - **Wholetone scale and unquantized CV show the same grey** — both map to `Palette::grey` in the type selector. Low-priority color collision; needs a distinct color for wholetone.
