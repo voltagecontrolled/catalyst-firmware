@@ -62,6 +62,12 @@ Default range for new channels is **−5V to +5V**. Changing a channel's type do
 
 ---
 
+## Main Mode
+
+The **main mode** is VoltSeq's default state — reached on boot, after disarming, or after exiting any editor. All other modes are entered from here and return here on exit. While in any modal editor (Channel Edit, Global Settings, Performance Page, Glide Step Editor, Clear Mode), the entry combos for other modals are silently ignored — you must exit the current mode first. The only exception is **Channel Edit**, which can also be entered while a channel is armed.
+
+---
+
 ## General Operation
 
 ### Play / Stop / Reset
@@ -78,7 +84,7 @@ Settings are saved to flash whenever play/stop is toggled.
 
 ### Clear Mode
 
-Hold **Shift + Play/Reset** for 600 ms. All page button LEDs and the Play LED slow-blink to confirm entry.
+From the main mode: hold **Shift + Play/Reset** for 600 ms. All page button LEDs and the Play LED slow-blink to confirm entry.
 
 | Action | Result |
 |---|---|
@@ -118,7 +124,7 @@ The tracked channel updates two ways:
 
 ## Armed Mode
 
-**CHAN + Page button N** arms channel N for focused editing. The encoder LED for that channel blinks. To disarm:
+From the main mode: **CHAN + Page button N** arms channel N for focused editing. The encoder LED for that channel blinks. To disarm:
 
 - **CHAN + same Page button N** — disarm
 - **Play/Reset** — disarm without stopping playback
@@ -181,7 +187,7 @@ For CV channels, glide time is a channel-level setting (how long the slew takes)
 
 ## Channel Edit
 
-**Entry:** Press and release **Shift + Chan.** (short tap — release before 2 seconds). A 2-second hold enters Global Settings instead.
+**Entry:** From the main mode or while armed — press and release **Shift + Chan.** (short tap — release before 2 seconds). A 2-second hold enters Global Settings instead.
 
 Press a **Page button** to focus that channel. Encoders edit per-channel settings for the focused channel.
 
@@ -208,7 +214,7 @@ Press a **Page button** to focus that channel. Encoders edit per-channel setting
 
 ## Global Settings
 
-**Entry:** Hold **Shift + Chan.** for **2 seconds**. The hold is a two-button combo: press and hold both Shift and Chan. together; if either is released before 2 seconds, it fires as a short tap instead (which enters/exits Channel Edit). Any other button press during the hold cancels it.
+**Entry:** From the main mode — hold **Shift + Chan.** for **2 seconds**. The hold is a two-button combo: press and hold both Shift and Chan. together; if either is released before 2 seconds, it fires as a short tap instead (which enters/exits Channel Edit). Any other button press during the hold cancels it.
 
 **Exit:** **Play/Reset** — saves and returns.
 
@@ -241,7 +247,7 @@ When non-zero (encoder 3): all channels automatically reset to step 1 every N ma
 
 ## Performance Page
 
-**Entry:** Hold **Fine + Glide** for 1.5 seconds. Encoder LEDs light to confirm. Releasing before 1.5 s cancels without entering.
+**Entry:** From the main mode — hold **Fine + Glide** for 1.5 seconds. Encoder LEDs light to confirm. Releasing before 1.5 s cancels without entering.
 
 **Exit:** **Play/Reset** — saves to flash.
 

@@ -559,7 +559,10 @@ public:
 		// Fine+Glide hold detection: entry into perf page (or settings from within perf page)
 		const bool both_held  = c.button.fine.is_high() && c.button.morph.is_high();
 		const bool either_just = c.button.fine.just_went_high() || c.button.morph.just_went_high();
-		if (both_held && either_just && !scrub_hold_pending_) {
+		// Perf Page entry is allowed from Main Mode (armed or unarmed) and from within Perf Page
+		// itself (to re-enter Perf Settings). All other modals block entry.
+		const bool perf_entry_blocked = clear_mode_active_ || global_settings_active_ || channel_edit_active_ || glide_editor_active_;
+		if (both_held && either_just && !scrub_hold_pending_ && !perf_entry_blocked) {
 			scrub_hold_pending_ = true;
 			scrub_hold_start_   = Controls::TimeNow();
 		}
@@ -593,7 +596,11 @@ public:
 		// --- SHIFT+CHAN hold: global settings (≥2 s) or channel edit (short tap) ---
 		// Timer starts when CHAN goes high while Shift is already held (or simultaneously).
 		// Held ≥2 s → Global Settings.  Released before 2 s → toggle Channel Edit as before.
-		if (shift && bank_jgh && !global_settings_active_) {
+		// Channel Edit / Global Settings entry is allowed only from Main Mode (armed or unarmed).
+		// All other modals block entry — modals do not stack, except Armed → Channel Edit which
+		// is handled naturally since armed_ch_ is not a modal flag.
+		const bool any_modal = clear_mode_active_ || global_settings_active_ || perf_page_active_ || channel_edit_active_ || glide_editor_active_;
+		if (shift && bank_jgh && !any_modal) {
 			shift_chan_hold_pending_ = true;
 			shift_chan_hold_start_   = Controls::TimeNow();
 		}

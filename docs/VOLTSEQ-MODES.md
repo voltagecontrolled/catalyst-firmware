@@ -86,13 +86,15 @@ Priority  Condition                        Handler
 
 ---
 
-## Mode: Normal (unarmed, no modal)
+## Main Mode (Normal — unarmed, no modal)
+
+**Main Mode** is the canonical starting point for the entire UI. All modal states (Channel Edit, Global Settings, Performance Page, Glide Step Editor, Clear Mode) can only be entered from Main Mode, with one exception: Channel Edit can also be entered while Armed (see Armed mode below). Modals do not stack — entering one while another is active is silently blocked.
 
 **State:** `armed_ch_ == nullopt`, all modal flags false, morph/chan not held.
 
-**Entry:** Default state; also reached by disarming, exiting any modal via Play.
+**Entry:** Default state; also reached by disarming or exiting any modal via Play/Reset.
 
-**Exit:** Pressing a Page button (→ step held sub-state), holding CHAN (→ armed), SHIFT+CHAN short (→ Channel Edit), SHIFT+CHAN long (→ Global Settings), morph held (→ GLIDE Modifier), Fine+Glide 1.5s (→ Performance Page).
+**Exit:** From Main Mode: pressing a Page button (→ step held sub-state), holding CHAN (→ Armed), SHIFT+CHAN short tap (→ Channel Edit), SHIFT+CHAN hold 2s (→ Global Settings), Glide held (→ GLIDE Modifier), Fine+Glide 1.5s (→ Performance Page).
 
 ### Sub-state: Shift held
 
@@ -132,7 +134,7 @@ Priority  Condition                        Handler
 
 **State:** `armed_ch_.has_value()`.
 
-**Entry:** CHAN held + Page button N. `armed_ch_ = N`, `focused_ch_ = N`.
+**Entry:** From Main Mode: CHAN held + Page button N. `armed_ch_ = N`, `focused_ch_ = N`.
 
 **Exit:**
 - CHAN held + Page button N again → `armed_ch_ = nullopt`
@@ -236,7 +238,7 @@ This is not a persistent mode — it is active only while Glide is physically he
 
 **State:** `glide_editor_active_ = true`.
 
-**Entry:** From GLIDE modifier: hold Glide, long-press a Page button (600ms) on a CV or Gate channel.
+**Entry:** From Main Mode only, via GLIDE modifier: hold Glide, long-press a Page button (600ms) on a CV or Gate channel.
 
 **Exit:**
 - Glide button rising edge → `glide_editor_active_ = false`; save if stopped
@@ -262,7 +264,7 @@ This is not a persistent mode — it is active only while Glide is physically he
 
 **State:** `channel_edit_active_ = true`.
 
-**Entry:** SHIFT+CHAN short tap. On entry:
+**Entry:** From Main Mode or Armed Mode: SHIFT+CHAN short tap. On entry:
 - `channel_edit_last_enc_ = 2` (pre-selects Length for passive display)
 - `length_display_until_ = now + 600ms`
 - `current_page_` reset to `playhead(edit_ch_) / 8` (syncs page to focused channel)
@@ -323,7 +325,7 @@ All 8 encoders control the focused channel (`edit_ch_`). Turning any encoder set
 
 **State:** `perf_page_active_ = true`.
 
-**Entry:** Fine+Glide held 1.5s. Entry confirmed by page-button blink flash. `perf_settings_active_` is also set true on initial entry (settings shown first).
+**Entry:** From Main Mode only: Fine+Glide held 1.5s. Entry confirmed by page-button blink flash. `perf_settings_active_` is also set true on initial entry (settings shown first).
 
 **Exit:** Play/Reset at top of Update(); saves shared data.
 
@@ -370,7 +372,7 @@ All 8 encoders control the focused channel (`edit_ch_`). Turning any encoder set
 
 **State:** `global_settings_active_ = true`.
 
-**Entry:** SHIFT+CHAN held 2s (kGlobalSettingsHoldTicks). `c.button.scene.clear_events()` is called on entry.
+**Entry:** From Main Mode only: SHIFT+CHAN held 2s (kGlobalSettingsHoldTicks). `c.button.scene.clear_events()` is called on entry.
 
 **Exit:** Play/Reset (top of Update()); saves macro data.
 
@@ -395,7 +397,7 @@ All 8 encoders control the focused channel (`edit_ch_`). Turning any encoder set
 
 **State:** `clear_mode_active_ = true`.
 
-**Entry:** SHIFT+PLAY held 600ms (kClearHoldTicks). `c.button.scene.clear_events()` and `c.button.play.clear_events()` called on entry. Blinker set.
+**Entry:** From Main Mode only: SHIFT+PLAY held 600ms (kClearHoldTicks). `c.button.scene.clear_events()` and `c.button.play.clear_events()` called on entry. Blinker set.
 
 **Exit:** Any input in UpdateClearMode:
 - Page button N → ClearChannel(N); exit
@@ -431,7 +433,7 @@ All 8 encoders control the focused channel (`edit_ch_`). Turning any encoder set
 | CHAN released (or Shift released) before 2s | Toggle `channel_edit_active_`; if entering: init entry state + reset current_page_ |
 | Held 2s | `global_settings_active_ = true`; clear scene button events |
 
-> This timer is NOT guarded by any active mode other than Global Settings itself. It can arm and fire while Perf Page, Channel Edit, Glide Editor, Clear Mode, or Armed state is active.
+> Timer only arms when no modal is active (`!any_modal`). Armed state is not a modal, so Armed → Channel Edit still works. Silently blocked in all other non-Main states.
 
 ---
 
@@ -441,7 +443,7 @@ Managed in `Common()` via `scrub_hold_pending_` / `phase_locked_` / `picking_up_
 
 **Lock toggle:** Fine+Glide tapped and released (either button released before 1.5s) → `DoLockToggle()`.
 
-**Perf Page entry:** Fine+Glide held ≥1.5s → `perf_page_active_ = true`.
+**Perf Page entry:** Fine+Glide held ≥1.5s → `perf_page_active_ = true`. Blocked if Channel Edit, Global Settings, Glide Editor, or Clear Mode is active.
 
 These are mutually exclusive by the release detection in Common().
 
@@ -460,19 +462,13 @@ While playing: writes to shadow step (current playing position). While stopped: 
 
 ## Known Collisions and Edge Cases
 
-### 1. SHIFT+CHAN hold fires in any active mode
+### 1. ~~SHIFT+CHAN hold fires in any active mode~~ — Resolved
 
-`shift_chan_hold_pending_` is only guarded against `global_settings_active_`. It starts and fires in:
-- Clear Mode (armed while clear mode is active)
-- Performance Page (can enter Global Settings or Channel Edit from Perf Page)
-- Glide Step Editor (can enter Channel Edit while in editor — both flags true simultaneously)
-- Armed state (can enter Channel Edit while armed — armed_ch_ is not cleared)
+`shift_chan_hold_pending_` now guards against all modal flags (`clear_mode_active_ || global_settings_active_ || perf_page_active_ || channel_edit_active_ || glide_editor_active_`). The timer only arms from Main Mode or Armed Mode. Armed is not a modal, so Armed → Channel Edit still works.
 
-When two modal flags are true simultaneously, the higher-priority one in the Update() chain wins. The lower-priority mode is dormant but resumes when the higher one exits.
+### 2. ~~Fine+Glide hold fires in any active mode~~ — Resolved
 
-### 2. Fine+Glide hold fires in any active mode
-
-`scrub_hold_pending_` in `Common()` runs unconditionally. Holding Fine+Glide 1.5s while in Channel Edit, Glide Editor, or armed state forces `perf_page_active_ = true`. Channel Edit / Glide Editor remains active in the background and resumes when Perf Page exits via Play.
+`scrub_hold_pending_` now guards against `clear_mode_active_ || global_settings_active_ || channel_edit_active_ || glide_editor_active_`. Perf Page is not blocked (to allow re-entry of Perf Settings from within Perf Page). Entry from Clear Mode, Channel Edit, Global Settings, and Glide Editor is now silently blocked.
 
 ### 3. Glide ignored when armed Trigger
 

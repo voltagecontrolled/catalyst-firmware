@@ -100,6 +100,8 @@ These features exist in the firmware but have not been user-tested yet. Each ite
 - **SHIFT+PAGE navigation** (alpha13): confirm page navigation works in normal mode, armed mode (all channel types), and Channel Edit. While Shift held: page buttons should show current page lit (not chaselight); encoder LEDs should show playhead colors with focused channel blinking. After navigating, chaselight should track the new page correctly.
 - **Chaselight focus from encoder wiggle** (alpha13): in main mode (unarmed, no step held), wiggling an encoder without holding a page button should update which channel's chaselight is shown on the page buttons. Confirm no steps are edited during this wiggle.
 - **Channel Edit page sync** (alpha13): on entering Channel Edit, the page buttons chaselight should be visible immediately (no "chaselight gone" after cross-mode page navigation). Test: go to Performance Page, navigate to page 2, exit, enter Channel Edit — chaselight should show on the correct page for the focused channel.
+- **16th-note clock rate** (alpha14): tap 120 BPM → sequence should run at 16th-note speed (8-step pattern completes twice per bar). Confirm BPM color zones still feel correct at musical tempos.
+- **Modal blocking** (alpha15): while in Channel Edit, confirm SHIFT+CHAN does nothing and Fine+Glide does nothing. While in Performance Page, confirm SHIFT+CHAN does nothing. While in Global Settings, confirm Fine+Glide does nothing. Confirm Armed → Channel Edit still works (SHIFT+CHAN short tap while a channel is armed).
 
 ### Core features never formally tested
 - **External clock sync**: patch a clock into Clock In; confirm VoltSeq locks to it, Reset jack resets all channels.
@@ -138,17 +140,7 @@ Saving to flash (`SaveMacro` / `SaveShared`) is synchronous and blocks the CPU f
 
 ## UX Cleanup
 
-Items identified during the alpha13 mode-state audit (`docs/VOLTSEQ-MODES.md`). All are candidates for cleanup but none have been acted on — do a full review before changing anything.
-
-### Modal entry timers fire in any active mode
-
-The SHIFT+CHAN hold timer (`shift_chan_hold_pending_`) and the Fine+Glide hold timer (`scrub_hold_pending_` in `Common()`) both run unconditionally regardless of which mode is currently active. This means:
-
-- SHIFT+CHAN held 2s while in Perf Page → enters Global Settings (Perf Page dormant in background)
-- SHIFT+CHAN short tap while in Glide Step Editor → Channel Edit and Glide Editor both flagged active simultaneously; Channel Edit wins by priority; Glide Editor resumes on Channel Edit exit
-- Fine+Glide 1.5s while in Channel Edit → enters Perf Page; Channel Edit dormant in background, resumes on Perf Page exit
-
-Decide: should these entry combos be blocked while any other modal is active, or is the "stack and resume" behavior acceptable/desirable?
+Items identified during the alpha13 mode-state audit (`docs/VOLTSEQ-MODES.md`). Items below are still open — do a full review before changing anything.
 
 ---
 
