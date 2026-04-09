@@ -249,9 +249,9 @@ Hold **Shift** in normal mode and turn encoders to set sequencer-wide defaults. 
 
 ## Performance Page (Slider)
 
-**Entry:** Hold **Fine + Glide** for 1.5 seconds. Encoder LEDs light to confirm.
+**Entry:** Hold **Fine + Glide** for 1.5 seconds. Encoder LEDs light to confirm. Settings are shown immediately on entry.
 
-**Exit:** Hold **Fine + Glide** briefly (release before 1.5 s), or press **Play/Reset**.
+**Exit:** Press **Play/Reset**, or release **Fine + Glide** before the 1.5 s threshold.
 
 The Performance Page puts the Phase Scrub slider in control of an **orbit engine** that manipulates playback positions across channels.
 
@@ -266,9 +266,9 @@ The Performance Page puts the Phase Scrub slider in control of an **orbit engine
 
 Step editing still works in the Performance Page (hold a Page button and turn encoders).
 
-### Entering Performance Page Settings
+### Performance Page Settings
 
-From the Performance Page, hold **Fine + Glide** for another 1.5 seconds.
+Settings are shown immediately when entering the Performance Page.
 
 | Encoder | Parameter | LED |
 |---|---|---|
@@ -280,7 +280,7 @@ From the Performance Page, hold **Fine + Glide** for another 1.5 seconds.
 
 **Page buttons** toggle the per-channel orbit follow mask here as well (lit = follows).
 
-**Exit:** press **Fine + Glide** briefly or press **Play/Reset**. Settings save to flash.
+**Exit:** press **Play/Reset**, or release **Fine + Glide** briefly. Settings save to flash.
 
 ### Phase Scrub Lock
 
@@ -300,7 +300,7 @@ VoltSeq saves automatically at the following moments:
 - Channel Edit exited (Shift+Chan. or Play/Reset)
 - Glide Step Editor exited
 - Ratchet Step Editor exited
-- Performance Page Settings exited
+- Performance Page exited (Play/Reset or short Fine+Glide release)
 - Mode switched (shared mode saved)
 
 There is no manual save step required.

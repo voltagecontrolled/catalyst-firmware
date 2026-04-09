@@ -530,7 +530,8 @@ public:
 			if (Controls::TimeNow() - scrub_hold_start_ >= kScrubHoldTicks) {
 				scrub_hold_pending_ = false;
 				if (!perf_page_active_) {
-					perf_page_active_ = true;
+					perf_page_active_    = true;
+					perf_settings_active_ = true;
 					p.shared.blinker.Set(3, 300); // entry confirmation flash
 				} else if (!perf_settings_active_) {
 					perf_settings_active_ = true;
@@ -564,6 +565,10 @@ public:
 			if (shift) {
 				shift_play_pending_ = true;
 				shift_play_press_t_ = Controls::TimeNow();
+			} else if (perf_page_active_) {
+				perf_page_active_     = false;
+				perf_settings_active_ = false;
+				p.shared.do_save_shared = true;
 			} else if (channel_edit_active_) {
 				channel_edit_active_   = false;
 				channel_edit_last_enc_ = 0xFF;
@@ -817,12 +822,7 @@ private:
 	// --- Performance Page ---
 
 	void UpdatePerfPage(bool fine) {
-		// Exit: Play/Reset, or short Fine+Glide (handled in Common)
-		if (c.button.play.just_went_high()) {
-			perf_page_active_     = false;
-			perf_settings_active_ = false;
-			return;
-		}
+		// Exit: Play (handled at top of Update), or short Fine+Glide (handled in Common)
 
 		// Perf Settings active: dispatch there
 		if (perf_settings_active_) {
@@ -1443,8 +1443,13 @@ public:
 					col = blink ? Palette::full_white : col;
 				c.SetEncoderLed(i, col);
 			}
+		} else if (p.AnyStepHeld()) {
+			// Step held for editing: show each channel's color at the held step so edits are visible live.
+			const uint8_t gs = GlobalStep(last_touched_step_);
+			for (auto i = 0u; i < Model::NumChans; i++)
+				c.SetEncoderLed(i, StepColorForChannel(i, gs));
 		} else {
-			// Unarmed: show each channel's value at its playhead step
+			// Unarmed idle: show each channel's color at its current playhead step
 			for (auto i = 0u; i < Model::NumChans; i++) {
 				const uint8_t ref_step = p.GetPlayhead(i);
 				c.SetEncoderLed(i, StepColorForChannel(i, ref_step));
