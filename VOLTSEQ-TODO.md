@@ -18,7 +18,12 @@ Backlog for VoltSeq firmware features, known bugs, and porting work.
 
 **Root cause:** `c.button.morph.just_went_high()` and `c.button.fine.just_went_high()` are consumed in `Common()` which runs before `Update()` every tick. By the time the shift-hold cancel check reads them, the events are already cleared. **Fixed in alpha10** by pre-reading `morph_jgh` and `fine_jgh` at the top of `Update()` alongside `bank_jgh` and `play_jgh`.
 
-**Still open:** The timer also starts if other buttons are *already held* when Shift goes high (e.g. holding Fine then pressing Shift). Should add `is_high()` checks on the `just_went_high()` guard line to prevent that case too.
+**Still open — entry mechanism needs redesign:** The 1.5s hold is fundamentally broken because Shift is used as a live modifier in Performance Page (freeze orbit) and elsewhere. Even with modal-state guards, the interaction is fragile. Consider replacing the hold with a less collision-prone combo:
+- **Double-tap Shift** — two quick presses; unlikely to fire accidentally
+- **Shift + Tap Tempo** — already used for CatSeq→VoltSeq mode switch, but only when both are held for 1s, so a short tap might be free
+- **Some other dedicated combo** — TBD
+
+Current hold-shift implementation should be treated as a placeholder until the entry combo is decided.
 
 ---
 
