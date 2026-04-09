@@ -17,7 +17,7 @@ VoltSeq uses the same physical panel as the Catalyst Sequencer. Panel controls a
 | Phase Scrub slider | CV recorder input / Performance page orbit |
 | Play/Reset | Play/Stop; Shift+Play = Reset/Clear |
 | Tap Tempo | Tap tempo |
-| Glide | GLIDE modifier (hold for glide/pulse-width/step editor) |
+| Glide | GLIDE modifier (hold for glide time / gate offset / pulse width) |
 | Chan. | Channel arm / Channel Edit |
 | Shift | Modifier; hold 1.5 s alone = Global Settings |
 | Fine | Fine-adjust modifier; Fine+Glide = Performance page / lock |
@@ -90,7 +90,7 @@ Hold **Shift + Play/Reset** for 600 ms. All page button LEDs and the Play LED sl
 
 Steps are organized into **8 pages of 8 steps** per channel, giving 64 total steps per channel.
 
-Page navigation is available inside any editor (Channel Edit, Glide Step Editor, Ratchet Step Editor, Performance Page) via **Shift + Page button N**.
+Page navigation is available inside any editor (Channel Edit, Ratchet Step Editor, Performance Page) via **Shift + Page button N**.
 
 > Page navigation is not available in the main mode while Shift is held — holding Shift alone for 1.5 s enters Global Settings instead.
 
@@ -166,14 +166,7 @@ Hold **Glide** to access per-channel live parameters:
 
 **Shift + Glide + encoder N:** offset all ratchet/repeat counts for Trigger channel N.
 
-### Glide Step Editor
-
-Hold **Glide** and **long-press** (600 ms) a **Page button** on a CV or Gate channel.
-
-- **Encoder N CW** = enable glide on step N; **CCW** = disable
-- For Gate channels: encoders adjust each step's gate length individually
-- **Shift + Page button** = navigate pages
-- **Glide** or **Play/Reset** = exit and save
+For CV channels, glide applies to all steps whenever glide time is non-zero — no per-step configuration required. Set glide time to 0 to disable.
 
 ### Ratchet Step Editor
 
@@ -298,7 +291,6 @@ VoltSeq saves automatically at these moments:
 - Play/Stop toggled
 - Global Settings exited
 - Channel Edit exited
-- Glide Step Editor exited
 - Ratchet Step Editor exited
 - Performance Page exited
 - Mode switched
@@ -317,7 +309,7 @@ VoltSeq saves automatically at these moments:
 | Armed CV | Each encoder: step CV color for current page; playing step blinks white |
 | Armed Gate/Trigger | Each encoder: step state for current page; playing step blinks white |
 | CHAN held (no page button) | Each encoder: channel type color |
-| Glide/Ratchet Step Editor | Active channel's page button blinks |
+| Ratchet Step Editor | Active channel's page button blinks |
 | Channel Edit — enc 1 | Brightness = output delay |
 | Channel Edit — enc 2 | Green/Orange/Yellow/Magenta = direction |
 | Channel Edit — enc 7 | Type/scale color |
@@ -354,7 +346,7 @@ VoltSeq saves automatically at these moments:
 | Channel Edit + **Shift + Page N** | Navigate to page N |
 | **Hold Glide + Encoder N** | Glide time / gate offset / pulse width for channel N |
 | **Hold Shift + Glide + Encoder N** | Offset all ratchet counts for Trigger channel N |
-| **Hold Glide + long-press Page N** (600 ms) | Enter Glide Step Editor (CV/Gate) or Ratchet Editor (Trigger) |
+| **Hold Glide + long-press Page N** (600 ms) | Enter Ratchet Step Editor (Trigger channels only) |
 | **Fine + Glide** (hold 1.5 s) | Enter Performance Page |
 | **Short Fine + Glide** (tap + release) | Toggle Phase Scrub Lock |
 | **Shift + Tap + Chan.** (hold 1 s) | Switch to VoltSeq mode |
