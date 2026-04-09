@@ -419,10 +419,10 @@ public:
 	void Common() override {
 		p.clock.bpm.external = c.sense.trig.is_high();
 
-		if (c.jack.trig.just_went_high())
-			p.clock.ExternalClockTick();
 		if (c.jack.reset.just_went_high())
 			p.Reset();
+		if (c.jack.trig.just_went_high())
+			p.clock.ExternalClockTick();
 		if (c.button.add.just_went_high())
 			p.clock.TapTempo();
 

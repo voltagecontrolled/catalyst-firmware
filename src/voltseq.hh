@@ -196,6 +196,13 @@ public:
 		channel_fired_.fill(false);
 		sub_counter_ = 0;
 	}
+
+	// Prime sub_counter_ so the next Update() tick fires channels immediately.
+	// Safe to call in external mode — sub_counter_ is overwritten each tick anyway.
+	void SyncStepClock() {
+		const uint32_t sub_period = std::max<uint32_t>(1u, bpm.GetBpmInTicks() / 4u);
+		sub_counter_ = sub_period;
+	}
 };
 
 // Per-channel gate output state (Gate channel type)
@@ -608,6 +615,7 @@ public:
 
 	void Play() {
 		playing = true;
+		clock.SyncStepClock();
 	}
 	void Stop() {
 		playing = false;
@@ -631,6 +639,7 @@ public:
 		gate_state    = {};
 		ratchet_state = {};
 		clock.ResetDividers();
+		clock.SyncStepClock();
 	}
 
 	// ---- Step-lock / arpeggiation API (called from UI) ----
