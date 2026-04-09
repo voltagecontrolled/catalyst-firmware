@@ -335,7 +335,7 @@ All 8 encoders control the focused channel (`edit_ch_`). Turning any encoder set
 
 **Entry:** Automatic on initial Perf Page entry. Re-entry: Fine+Glide 1.5s while already in Perf Page.
 
-**Exit:** Play/Reset (while perf_settings_active_) → `perf_settings_active_ = false` only (stays in Perf Page). Fine+Glide rising edge while Fine held → same.
+**Exit:** Play/Reset exits the whole Perf Page (handled at top of Update() — the `play_jgh` event is consumed before `UpdatePerfSettings` runs). Fine+Glide short tap triggers `DoLockToggle()` in `Common()` and does **not** exit Perf Settings.
 
 | Input | Action |
 |-------|--------|

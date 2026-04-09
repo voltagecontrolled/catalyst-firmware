@@ -981,17 +981,9 @@ private:
 	}
 
 	void UpdatePerfSettings() {
-		// Exit: Fine+Glide short (handled in Common) or Play
-		if (c.button.play.just_went_high()) {
-			p.shared.do_save_shared   = true;
-			perf_settings_active_     = false;
-			return;
-		}
-		if (c.button.fine.is_high() && c.button.morph.just_went_high()) {
-			p.shared.do_save_shared   = true;
-			perf_settings_active_     = false;
-			return;
-		}
+		// Exit: Play (handled at top of Update — exits Perf Page entirely).
+		// Fine+Glide short is handled in Common() as DoLockToggle; it does NOT exit
+		// Perf Settings, so the user stays in Settings after locking/unlocking.
 
 		// Encoder settings (mirrors ScrubSettings from sequencer)
 		ForEachEncoderInc(c, [this](uint8_t enc, int32_t inc) {
