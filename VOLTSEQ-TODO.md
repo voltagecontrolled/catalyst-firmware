@@ -32,8 +32,8 @@ This is symmetric on paper, but `slew_val[ch]` is always set to `out_cv` after e
 
 ---
 
-### Beat Repeat Mode is Non-Functional (Blue/Cyan modes in Performance Page)
-Root cause diagnosed and design options documented. See `docs/planned/VOLTSEQ-BEAT-REPEAT.md`.
+### Beat Repeat Mode — Fixed in alpha18 (Needs Hardware Verification)
+Root cause was that orbit-following channels only fired via their own clock dividers, not at the subdivision rate. Fix suppresses normal clock fires for orbit channels during beat repeat and drives them from the orbit advance timer. See `docs/planned/VOLTSEQ-BEAT-REPEAT.md` for the original diagnosis.
 
 ---
 
@@ -103,6 +103,8 @@ These features exist in the firmware but have not been user-tested yet. Each ite
 - **16th-note clock rate** (alpha14): tap 120 BPM → sequence should run at 16th-note speed (8-step pattern completes twice per bar). Confirm BPM color zones still feel correct at musical tempos.
 - **Modal blocking** (alpha15): while in Channel Edit, confirm SHIFT+CHAN does nothing and Fine+Glide does nothing. While in Performance Page, confirm SHIFT+CHAN does nothing. While in Global Settings, confirm Fine+Glide does nothing. Confirm Armed → Channel Edit still works (SHIFT+CHAN short tap while a channel is armed).
 - **Glide Step Editor removed** (alpha17): confirm Glide + page button (any hold duration) now only does Gate ratchet editing — no editor entry, no 600ms cliff. Confirm CV glide flags still work via armed CV + Glide held + enc N.
+- **Beat repeat firing at subdivision rate** (alpha18): enter Performance Page, select blue or cyan mode, commit a zone. Gate/Trigger channels in the follow mask should stutter at the subdivision rate (e.g., zone 4 = triplet 8th = 1.5× beat rate) rather than at the channel's own clock division. Confirm each zone produces audibly distinct repetition rates. Confirm gate duration scales to fit within the subdivision window. Confirm channels excluded from the orbit follow mask continue playing normally.
+- **Channel Edit page button focus (alpha19)**: tapping any page button in Channel Edit should immediately focus that channel and show passive length display — no delay, no long-press behavior. Confirm holding a page button for several seconds does NOT clear the channel. Confirm channel clearing still works via SHIFT+PLAY → Clear Mode.
 
 ### Core features never formally tested
 - **External clock sync**: patch a clock into Clock In; confirm VoltSeq locks to it, Reset jack resets all channels.
@@ -162,13 +164,6 @@ The wiki documents "Hold Page + turn Encoder" as working in Perf Page. Either fi
 
 ---
 
-### Channel Edit long-press clear is easy to trigger accidentally
-
-600ms is short — pressing a page button to focus a channel and pausing before releasing can clear all 64 steps with no undo. The 3-flash blinker fires after the clear, not before.
-
-Options: (a) increase the threshold (e.g., 1000–1500ms); (b) require a second confirmation gesture (turn an encoder, or press again); (c) add a "pending clear" visual warning during the hold window so the user knows what's about to happen.
-
----
 
 ### current_page_ bleeds between modes
 

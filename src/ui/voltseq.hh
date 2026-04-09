@@ -52,12 +52,8 @@ class Main : public Abstract {
 	EncoderAccel enc_accel_{};
 
 	// Long-press detection constants (shared by Channel Edit clear and any future long-press)
-	static constexpr uint8_t  kNoLongpressBtn  = 0xFF;
-	static constexpr uint32_t kLongpressMs     = 600u;
 
-	// Long-press detection in Channel Edit: hold page button to clear that channel's steps
-	Clock::Timer channel_edit_clear_timer_{kLongpressMs};
-	uint8_t      channel_edit_clear_btn_ = kNoLongpressBtn;
+
 	// Deadline (Controls::TimeNow) until the length-feedback display is shown in Channel Edit.
 	// Starts when encoder 2 (Length) is turned; display reverts to normal after ~600 ms.
 	uint32_t     length_display_until_ = 0;
@@ -920,7 +916,7 @@ private:
 
 	// --- Performance Page ---
 
-	void UpdatePerfPage(bool fine) {
+	void UpdatePerfPage(bool /*fine*/) {
 		// Exit: Play (handled at top of Update), or short Fine+Glide (handled in Common)
 
 		// Perf Settings active: dispatch there
@@ -946,22 +942,6 @@ private:
 			}
 		}
 
-		// Encoder step editing still works in perf page (same as normal)
-		if (p.AnyStepHeld()) {
-			ForEachEncoderInc(c, [&](uint8_t enc, int32_t inc) {
-				for (auto i = 0u; i < Model::NumChans; i++) {
-					if (!c.button.scene[i].is_high()) continue;
-					const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));
-					const auto    type = p.GetData().channel[enc].type;
-					if (type == ChannelType::CV)
-						EditCvStep(enc, gs, inc, fine);
-					else if (type == ChannelType::Gate)
-						EditGateStep(enc, gs, inc, fine);
-					else
-						EditTrigStep(enc, gs, inc);
-				}
-			});
-		}
 	}
 
 	void UpdatePerfSettings() {
@@ -1109,33 +1089,13 @@ private:
 			return;
 		}
 
-		// Page button: tap = focus channel, hold (600 ms) = clear that channel's steps
-		if (channel_edit_clear_btn_ != kNoLongpressBtn) {
-			const uint8_t btn = channel_edit_clear_btn_;
-			if (!c.button.scene[btn].is_high()) {
-				// Released before long-press: focus channel and show length passively for 600 ms
-				edit_ch_                = btn;
-				channel_edit_last_enc_  = 2; // pre-select length encoder for passive display
-				length_display_until_   = Controls::TimeNow() + Clock::MsToTicks(600);
-				channel_edit_clear_btn_ = kNoLongpressBtn;
-				return;
-			}
-			if (channel_edit_clear_timer_.Check()) {
-				// Held long enough: clear all steps for this channel
-				ClearChannel(btn);
-				edit_ch_                = btn;
-				channel_edit_last_enc_  = 0xFF;
-				length_display_until_   = 0;
-				channel_edit_clear_btn_ = kNoLongpressBtn;
-				return;
-			}
-			return; // still waiting for timer or release
-		}
-
+		// Page button: tap = focus channel and show length passively for 600 ms.
+		// Channel clearing is done via SHIFT+PLAY → Clear Mode (not here).
 		for (auto [i, btn] : countzip(c.button.scene)) {
 			if (btn.just_went_high()) {
-				channel_edit_clear_btn_ = static_cast<uint8_t>(i);
-				channel_edit_clear_timer_.SetAlarm();
+				edit_ch_               = static_cast<uint8_t>(i);
+				channel_edit_last_enc_ = 2; // pre-select length encoder for passive display
+				length_display_until_  = Controls::TimeNow() + Clock::MsToTicks(600);
 				return;
 			}
 		}

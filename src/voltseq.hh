@@ -218,20 +218,23 @@ class Interface {
 	bool                                      orbit_ping_dir_        = true;
 	std::array<uint8_t, Model::NumChans>      orbit_step_{};
 	std::array<uint8_t, Model::NumChans>      orbit_step_prev_{};
-	uint32_t                                  beat_repeat_countdown_ = 0;
-	float                                     beat_repeat_phase_     = 0.f;
+	uint32_t                                  beat_repeat_countdown_   = 0;
+	float                                     beat_repeat_phase_       = 0.f;
+	uint32_t                                  beat_repeat_safe_period_ = 0u;
 
 	// ---- Orbit engine ----
 
 	// Advance orbit_pos and compute per-channel orbit_step[] each tick.
+	// Returns true when the orbit position advanced this tick (used by UpdateClock to drive
+	// gate/trigger fires at the subdivision rate during beat repeat).
 	// Called from UpdateClock() after the normal clock advance.
-	void UpdateOrbit(bool master_ticked) {
+	bool UpdateOrbit(bool master_ticked) {
 		const auto perf_mode = shared.data.slider_perf_mode;
 		if (perf_mode == 0) {
 			orbit_active_          = false;
 			beat_repeat_countdown_ = 0;
 			beat_repeat_phase_     = 0.f;
-			return;
+			return false;
 		}
 
 		// Beat period in main-loop ticks (3kHz).  Use averaged external interval when clocked
@@ -267,6 +270,7 @@ class Interface {
 				const uint32_t safe_period =
 				    is_cyan ? std::max<uint32_t>(1u, beat_period * div_num_4[zone] / div_denom_4[zone])
 				            : std::max<uint32_t>(1u, beat_period * div_num_8[zone] / div_denom_8[zone]);
+				beat_repeat_safe_period_ = safe_period;
 
 				if (beat_repeat_countdown_ == 0) {
 					const bool first_entry = shared.beat_repeat_snap_pending;
@@ -356,6 +360,7 @@ class Interface {
 				orbit_step_[ch] = static_cast<uint8_t>((center_step + pos_in_window) % len);
 			}
 		}
+		return orbit_should_adv;
 	}
 
 	// ---- internal helpers ----
@@ -417,7 +422,9 @@ class Interface {
 	// Set up gate output for channel ch when its step fires.
 	// Gate step value encoding: high byte = gate length (0=off, 1–255 ≈ 0.4%–100%);
 	//                           low byte  = ratchet count (0 or 1 = single gate, 2–8 = N pulses per step).
-	void FireGate(uint8_t ch, uint8_t step_idx) {
+	// period_override: if non-zero, use this as the step period instead of StepPeriodTicks(ch).
+	//                  Used by FireOrbitStep during beat repeat to match the subdivision rate.
+	void FireGate(uint8_t ch, uint8_t step_idx, uint32_t period_override = 0u) {
 		const auto &cs    = data.channel[ch];
 		const auto  raw   = data.steps[PageOf(step_idx)][StepInPage(step_idx)][ch];
 		const auto gate_len_byte = static_cast<uint8_t>(raw >> 8);
@@ -430,7 +437,7 @@ class Interface {
 		const uint8_t count       = (ratchet_byte >= 2u) ? ratchet_byte : 1u;
 		const uint32_t delay      = Clock::MsToTicks(cs.output_delay_ms);
 		const uint32_t now        = Controls::TimeNow();
-		const uint32_t period     = StepPeriodTicks(ch);
+		const uint32_t period     = period_override > 0u ? period_override : StepPeriodTicks(ch);
 		const uint32_t interval   = (count > 1u && period > 0u) ? (period / count) : period;
 		const uint32_t dur        = static_cast<uint32_t>(frac * interval);
 		auto &gs = gate_state[ch];
@@ -453,8 +460,10 @@ class Interface {
 		rs.pulse_off_tick = Controls::TimeNow() + pulse_ticks;
 	}
 
-	// Set up ratchet/repeat output for channel ch when its step fires
-	void FireTrigger(uint8_t ch, uint8_t step_idx) {
+	// Set up ratchet/repeat output for channel ch when its step fires.
+	// period_override: if non-zero, use this as the step period instead of StepPeriodTicks(ch).
+	//                  Used by FireOrbitStep during beat repeat to match the subdivision rate.
+	void FireTrigger(uint8_t ch, uint8_t step_idx, uint32_t period_override = 0u) {
 		const auto &cs  = data.channel[ch];
 		const auto  raw = data.steps[PageOf(step_idx)][StepInPage(step_idx)][ch];
 		const auto  val = static_cast<int8_t>(raw & 0xFF);
@@ -470,7 +479,7 @@ class Interface {
 		if (val > 0) {
 			// Ratchet: val pulses subdivided within step period
 			const auto count         = static_cast<uint8_t>(val);
-			const uint32_t period    = StepPeriodTicks(ch);
+			const uint32_t period    = period_override > 0u ? period_override : StepPeriodTicks(ch);
 			const uint32_t interval  = period > 0 ? period / count : 1u;
 			rs.total_count      = count;
 			rs.fired_count      = 0;
@@ -485,11 +494,22 @@ class Interface {
 			rs.fired_count      = 0;
 			rs.repeat_remaining = static_cast<uint8_t>(-val);
 			rs.next_fire_tick   = now + delay;
-			rs.interval_ticks   = StepPeriodTicks(ch);
+			rs.interval_ticks   = period_override > 0u ? period_override : StepPeriodTicks(ch);
 			rs.pulse_high       = false;
 			rs.pulse_off_tick   = 0;
 		}
 		(void)pulse_ticks; // used in UpdateTriggers()
+	}
+
+	// Fire the gate/trigger for channel ch at orbit_step_[ch], using beat_repeat_safe_period_
+	// for gate duration and ratchet interval timing instead of StepPeriodTicks(ch).
+	// Only called by UpdateClock when the orbit advances during beat repeat.
+	void FireOrbitStep(uint8_t ch) {
+		const auto step = orbit_step_[ch];
+		if (data.channel[ch].type == ChannelType::Gate)
+			FireGate(ch, step, beat_repeat_safe_period_);
+		else if (data.channel[ch].type == ChannelType::Trigger)
+			FireTrigger(ch, step, beat_repeat_safe_period_);
 	}
 
 	// Called when channel ch's divider fires and we are playing
@@ -736,15 +756,29 @@ public:
 
 		if (master_ticked && AnyStepHeld())
 			TickArp();
+
+		// During beat repeat (perf_mode 2 or 3), orbit-following channels are driven by the
+		// orbit advance timer rather than their own clock dividers.  Suppress OnChannelFired for
+		// those channels here; FireOrbitStep fires them below when the orbit advances.
+		const bool beat_repeat_active = (shared.data.slider_perf_mode >= 2);
 		if (playing) {
 			for (auto ch = 0u; ch < Model::NumChans; ch++) {
-				if (clock.ChannelFired(ch))
+				if (clock.ChannelFired(ch)) {
+					if (beat_repeat_active && OrbitActiveForChannel(ch))
+						continue;
 					OnChannelFired(ch);
+				}
 			}
 		}
 		UpdateGates();
 		UpdateTriggers();
-		UpdateOrbit(master_ticked);
+		const bool orbit_advanced = UpdateOrbit(master_ticked);
+		if (playing && orbit_advanced && beat_repeat_active) {
+			for (auto ch = 0u; ch < Model::NumChans; ch++) {
+				if (OrbitActiveForChannel(ch))
+					FireOrbitStep(ch);
+			}
+		}
 		return master_ticked;
 	}
 

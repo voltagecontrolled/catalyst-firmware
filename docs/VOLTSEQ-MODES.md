@@ -19,13 +19,6 @@ channel_edit_last_enc_ uint8_t             last encoder turned in Channel Edit (
 length_display_until_  uint32_t            tick deadline for passive length display in Channel Edit
 channel_edit_clear_btn_ uint8_t            page button held for long-press clear (kNoLongpressBtn = none)
 
-glide_editor_active_   bool
-glide_editor_ch_       uint8_t             channel being edited in Glide Step Editor
-
-glide_longpress_btn_   uint8_t             page button tracked in GLIDE modifier (kNoLongpressBtn = none)
-glide_longpress_shift_ bool                shift state when the page button was pressed
-glide_longpress_timer_ Clock::Timer        fires at 600 ms
-
 perf_page_active_      bool
 perf_settings_active_  bool                sub-mode within perf page
 
@@ -250,11 +243,11 @@ This is not a persistent mode — it is active only while Glide is physically he
 
 All other processing is skipped while Shift is held.
 
-### Sub-state: Page button press (tap = focus, hold = clear)
+### Sub-state: Page button press (tap = focus)
 
-`channel_edit_clear_btn_` tracks which button is held. On rising edge, the timer starts. On falling edge before 600ms: `edit_ch_ = btn`; passive length display for 600ms. At 600ms: `ClearChannel(btn)`.
+Rising edge: `edit_ch_ = btn`; passive length display for 600ms.
 
-Only one page button tracked at a time (no multi-press in Channel Edit).
+Channel clearing is done via SHIFT+PLAY → Clear Mode, not from Channel Edit.
 
 ### Sub-state: Encoder editing (normal)
 
@@ -319,7 +312,6 @@ All 8 encoders control the focused channel (`edit_ch_`). Turning any encoder set
 | None | Page button N | scrub_ignore_mask ^= (1<<N) |
 | Shift held | Page button N | NavigatePage(N) |
 | Shift held (beat-repeat) | (held) | freezes orbit_center and beat-repeat zone commitment |
-| Step held + Encoder N | Encoder N | EditCvStep / EditGateStep / EditTrigStep |
 
 **LED — Page buttons:** scrub_ignore_mask bits — lit = channel follows orbit.
 
@@ -430,11 +422,11 @@ While playing: writes to shadow step (current playing position). While stopped: 
 
 ### 1. ~~SHIFT+CHAN hold fires in any active mode~~ — Resolved
 
-`shift_chan_hold_pending_` now guards against all modal flags (`clear_mode_active_ || global_settings_active_ || perf_page_active_ || channel_edit_active_ || glide_editor_active_`). The timer only arms from Main Mode or Armed Mode. Armed is not a modal, so Armed → Channel Edit still works.
+`shift_chan_hold_pending_` now guards against all modal flags (`clear_mode_active_ || global_settings_active_ || perf_page_active_ || channel_edit_active_`). The timer only arms from Main Mode or Armed Mode. Armed is not a modal, so Armed → Channel Edit still works.
 
 ### 2. ~~Fine+Glide hold fires in any active mode~~ — Resolved
 
-`scrub_hold_pending_` now guards against `clear_mode_active_ || global_settings_active_ || channel_edit_active_ || glide_editor_active_`. Perf Page is not blocked (to allow re-entry of Perf Settings from within Perf Page). Entry from Clear Mode, Channel Edit, Global Settings, and Glide Editor is now silently blocked.
+`scrub_hold_pending_` now guards against `clear_mode_active_ || global_settings_active_ || channel_edit_active_`. Perf Page is not blocked (to allow re-entry of Perf Settings from within Perf Page). Entry from Clear Mode, Channel Edit, and Global Settings is now silently blocked.
 
 ### 3. Glide ignored when armed Trigger
 
@@ -450,11 +442,9 @@ While playing: writes to shadow step (current playing position). While stopped: 
 - Glide wins (per-step glide flag editing)
 - Shift+enc 4/6 (range/scale/page) is inaccessible while Glide is held
 
-### 5. Page button in UpdatePerfPage does not set step held
+### 5. ~~Dead step-edit block in UpdatePerfPage~~ — Resolved
 
-In `UpdatePerfPage`, page buttons toggle `scrub_ignore_mask` on any press regardless of whether a step-edit is intended. The code then falls through to check `p.AnyStepHeld()` for encoder editing. But since page button presses are consumed by the mask toggle, holding a page button then turning an encoder does NOT work in Perf Page — `scene[i].is_high()` returns true (button is held) but the step-edit check uses `p.AnyStepHeld()` which depends on `SetStepHeld()` being called, which never happens in Perf Page.
-
-Actually, re-reading the code — `p.AnyStepHeld()` tracks logical step holds set via `p.SetStepHeld()`, not physical button states. Since Perf Page never calls `SetStepHeld`, `AnyStepHeld()` is always false there. The `ForEachEncoderInc` block in `UpdatePerfPage` is unreachable. Step editing via hold-page+encoder is broken in Perf Page despite being documented.
+The unreachable `ForEachEncoderInc` block (guarded by `p.AnyStepHeld()`, which is always false in Perf Page since `SetStepHeld` is never called there) has been removed. Step editing via hold-page+encoder is not supported in Perf Page; wiki updated accordingly.
 
 ### 6. current_page_ is shared state across all modes
 
@@ -467,9 +457,9 @@ Actually, re-reading the code — `p.AnyStepHeld()` tracks logical step holds se
 
 SHIFT+PLAY while armed starts `shift_play_pending_`, which can enter Clear Mode. `armed_ch_` is not cleared. After Clear Mode exits, `armed_ch_` is still set and armed mode resumes. This is functionally harmless but may be surprising.
 
-### 8. Channel Edit long-press clear vs. page focus race
+### 8. ~~Channel Edit long-press clear vs. page focus race~~ — Resolved
 
-In Channel Edit, pressing a page button starts the long-press clear timer. If the user intends to focus a channel (short tap) but holds slightly too long (≥600ms), all steps for that channel are cleared with no undo. There is a 3-flash blinker confirmation but no hold-to-confirm or two-step gesture.
+Page button in Channel Edit is now tap-to-focus only (immediate on rising edge). Channel clearing is exclusively via SHIFT+PLAY → Clear Mode, which has an explicit blink warning and confirmation gesture.
 
 ### 9. save_macro deferred while playing
 

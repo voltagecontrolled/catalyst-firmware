@@ -191,9 +191,7 @@ Hold **Glide** (unarmed) to access per-channel live parameters.
 
 **Entry:** From the main mode or while armed — press and release **Shift + Chan.** (short tap — release before 2 seconds). A 2-second hold enters Global Settings instead.
 
-Press a **Page button** to focus that channel. Encoders edit per-channel settings for the focused channel.
-
-**Long-press** (600 ms) a Page button to **clear all steps** for that channel.
+Press a **Page button** to focus that channel. Encoders edit per-channel settings for the focused channel. To clear a channel's steps, use **Shift + Play → Clear Mode** (see above).
 
 **Page buttons** show a chaselight for the focused channel's current playing position. While **Shift is held**, the page buttons switch to a page indicator (currently selected page lights solid) so you can orient yourself before navigating.
 
