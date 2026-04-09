@@ -18,12 +18,11 @@ Backlog for VoltSeq firmware features, known bugs, and porting work.
 
 **Root cause:** `c.button.morph.just_went_high()` and `c.button.fine.just_went_high()` are consumed in `Common()` which runs before `Update()` every tick. By the time the shift-hold cancel check reads them, the events are already cleared. **Fixed in alpha10** by pre-reading `morph_jgh` and `fine_jgh` at the top of `Update()` alongside `bank_jgh` and `play_jgh`.
 
-**Still open — entry mechanism needs redesign:** The 1.5s hold is fundamentally broken because Shift is used as a live modifier in Performance Page (freeze orbit) and elsewhere. Even with modal-state guards, the interaction is fragile. Consider replacing the hold with a less collision-prone combo:
-- **Double-tap Shift** — two quick presses; unlikely to fire accidentally
-- **Shift + Tap Tempo** — already used for CatSeq→VoltSeq mode switch, but only when both are held for 1s, so a short tap might be free
-- **Some other dedicated combo** — TBD
+**Proposed fix — SHIFT+CHAN hold (2s) for Global Settings:**
+- **Short SHIFT+CHAN** (tap) → Channel Edit (already works)
+- **Long SHIFT+CHAN** (hold ≥ 2s) → Global Settings
 
-Current hold-shift implementation should be treated as a placeholder until the entry combo is decided.
+This is natural (same modifier, deeper hold = deeper menu), avoids all conflicts with Performance Page Shift usage, and removes the dedicated hold-Shift-alone timer entirely. Implementation: in the SHIFT+CHAN handler, start a 2s timer on the first tick both are held; if they're still held at 2s, enter global settings instead of Channel Edit; if released before 2s, enter Channel Edit as today. Remove `shift_hold_pending_` / `kGlobalSettingsHoldTicks` entirely.
 
 ---
 
