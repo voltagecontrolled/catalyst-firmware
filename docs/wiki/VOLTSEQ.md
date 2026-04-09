@@ -132,6 +132,8 @@ The slider maps across the channel's configured **Range**.
 
 **Encoder N:** directly edits step N's CV value. Fine = sub-semitone; fast spinning accelerates.
 
+**Glide held while armed:** encoder LEDs switch to show per-step glide flags (white = glide on, dim = off). Turn encoder N CW to enable glide on step N; CCW to disable. Glide time (the slew duration) is set separately via the unarmed GLIDE modifier.
+
 **Shift held while armed:**
 
 | Encoder | Panel label | Parameter |
@@ -166,7 +168,7 @@ Hold **Glide** to access per-channel live parameters:
 
 **Shift + Glide + encoder N:** offset all ratchet/repeat counts for Trigger channel N.
 
-For CV channels, glide applies to all steps whenever glide time is non-zero — no per-step configuration required. Set glide time to 0 to disable.
+For CV channels, glide time is a channel-level setting (how long the slew takes). Which steps actually slew is controlled per-step while armed — see **Armed CV Channel** below.
 
 ### Ratchet Step Editor
 
@@ -346,6 +348,7 @@ VoltSeq saves automatically at these moments:
 | Channel Edit + **Shift + Page N** | Navigate to page N |
 | **Hold Glide + Encoder N** | Glide time / gate offset / pulse width for channel N |
 | **Hold Shift + Glide + Encoder N** | Offset all ratchet counts for Trigger channel N |
+| Armed CV + **Hold Glide + Encoder N** | Enable (CW) / disable (CCW) glide on step N |
 | **Hold Glide + long-press Page N** (600 ms) | Enter Ratchet Step Editor (Trigger channels only) |
 | **Fine + Glide** (hold 1.5 s) | Enter Performance Page |
 | **Short Fine + Glide** (tap + release) | Toggle Phase Scrub Lock |

@@ -708,8 +708,8 @@ public:
 			return;
 		}
 
-		// --- GLIDE modifier ---
-		if (c.button.morph.is_high()) {
+		// --- GLIDE modifier (unarmed only — armed CV handles Glide internally for per-step flags) ---
+		if (c.button.morph.is_high() && !armed_ch_.has_value()) {
 			UpdateGlideModifier(shift, fine);
 			return;
 		}
@@ -806,6 +806,15 @@ private:
 
 	void UpdateArmedCV(uint8_t ch, bool fine) {
 		auto &cs = p.GetData().channel[ch];
+
+		// Glide held: encoder N sets (CW) or clears (CCW) the per-step glide flag for step N.
+		// Glide time is set separately via the unarmed Glide modifier (Glide + encoder in normal mode).
+		if (c.button.morph.is_high()) {
+			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
+				p.SetGlideFlag(ch, GlobalStep(enc), dir > 0);
+			});
+			return;
+		}
 
 		if (c.button.shift.is_high()) {
 			// Shift held: enc 4 (panel 5, Range) adjusts the channel voltage range;
@@ -1508,20 +1517,28 @@ public:
 				c.SetEncoderLed(i, col);
 			}
 		} else if (armed) {
-			// CV armed: each encoder shows that step's CV value color for the armed channel,
-			// with the currently playing step highlighted (chaselight).
-			// A held page button suppresses the chase blink so the static color is visible while editing.
-			const auto ph       = p.GetPlayhead(ch);
-			const bool on_page  = (ph / Model::NumChans == current_page_);
-			const uint8_t chase = on_page ? static_cast<uint8_t>(ph % Model::NumChans) : 0xFF;
-			const bool blink    = (Controls::TimeNow() >> 8) & 1u;
+			// CV armed + Glide held: show per-step glide flags (white = glide on, dim grey = off)
+			if (c.button.morph.is_high()) {
+				for (auto i = 0u; i < Model::NumChans; i++) {
+					const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));
+					c.SetEncoderLed(i, p.GlideFlag(ch, gs) ? Palette::full_white : Palette::dim_grey);
+				}
+			} else {
+				// CV armed: each encoder shows that step's CV value color for the armed channel,
+				// with the currently playing step highlighted (chaselight).
+				// A held page button suppresses the chase blink so the static color is visible while editing.
+				const auto ph       = p.GetPlayhead(ch);
+				const bool on_page  = (ph / Model::NumChans == current_page_);
+				const uint8_t chase = on_page ? static_cast<uint8_t>(ph % Model::NumChans) : 0xFF;
+				const bool blink    = (Controls::TimeNow() >> 8) & 1u;
 
-			for (auto i = 0u; i < Model::NumChans; i++) {
-				const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));
-				Color col        = StepColorForChannel(ch, gs);
-				if (i == chase && !c.button.scene[i].is_high())
-					col = blink ? Palette::full_white : col;
-				c.SetEncoderLed(i, col);
+				for (auto i = 0u; i < Model::NumChans; i++) {
+					const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));
+					Color col        = StepColorForChannel(ch, gs);
+					if (i == chase && !c.button.scene[i].is_high())
+						col = blink ? Palette::full_white : col;
+					c.SetEncoderLed(i, col);
+				}
 			}
 		} else if (p.AnyStepHeld()) {
 			// Step held for editing: show each channel's color at the held step so edits are visible live.
