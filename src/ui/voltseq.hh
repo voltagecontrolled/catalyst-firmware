@@ -1629,11 +1629,16 @@ public:
 
 		// --- Phase Scrub Lock indicator: enc 7 (panel 8) ---
 		// Shown in all states except Performance Page (which has its own enc 7 display).
-		// Red = locked; blinks red during pickup (slider not yet reached locked position).
+		// Matches CatSeq behavior: rapid red flash on toggle, while slider moves when locked,
+		// and during pickup. Silent when locked and idle.
 		if (!perf_page_active_) {
-			if (phase_locked_) {
-				const bool blink = (Controls::TimeNow() >> 8) & 1u;
-				c.SetEncoderLed(7, picking_up_ ? (blink ? Palette::red : Palette::off) : Palette::red);
+			const auto t            = Controls::TimeNow();
+			const bool just_toggled = (t - lock_toggle_time_) < kToggleFeedbackTicks;
+			const bool slider_active = phase_locked_
+			                        && (t - last_slider_move_time_) < kSliderActiveTicks
+			                        && last_slider_move_time_ != 0;
+			if (just_toggled || slider_active || picking_up_) {
+				c.SetEncoderLed(7, ((t >> 7) & 1u) ? Palette::red : Palette::off);
 			}
 		}
 	}
