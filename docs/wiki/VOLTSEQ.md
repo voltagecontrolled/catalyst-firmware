@@ -90,9 +90,9 @@ Hold **Shift + Play/Reset** for 600 ms. All page button LEDs and the Play LED sl
 
 Steps are organized into **8 pages of 8 steps** per channel, giving 64 total steps per channel.
 
-Page navigation is available inside any editor (Channel Edit, Glide Step Editor, Performance Page) via **Shift + Page button N**.
+**Shift + Page button N** navigates to page N in every mode: normal, armed (any channel type), Channel Edit, Glide Step Editor, and Performance Page.
 
-> Page navigation is not available in the main mode while Shift is held — holding Shift alone for 1.5 s enters Global Settings instead.
+While Shift is held (in normal or armed mode), the page buttons switch to a **navigation indicator**: the currently selected page button lights solid, and the encoder LED for the currently tracked channel blinks to confirm which channel's chaselight you are viewing. Pressing any page button in this state navigates without editing any steps.
 
 ### Step Editing
 
@@ -108,7 +108,11 @@ Channels shorter than the current page wrap to their equivalent position — a T
 
 ### Chaselight
 
-In the main mode (unarmed), the **page button LEDs** show the current playhead position for the most recently edited channel. The tracked channel updates whenever you turn an encoder while a page button is held.
+In the main mode (unarmed), the **page button LEDs** show the current playhead position for the most recently focused channel.
+
+The tracked channel updates two ways:
+- **Turn an encoder while holding a page button** — edits a step and focuses that encoder's channel.
+- **Turn an encoder without holding any page button** — focuses that channel without editing anything. Use this to quickly aim the chaselight at any channel while playing.
 
 ---
 
@@ -177,13 +181,13 @@ For CV channels, glide time is a channel-level setting (how long the slew takes)
 
 ## Channel Edit
 
-**Entry:** Hold **Shift + Chan.**
+**Entry:** Press and release **Shift + Chan.** (short tap — release before 2 seconds). A 2-second hold enters Global Settings instead.
 
 Press a **Page button** to focus that channel. Encoders edit per-channel settings for the focused channel.
 
 **Long-press** (600 ms) a Page button to **clear all steps** for that channel.
 
-**Page buttons** show a chaselight for the focused channel's current playing position, so you can verify direction changes are taking effect while the sequence runs.
+**Page buttons** show a chaselight for the focused channel's current playing position. While **Shift is held**, the page buttons switch to a page indicator (currently selected page lights solid) so you can orient yourself before navigating.
 
 | Encoder | Panel label | Parameter | Notes |
 |---|---|---|---|
@@ -196,7 +200,7 @@ Press a **Page button** to focus that channel. Encoders edit per-channel setting
 | 7 | Transpose | Channel type / scale | CV scales → Gate → Trigger; LED = type color |
 | 8 | Random | Random amount | 0–100%; LED brightness = amount |
 
-**Exit:** **Shift + Chan.** or **Play/Reset** — saves and returns.
+**Exit:** **Shift + Chan.** (short tap) or **Play/Reset** — saves and returns.
 
 > Phase rotate is destructive with no undo.
 
@@ -204,7 +208,7 @@ Press a **Page button** to focus that channel. Encoders edit per-channel setting
 
 ## Global Settings
 
-**Entry:** Hold **Shift** alone for **1.5 seconds** (any other button press during the hold cancels it). All other Shift combos — Shift+Play, Shift+Chan, etc. — work normally.
+**Entry:** Hold **Shift + Chan.** for **2 seconds**. The hold is a two-button combo: press and hold both Shift and Chan. together; if either is released before 2 seconds, it fires as a short tap instead (which enters/exits Channel Edit). Any other button press during the hold cancels it.
 
 **Exit:** **Play/Reset** — saves and returns.
 
@@ -301,7 +305,8 @@ VoltSeq saves automatically at these moments:
 |---|---|
 | Main mode, unarmed | Each encoder: channel's current step color (playhead position) |
 | Main mode, step held for editing | Each encoder: that step's color across all channels |
-| Main mode, page buttons | Chaselight for most recently edited channel |
+| Main mode, page buttons | Chaselight for most recently focused channel |
+| Main mode, Shift held | Page buttons: current page lit solid; focused encoder blinks white |
 | Armed CV | Each encoder: step CV color for current page; playing step blinks white |
 | Armed Gate | Each encoder: step gate state; playing step blinks white |
 | Armed Gate + Glide held | Each encoder: per-step ratchet count (dim = none, bright green = high) |
@@ -312,9 +317,10 @@ VoltSeq saves automatically at these moments:
 | Channel Edit — enc 7 | Type/scale color |
 | Channel Edit — enc 8 | Brightness = random amount |
 | Channel Edit — page buttons | Chaselight for focused channel |
+| Channel Edit, Shift held | Page buttons: current page lit solid (not focused channel) |
 | Global Settings — enc 1 | Red = play/stop reset on, off = off |
 | Global Settings — enc 3 | Red = snap steps (8/16/32/64), orange = other, off = disabled |
-| Global Settings — enc 6 | Yellow pulse (white at snap BPM) = current BPM phase |
+| Global Settings — enc 6 | BPM color zone pulse (red <50, orange 50–79, yellow 80–99, green 100–119, blue 120–149, teal 150–179, lavender 180+) |
 | Global Settings — page buttons | Lit = reset leader channel |
 | Performance Page | Each encoder: channel's current output step color |
 | Perf Settings — enc 8 | Red = locked; blinks red during pickup |
@@ -328,11 +334,14 @@ VoltSeq saves automatically at these moments:
 | **Play/Reset** | Toggle play/stop |
 | **Shift + Play** (short) | Reset all channels to step 1 |
 | **Shift + Play** (hold 600 ms) | Enter Clear mode |
-| **Hold Shift alone (1.5 s)** | Enter Global Settings |
+| **Shift + Chan.** (short tap) | Enter/exit Channel Edit |
+| **Shift + Chan.** (hold 2 s) | Enter Global Settings |
 | **Chan. + Page N** | Arm channel N |
 | **Chan. + same Page N** | Disarm channel N |
 | **Play/Reset** while armed | Disarm (playback continues) |
-| **Shift + Chan.** | Enter/exit Channel Edit |
+| **Shift + Page N** | Navigate to page N (works in all modes) |
+| **Hold Shift** (normal/armed) | Page indicator on page buttons; focused encoder blinks |
+| **Wiggle encoder** (no step held) | Focus chaselight on that channel |
 | **Hold Page N + turn Encoder M** | Edit channel M's value at step N |
 | Armed CV + **Encoder N** | Edit step N's CV value |
 | Armed CV + **Shift + Enc 5** | Adjust channel range |
