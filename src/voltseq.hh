@@ -409,10 +409,9 @@ class Interface {
 
 	// Compute step period for channel ch in main-loop ticks.
 	// bpm_in_ticks = one quarter note at the current BPM (set by tap or encoder).
-	// Dividing by 2 makes each step an 8th note, matching standard eurorack convention
-	// where tap tempo represents quarter notes and sequences run at 8th-note resolution.
+	// Dividing by 4 makes each step a 16th note: tap the beat, steps run at 16th-note resolution.
 	uint32_t StepPeriodTicks(uint8_t ch) const {
-		return (data.bpm.bpm_in_ticks * data.channel[ch].division.Read()) / 2;
+		return (data.bpm.bpm_in_ticks * data.channel[ch].division.Read()) / 4;
 	}
 
 	// Set up gate output for channel ch when its step fires.
