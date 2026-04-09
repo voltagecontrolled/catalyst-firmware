@@ -1188,6 +1188,10 @@ private:
 
 public:
 	void PaintLeds(const Model::Output::Buffer & /*outs*/) override {
+		// Play LED: lit while playing (mirrors CatSeq behavior).
+		// Clear mode overrides this below with a blink pattern.
+		c.SetPlayLed(p.IsPlaying());
+
 		// --- Clear mode: all page buttons + play LED slow-blink ---
 		if (clear_mode_active_) {
 			for (auto i = 0u; i < Model::NumChans; i++)

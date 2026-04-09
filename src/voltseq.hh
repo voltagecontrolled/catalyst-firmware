@@ -153,21 +153,33 @@ public:
 	}
 
 	// Advance clock and per-channel dividers.  Returns true if the master (quarter-note) clock ticked.
-	// Channel step advances fire at 16th-note rate via sub_counter_ regardless of master tick.
+	//
+	// Internal clock: channels fire at 16th-note rate via sub_counter_ (bpm_in_ticks/4 per step).
+	// External clock: sub_counter_ is bypassed; channels fire directly on each incoming pulse.
+	//   bpm_in_ticks under external clock is the inter-pulse interval, NOT a quarter note, so
+	//   dividing it further by 4 would fire steps at 1/64th note rate — bypassing is essential.
 	bool Update(const std::array<ChannelSettings, Model::NumChans> &channels) {
 		const bool master_ticked = bpm.Update();
-		if (master_ticked)
-			sub_counter_ = 0; // re-sync sub-clock to master on each quarter note
-
 		channel_fired_.fill(false);
 
-		// 16th-note sub-clock: fire channel dividers every bpm_in_ticks/4 ticks.
-		const uint32_t sub_period = std::max<uint32_t>(1u, bpm.GetBpmInTicks() / 4u);
-		sub_counter_++;
-		if (sub_counter_ >= sub_period) {
+		if (bpm.external) {
+			// External clock: each incoming pulse fires channel dividers once.
+			// sub_counter_ is held at 0 so the internal sub-clock is clean on return to internal.
 			sub_counter_ = 0;
-			for (auto ch = 0u; ch < Model::NumChans; ch++) {
-				channel_fired_[ch] = dividers[ch].Update(channels[ch].division);
+			if (master_ticked) {
+				for (auto ch = 0u; ch < Model::NumChans; ch++)
+					channel_fired_[ch] = dividers[ch].Update(channels[ch].division);
+			}
+		} else {
+			// Internal clock: 16th-note sub-clock drives step advances.
+			if (master_ticked)
+				sub_counter_ = 0; // re-sync sub-clock to quarter-note master on each beat
+			const uint32_t sub_period = std::max<uint32_t>(1u, bpm.GetBpmInTicks() / 4u);
+			sub_counter_++;
+			if (sub_counter_ >= sub_period) {
+				sub_counter_ = 0;
+				for (auto ch = 0u; ch < Model::NumChans; ch++)
+					channel_fired_[ch] = dividers[ch].Update(channels[ch].division);
 			}
 		}
 
