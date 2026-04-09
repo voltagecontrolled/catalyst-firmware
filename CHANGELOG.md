@@ -244,6 +244,7 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 | alpha14 | Step clock rate changed to 16th-note resolution — `StepPeriodTicks` divides `bpm_in_ticks` by 4; tap tempo remains quarter-note input so tapping 120 BPM produces steps at 480 steps/min (16th notes at 120 BPM) |
 | alpha15 | Modal entry blocked from non-main states: SHIFT+CHAN (Channel Edit / Global Settings) and Fine+Glide (Performance Page) now silently ignore entry gestures while any modal is active; Armed → Channel Edit remains the one allowed cross-state entry; no modal stacking |
 | alpha16 | Fix phase scrub lock indicator to match CatSeq behavior (event-driven flash only: on toggle, while slider moves when locked, during pickup; silent when locked and idle); fix Fine+Glide short tap inside Perf Settings — was exiting to Perf Page normal before the lock toggle fired; now stays in Settings |
+| alpha17 | Remove Glide Step Editor — long-press Glide+page-button no longer enters a persistent editor; Glide+page-button held is now unambiguously Gate ratchet editing with no 600ms timing cliff; CV per-step glide flags remain accessible via armed CV + Glide + enc N; stale-timer collision #10 eliminated |
 
 **Deviations from spec (`docs/planned/VOLTSEQ.md`):**
 - Slider recording uses the channel Range parameter directly; separate `slider_base_v`/`slider_span_v` fields were removed.

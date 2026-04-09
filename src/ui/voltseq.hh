@@ -44,10 +44,6 @@ class Main : public Abstract {
 	uint8_t edit_ch_              = 0;    // focused channel (0-7) in Channel Edit
 	uint8_t channel_edit_last_enc_ = 0xFF; // last encoder turned (drives feedback display)
 
-	// Glide step editor state
-	bool    glide_editor_active_   = false;
-	uint8_t glide_editor_ch_       = 0;
-
 	// Bitmask: bit i set if an encoder was turned while step i was held (armed Trigger editing).
 	// Used to distinguish tap (toggle) from hold+edit (no toggle).
 	uint8_t trigger_step_enc_turned_ = 0;
@@ -55,12 +51,9 @@ class Main : public Abstract {
 	// Velocity-based encoder acceleration (bypassed in fine mode).
 	EncoderAccel enc_accel_{};
 
-	// Long-press detection for GLIDE + page button entry
+	// Long-press detection constants (shared by Channel Edit clear and any future long-press)
 	static constexpr uint8_t  kNoLongpressBtn  = 0xFF;
 	static constexpr uint32_t kLongpressMs     = 600u;
-	Clock::Timer               glide_longpress_timer_{kLongpressMs};
-	uint8_t                    glide_longpress_btn_   = kNoLongpressBtn;
-	bool                       glide_longpress_shift_ = false;
 
 	// Long-press detection in Channel Edit: hold page button to clear that channel's steps
 	Clock::Timer channel_edit_clear_timer_{kLongpressMs};
@@ -561,7 +554,7 @@ public:
 		const bool either_just = c.button.fine.just_went_high() || c.button.morph.just_went_high();
 		// Perf Page entry is allowed from Main Mode (armed or unarmed) and from within Perf Page
 		// itself (to re-enter Perf Settings). All other modals block entry.
-		const bool perf_entry_blocked = clear_mode_active_ || global_settings_active_ || channel_edit_active_ || glide_editor_active_;
+		const bool perf_entry_blocked = clear_mode_active_ || global_settings_active_ || channel_edit_active_;
 		if (both_held && either_just && !scrub_hold_pending_ && !perf_entry_blocked) {
 			scrub_hold_pending_ = true;
 			scrub_hold_start_   = Controls::TimeNow();
@@ -599,7 +592,7 @@ public:
 		// Channel Edit / Global Settings entry is allowed only from Main Mode (armed or unarmed).
 		// All other modals block entry — modals do not stack, except Armed → Channel Edit which
 		// is handled naturally since armed_ch_ is not a modal flag.
-		const bool any_modal = clear_mode_active_ || global_settings_active_ || perf_page_active_ || channel_edit_active_ || glide_editor_active_;
+		const bool any_modal = clear_mode_active_ || global_settings_active_ || perf_page_active_ || channel_edit_active_;
 		if (shift && bank_jgh && !any_modal) {
 			shift_chan_hold_pending_ = true;
 			shift_chan_hold_start_   = Controls::TimeNow();
@@ -650,9 +643,6 @@ public:
 				length_display_until_  = 0;
 				if (!p.IsPlaying()) p.shared.do_save_macro = true;
 				// else: save deferred to next play-stop toggle
-			} else if (glide_editor_active_) {
-				glide_editor_active_   = false;
-				if (!p.IsPlaying()) p.shared.do_save_macro = true;
 			} else if (armed_ch_.has_value()) {
 				armed_ch_                = std::nullopt;
 				trigger_step_enc_turned_ = 0;
@@ -694,7 +684,6 @@ public:
 			perf_page_active_        = false;
 			perf_settings_active_    = false;
 			channel_edit_active_     = false;
-			glide_editor_active_     = false;
 			clear_mode_active_       = false;
 			global_settings_active_   = false;
 			shift_chan_hold_pending_  = false;
@@ -730,11 +719,6 @@ public:
 			return;
 		}
 
-		// --- Glide / Ratchet step editors ---
-		if (glide_editor_active_) {
-			UpdateGlideEditor(fine);
-			return;
-		}
 		// --- GLIDE modifier (unarmed only — armed CV handles Glide internally for per-step flags) ---
 		if (c.button.morph.is_high() && !armed_ch_.has_value()) {
 			UpdateGlideModifier(shift, fine);
@@ -1066,51 +1050,16 @@ private:
 	// --- GLIDE modifier (called when c.button.morph is held) ---
 
 	void UpdateGlideModifier(bool shift, bool fine) {
-		// Track page-button presses for long-press detection
+		// Page button held + encoder: per-step ratchet edit for Gate channels
 		for (auto [i, btn] : countzip(c.button.scene)) {
-			if (btn.just_went_high()) {
-				glide_longpress_btn_   = static_cast<uint8_t>(i);
-				glide_longpress_shift_ = shift;
-				glide_longpress_timer_.SetAlarm();
+			if (btn.is_high()) {
+				const auto step_btn = static_cast<uint8_t>(i);
+				ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
+					if (p.GetData().channel[enc].type == ChannelType::Gate)
+						EditGateRatchet(enc, GlobalStep(step_btn), dir);
+				});
+				return;
 			}
-			if (static_cast<uint8_t>(i) == glide_longpress_btn_ && btn.just_went_low()) {
-				glide_longpress_btn_ = kNoLongpressBtn; // released before timer fired
-			}
-		}
-
-		// Check for long-press fire
-		if (glide_longpress_btn_ != kNoLongpressBtn && glide_longpress_timer_.Check()) {
-			const auto ch   = glide_longpress_btn_;
-			const bool was_shift = glide_longpress_shift_;
-			glide_longpress_btn_ = kNoLongpressBtn;
-			const auto type = p.GetData().channel[ch].type;
-
-			if (!was_shift) {
-				// Long-press: Glide Step Editor for CV or Gate channels
-				if (type == ChannelType::CV || type == ChannelType::Gate) {
-					glide_editor_active_ = true;
-					glide_editor_ch_     = ch;
-				}
-				// Trigger: no glide step editor (ratchet editing is done via armed mode or step+enc)
-			}
-			return;
-		}
-
-		// Step button held + encoder: per-step ratchet edit for Gate channels
-		// (consistency with normal step+enc for CV/Trigger editing)
-		if (glide_longpress_btn_ != kNoLongpressBtn) {
-			const auto step_btn = glide_longpress_btn_;
-			bool enc_turned = false;
-			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
-				auto &cs = p.GetData().channel[enc];
-				if (cs.type == ChannelType::Gate) {
-					EditGateRatchet(enc, GlobalStep(step_btn), dir);
-					enc_turned = true;
-				}
-			});
-			if (enc_turned)
-				glide_longpress_btn_ = kNoLongpressBtn; // cancel long-press once enc turned
-			return;
 		}
 
 		// No step held: encoder adjustments apply channel-level parameters
@@ -1132,40 +1081,6 @@ private:
 				}
 			}
 			(void)fine;
-		});
-	}
-
-	// --- Glide Step Editor ---
-
-	void UpdateGlideEditor(bool fine) {
-		// Exit: Play (handled at top of Update) or GLIDE press.  Do NOT exit on bare page button
-		// press — for channel 0, page button 0 is also step 1, making step 1 unreachable.
-		if (c.button.morph.just_went_high()) {
-			glide_editor_active_   = false;
-			p.shared.do_save_macro = true;
-			return;
-		}
-
-		// Page navigation while Shift held
-		if (c.button.shift.is_high()) {
-			for (auto [i, btn] : countzip(c.button.scene)) {
-				if (btn.just_went_high())
-					NavigatePage(static_cast<uint8_t>(i));
-			}
-			return;
-		}
-
-		const auto ch   = glide_editor_ch_;
-		const auto type = p.GetData().channel[ch].type;
-
-		ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
-			const uint8_t gs = GlobalStep(enc); // enc 0-7 maps to step 0-7 on current page
-			if (type == ChannelType::CV) {
-				// CW = set glide on, CCW = set glide off (no accel: binary flag)
-				p.SetGlideFlag(ch, gs, dir > 0);
-			} else if (type == ChannelType::Gate) {
-				EditGateStep(ch, gs, dir, fine);
-			}
 		});
 	}
 
@@ -1379,28 +1294,6 @@ public:
 			                        && last_slider_move_time_ != 0;
 			if (just_toggled || slider_active || picking_up_) {
 				c.SetEncoderLed(7, ((t >> 7) & 1u) ? Palette::red : Palette::off);
-			}
-			return;
-		}
-
-		// --- Glide Step Editor ---
-		if (glide_editor_active_) {
-			const auto ch   = glide_editor_ch_;
-			const auto type = p.GetData().channel[ch].type;
-			const bool blink = (Controls::TimeNow() >> 8) & 1u;
-			for (auto i = 0u; i < Model::NumChans; i++) {
-				// Page buttons: editor channel pulses
-				c.SetButtonLed(i, i == ch && blink);
-				// Encoder LEDs: CV = glide flag; Gate = gate length; Trigger = trig color
-				const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));
-				Color col;
-				if (type == ChannelType::CV)
-					col = p.GlideFlag(ch, gs) ? Palette::full_white : Palette::dim_grey;
-				else if (type == ChannelType::Gate)
-					col = GateStepColor(ch, gs);
-				else
-					col = TrigStepColor(ch, gs);
-				c.SetEncoderLed(i, col);
 			}
 			return;
 		}

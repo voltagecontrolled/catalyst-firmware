@@ -64,23 +64,21 @@ Priority  Condition                        Handler
   3       global_settings_active_           → UpdateGlobalSettings(), return
   4       perf_page_active_                 → UpdatePerfPage(), return
   5       channel_edit_active_              → UpdateChannelEdit(), return
-  6       glide_editor_active_              → UpdateGlideEditor(), return
-  7       morph held && !armed              → UpdateGlideModifier(), return
-  8       chan held                         → arm/disarm / type change, return
-  9       armed_ch_.has_value()             → UpdateArmed() (no return guard; falls through)
- 10       (else)                            → UpdateNormal()
+  6       morph held && !armed              → UpdateGlideModifier(), return
+  7       chan held                         → arm/disarm / type change, return
+  8       armed_ch_.has_value()             → UpdateArmed() (no return guard; falls through)
+  9       (else)                            → UpdateNormal()
 ──────────────────────────────────────────────────────────────────────
 ```
 
 **Pre-priority guards** (run at the very top of Update() before the chain):
 
-- `shift_chan_hold_pending_` — SHIFT+CHAN hold timer; fires Channel Edit entry or Global Settings entry independent of which mode is active (only guards against re-entry while `global_settings_active_`).
+- `shift_chan_hold_pending_` — SHIFT+CHAN hold timer; fires Channel Edit entry or Global Settings entry. Guards against all active modals (see any_modal check).
 - `play_jgh` block — Play button rising edge is routed before the chain:
   - Global Settings active → exit Global Settings (save)
   - Shift held → arm shift_play_pending_ (for Reset / Clear mode)
   - Perf Page active → exit Perf Page (save)
   - Channel Edit active → exit Channel Edit (save)
-  - Glide Editor active → exit Glide Editor (save)
   - Armed → disarm (no playback change)
   - Else → Toggle play/stop (save)
 
@@ -196,9 +194,9 @@ Slider recording (motion-gated, via Common()) runs independently for CV channels
 
 **State:** `c.button.morph.is_high() && !armed_ch_.has_value()`.
 
-This is not a persistent mode — it is active only while Glide is physically held. No state variable; priority 7 in Update() chain.
+This is not a persistent mode — it is active only while Glide is physically held. No state variable; priority 6 in Update() chain.
 
-**Entry:** Hold Glide (unarmed). Shift state is passed as parameter.
+**Entry:** From Main Mode: hold Glide (unarmed). Shift state is passed as parameter.
 
 **Exit:** Release Glide.
 
@@ -216,47 +214,15 @@ This is not a persistent mode — it is active only while Glide is physically he
 |-------|--------|
 | Encoder N (Trigger channel) | OffsetAllTrigSteps(N, dir) — skips rest steps |
 
-### Page button held (pending long-press)
+### Page button held
 
 | Input | Action |
 |-------|--------|
-| Encoder N (Gate channel) | EditGateRatchet(N, GlobalStep(page_btn), dir); cancels long-press |
+| Encoder N (Gate channel) | EditGateRatchet(N, GlobalStep(page_btn), dir) |
 
-### Long-press fires (600 ms, page button still held)
-
-| Condition | Action |
-|-----------|--------|
-| Channel N is CV or Gate | glide_editor_active_ = true; glide_editor_ch_ = N |
-| Channel N is Trigger | no-op (Trigger has no Glide Step Editor) |
-| Shift was held at press time | no-op (long-press entry blocked when shift held) |
+> Only the first held page button (lowest index) is used. Non-Gate channels are unaffected.
 
 **LED:** No dedicated display — uses whatever the current background mode shows.
-
----
-
-## Mode: Glide Step Editor
-
-**State:** `glide_editor_active_ = true`.
-
-**Entry:** From Main Mode only, via GLIDE modifier: hold Glide, long-press a Page button (600ms) on a CV or Gate channel.
-
-**Exit:**
-- Glide button rising edge → `glide_editor_active_ = false`; save if stopped
-- Play/Reset → handled at top of Update() before editor runs; `glide_editor_active_ = false`; save if stopped
-
-| Modifier | Input | Action |
-|----------|-------|--------|
-| None | Encoder N (CV channel) | SetGlideFlag(ch, page_step(N), dir>0) |
-| None | Encoder N (Gate channel) | EditGateStep(ch, page_step(N), dir, fine) |
-| Shift held | Page button N | NavigatePage(N) |
-
-> Bare page button presses are intentionally not processed (page button 0 overlaps step 1 of channel 0; catching bare presses would make step 1 unreachable).
-
-**LED — Page buttons:** Channel N blinks (blink = `(TimeNow()>>8)&1`). Other buttons off.
-
-**LED — Encoders (CV channel):** full_white if glide flag set; dim_grey if not.
-
-**LED — Encoders (Gate channel):** GateStepColor(ch, page_step(i)).
 
 ---
 
@@ -509,9 +475,9 @@ In Channel Edit, pressing a page button starts the long-press clear timer. If th
 
 Saves to flash are deferred to the next play/stop toggle when playing. Settings changed in Channel Edit, type changes via CHAN+encoder, and glide/ratchet editor changes are all lost on a power cycle if the sequence is never stopped.
 
-### 10. GLIDE modifier page-button tracking is independent of armed state guard
+### 10. ~~GLIDE modifier stale long-press timer~~ — Resolved
 
-`UpdateGlideModifier` is only called when `!armed_ch_`. However, `glide_longpress_btn_` and `glide_longpress_timer_` are not reset when arming/disarming. If a page button is pressed in the GLIDE modifier, then the user arms a channel before the 600ms timer fires, the timer state is left dangling. On next GLIDE modifier entry, the stale timer check could immediately fire a Glide Editor entry for the wrong channel.
+Glide Step Editor removed. `glide_longpress_timer_`, `glide_longpress_btn_`, and `glide_longpress_shift_` no longer exist. `UpdateGlideModifier` now uses `btn.is_high()` directly — no timer state to go stale.
 
 ---
 

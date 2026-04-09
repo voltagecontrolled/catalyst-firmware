@@ -102,6 +102,7 @@ These features exist in the firmware but have not been user-tested yet. Each ite
 - **Channel Edit page sync** (alpha13): on entering Channel Edit, the page buttons chaselight should be visible immediately (no "chaselight gone" after cross-mode page navigation). Test: go to Performance Page, navigate to page 2, exit, enter Channel Edit — chaselight should show on the correct page for the focused channel.
 - **16th-note clock rate** (alpha14): tap 120 BPM → sequence should run at 16th-note speed (8-step pattern completes twice per bar). Confirm BPM color zones still feel correct at musical tempos.
 - **Modal blocking** (alpha15): while in Channel Edit, confirm SHIFT+CHAN does nothing and Fine+Glide does nothing. While in Performance Page, confirm SHIFT+CHAN does nothing. While in Global Settings, confirm Fine+Glide does nothing. Confirm Armed → Channel Edit still works (SHIFT+CHAN short tap while a channel is armed).
+- **Glide Step Editor removed** (alpha17): confirm Glide + page button (any hold duration) now only does Gate ratchet editing — no editor entry, no 600ms cliff. Confirm CV glide flags still work via armed CV + Glide held + enc N.
 
 ### Core features never formally tested
 - **External clock sync**: patch a clock into Clock In; confirm VoltSeq locks to it, Reset jack resets all channels.
@@ -144,21 +145,6 @@ Items identified during the alpha13 mode-state audit (`docs/VOLTSEQ-MODES.md`). 
 
 ---
 
-### Glide Step Editor — consider removing
-
-The Glide Step Editor (entered via Glide + long-press page button 600ms) provides:
-- CV channels: per-step glide flag editing
-- Gate channels: gate step length editing
-
-Both are also accessible without this editor:
-- Per-step CV glide flags: armed CV + Glide held + enc N
-- Gate step lengths: armed Gate + enc N
-
-The editor's only ergonomic advantage is persistence (no button to hold). Its cost: it creates a 600ms timing cliff in the GLIDE modifier where holding a page button too long switches from Gate ratchet editing (the useful path) to editor entry. Removing it would make the short Glide+page-button gesture unambiguous. The `glide_longpress_timer_` and related state could also be simplified.
-
-If removed, the stale-timer collision (mode map collision #10) goes away with it.
-
----
 
 ### GLIDE modifier inaccessible while armed Trigger
 

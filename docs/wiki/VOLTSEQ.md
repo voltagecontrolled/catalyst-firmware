@@ -64,7 +64,7 @@ Default range for new channels is **−5V to +5V**. Changing a channel's type do
 
 ## Main Mode
 
-The **main mode** is VoltSeq's default state — reached on boot, after disarming, or after exiting any editor. All other modes are entered from here and return here on exit. While in any modal editor (Channel Edit, Global Settings, Performance Page, Glide Step Editor, Clear Mode), the entry combos for other modals are silently ignored — you must exit the current mode first. The only exception is **Channel Edit**, which can also be entered while a channel is armed.
+The **main mode** is VoltSeq's default state — reached on boot, after disarming, or after exiting any editor. All other modes are entered from here and return here on exit. While in any modal editor (Channel Edit, Global Settings, Performance Page, Clear Mode), the entry combos for other modals are silently ignored — you must exit the current mode first. The only exception is **Channel Edit**, which can also be entered while a channel is armed.
 
 ---
 
@@ -96,7 +96,7 @@ From the main mode: hold **Shift + Play/Reset** for 600 ms. All page button LEDs
 
 Steps are organized into **8 pages of 8 steps** per channel, giving 64 total steps per channel.
 
-**Shift + Page button N** navigates to page N in every mode: normal, armed (any channel type), Channel Edit, Glide Step Editor, and Performance Page.
+**Shift + Page button N** navigates to page N in every mode: normal, armed (any channel type), Channel Edit, and Performance Page.
 
 While Shift is held (in normal or armed mode), the page buttons switch to a **navigation indicator**: the currently selected page button lights solid, and the encoder LED for the currently tracked channel blinks to confirm which channel's chaselight you are viewing. Pressing any page button in this state navigates without editing any steps.
 
@@ -171,17 +171,19 @@ The slider maps across the channel's configured **Range**.
 
 ## GLIDE Modifier
 
-Hold **Glide** to access per-channel live parameters:
+Hold **Glide** (unarmed) to access per-channel live parameters.
+
+**No page button held:**
 
 | Encoder N | CV channel | Gate channel | Trigger channel |
 |---|---|---|---|
 | Turn | Glide time (0–10 s) | Offset all gate lengths | Trigger pulse width (1–100 ms) |
 
-**Step held + Glide + Encoder N (Gate channel):** set ratchet count for that specific step of Gate channel N.
+**Page button N held + Encoder M (Gate channel):** set ratchet count for step N of Gate channel M.
 
-**Shift + Glide + encoder N:** offset all ratchet/repeat counts for Trigger channel N.
+**Shift + Glide + Encoder N (Trigger channel):** offset all ratchet/repeat counts for Trigger channel N.
 
-For CV channels, glide time is a channel-level setting (how long the slew takes). Which steps actually slew is controlled per-step while armed — see **Armed CV Channel** below.
+**CV glide time** is a channel-level setting — it controls how long the slew takes. *Which steps* actually slew is set per-step while armed: hold Glide while an armed CV channel is active and turn encoders to enable or disable glide flags on individual steps.
 
 ---
 
@@ -281,7 +283,7 @@ Shown immediately on entry. Encoder LEDs reflect current values.
 
 Toggle the slider lock with either:
 - **Encoder 8** (Random) while in Performance Page Settings
-- **Short Fine + Glide** (tap and release before 1.5 s) — works from anywhere, including outside the Performance Page
+- **Short Fine + Glide** (tap and release before 1.5 s) — works from the main mode or from within the Performance Page
 
 **Locked:** slider is frozen at its current position; encoder 8 LED is red.
 
