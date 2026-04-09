@@ -649,29 +649,15 @@ public:
 		clock.SyncStepClock();
 	}
 
-	// Like Reset() but uses a time-based heuristic to decide whether to clear primed[].
-	// Used for the external reset jack:
-	//
-	// Case A (reset arrives before clock, or simultaneously):
-	//   last_clock_time is ~one-step-period old → clear primed=false
-	//   → step 0 fires on the first post-reset clock (correct).
-	//
-	// Case B (clock fires a few ticks BEFORE reset, e.g. Oxi One sends them slightly apart):
-	//   last_clock_time is very recent (< half step period) → keep primed=true
-	//   → step 0 was just played naturally; next clock advances to step 1, no double-fire.
-	//
-	// Manual resets (SHIFT+PLAY, play/stop reset mode) use Reset() which always clears primed.
+	// External reset: rewind all playheads to step 0 and fire step 0 immediately.
+	// Unlike Reset() (used for manual play/stop), this sets primed=true so the next
+	// clock tick advances to step 1 — matching CatSeq's behavior where the phaser
+	// always advances on each clock with no "priming" pause.
 	void ResetExternal() {
-		const auto     now             = Controls::TimeNow();
-		const uint32_t half_step       = std::max<uint32_t>(1u, clock.bpm.GetBpmInTicks() / 2u);
-		const bool     clock_was_recent = (now - clock.GetLastExternalClockTime()) < half_step;
-
 		playhead.fill(0);
 		shadow.fill(0);
 		pingpong_dir.fill(1);
-		if (!clock_was_recent)
-			primed.fill(false);
-		// When clock_was_recent, primed stays true: step 0 just fired naturally.
+		primed.fill(true);
 		just_wrapped_.fill(false);
 		held_count_           = 0;
 		arp_index_            = 0;
@@ -680,6 +666,15 @@ public:
 		ratchet_state = {};
 		clock.ResetDividers();
 		clock.SyncStepClock();
+
+		// Fire step 0 immediately so it produces output from this tick.
+		for (auto ch = 0u; ch < Model::NumChans; ch++) {
+			const auto step = GetOutputStep(ch);
+			if (data.channel[ch].type == ChannelType::Gate)
+				FireGate(ch, step);
+			else if (data.channel[ch].type == ChannelType::Trigger)
+				FireTrigger(ch, step);
+		}
 	}
 
 	// ---- Step-lock / arpeggiation API (called from UI) ----

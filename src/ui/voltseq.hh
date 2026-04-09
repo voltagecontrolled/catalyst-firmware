@@ -77,12 +77,6 @@ class Main : public Abstract {
 	uint32_t scrub_hold_start_   = 0;
 	bool     initialized_from_shared_ = false;
 
-	// Post-reset clock guard: mirrors CatSeq's time_last_reset / Trig() guard.
-	// Any clock pulse arriving within BpmToTicks(max_bpm) ticks (~50ms) of the last
-	// external reset is ignored, preventing the simultaneous-reset+clock edge from
-	// advancing the playhead before step 0 has had a chance to play.
-	uint32_t time_last_reset_ = 0;
-
 	// Slider movement tracking (for lock indicator)
 	uint16_t last_slider_raw_        = 0;
 	uint32_t last_slider_move_time_  = 0;
@@ -425,14 +419,10 @@ public:
 	void Common() override {
 		p.clock.bpm.external = c.sense.trig.is_high();
 
-		if (c.jack.reset.just_went_high()) {
-			p.Reset();
-			time_last_reset_ = Controls::TimeNow();
-		}
-		if (c.jack.trig.just_went_high()) {
-			if (Controls::TimeNow() - time_last_reset_ >= Clock::BpmToTicks(Clock::Bpm::max_bpm))
-				p.clock.ExternalClockTick();
-		}
+		if (c.jack.reset.just_went_high())
+			p.ResetExternal();
+		if (c.jack.trig.just_went_high())
+			p.clock.ExternalClockTick();
 		if (c.button.add.just_went_high())
 			p.clock.TapTempo();
 
