@@ -606,6 +606,9 @@ public:
 					// Show focused channel's length passively on entry
 					channel_edit_last_enc_ = 2;
 					length_display_until_  = Controls::TimeNow() + Clock::MsToTicks(600);
+					// Sync current_page_ to the focused channel's playhead page so the
+					// chaselight and step display are immediately on the correct page.
+					current_page_ = static_cast<uint8_t>(p.GetPlayhead(edit_ch_) / Model::NumChans);
 				} else {
 					channel_edit_last_enc_ = 0xFF;
 					length_display_until_  = 0;
@@ -771,8 +774,21 @@ public:
 
 private:
 	void UpdateNormal(bool fine) {
-		// Disarm if armed channel's page button pressed alone (spec: "press page button N again to disarm")
-		// (handled above; armed_ch_ would already be nullopt here)
+		// Shift held: page navigation and encoder focus only — no step editing.
+		// Page buttons navigate to the selected page; encoder turns update the chaselight channel.
+		if (c.button.shift.is_high()) {
+			// Release any steps that were held before shift was pressed
+			for (auto [i, btn] : countzip(c.button.scene)) {
+				if (btn.just_went_low())
+					p.SetStepHeld(GlobalStep(i), false);
+			}
+			for (auto [i, btn] : countzip(c.button.scene)) {
+				if (btn.just_went_high())
+					NavigatePage(static_cast<uint8_t>(i));
+			}
+			ForEachEncoderInc(c, [&](uint8_t enc, int32_t /*inc*/) { focused_ch_ = enc; });
+			return;
+		}
 
 		// Step hold tracking and x0x editing
 		for (auto [i, btn] : countzip(c.button.scene)) {
@@ -802,7 +818,9 @@ private:
 				}
 			});
 		} else {
-			ClearEncoderEvents(c); // drain stale deltas — prevent accumulated turns from firing on next CHAN press
+			// No step held and no shift: update focused channel from encoder wiggle for chaselight tracking
+			ForEachEncoderInc(c, [&](uint8_t enc, int32_t /*inc*/) { focused_ch_ = enc; });
+			ClearEncoderEvents(c); // drain deltas — prevent accumulated turns from firing on next CHAN press
 		}
 	}
 
@@ -834,9 +852,12 @@ private:
 		}
 
 		if (c.button.shift.is_high()) {
-			// Shift held: enc 4 (panel 5, Range) adjusts the channel voltage range;
-			//             enc 6 (panel 7, Transpose) cycles the quantizer scale.
+			// Shift held: page navigation + enc 4 (Range) / enc 6 (Transpose).
 			// Slider range IS the recording range, so adjusting Range also changes recording.
+			for (auto [i, btn] : countzip(c.button.scene)) {
+				if (btn.just_went_high())
+					NavigatePage(static_cast<uint8_t>(i));
+			}
 			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
 				if (enc == 4) cs.range.Inc(dir);
 				else if (enc == 6) CycleTypeSel(ch, dir);
@@ -853,6 +874,15 @@ private:
 	}
 
 	void UpdateArmedGate(uint8_t ch, bool fine) {
+		// Shift held: page navigation only
+		if (c.button.shift.is_high()) {
+			for (auto [i, btn] : countzip(c.button.scene)) {
+				if (btn.just_went_high())
+					NavigatePage(static_cast<uint8_t>(i));
+			}
+			ClearEncoderEvents(c);
+			return;
+		}
 		// Glide held: encoder N adjusts ratchet count for step N (0 = no ratchet, 2–8 = N pulses)
 		if (c.button.morph.is_high()) {
 			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
@@ -874,6 +904,15 @@ private:
 	}
 
 	void UpdateArmedTrigger(uint8_t ch, bool /*fine*/) {
+		// Shift held: page navigation only
+		if (c.button.shift.is_high()) {
+			for (auto [i, btn] : countzip(c.button.scene)) {
+				if (btn.just_went_high())
+					NavigatePage(static_cast<uint8_t>(i));
+			}
+			ClearEncoderEvents(c);
+			return;
+		}
 		// Tap page button → toggle step on/off
 		for (auto [i, btn] : countzip(c.button.scene)) {
 			if (btn.just_went_high()) {
@@ -1398,9 +1437,14 @@ public:
 				const uint8_t chase  = on_page ? static_cast<uint8_t>(ph_edit % Model::NumChans) : 0xFF;
 				const bool  blink    = (Controls::TimeNow() >> 8) & 1u;
 				for (auto i = 0u; i < Model::NumChans; i++) {
-					// Default: focused-channel indicator; chaselight blinks on the playing step
-					bool page_lit = (i == edit_ch_);
-					if (i == chase) page_lit = blink;
+					// Shift held: show current page; otherwise focused-channel + chaselight
+					bool page_lit;
+					if (c.button.shift.is_high()) {
+						page_lit = (i == current_page_);
+					} else {
+						page_lit = (i == edit_ch_);
+						if (i == chase) page_lit = blink;
+					}
 					c.SetButtonLed(i, page_lit);
 					Color col = Palette::dim_grey;
 					if (i == 0) col = Palette::off.blend(Palette::full_white, cs.output_delay_ms / 20.f);
@@ -1486,6 +1530,9 @@ public:
 				const auto sv  = p.GetStepValue(ch, GlobalStep(i));
 				const auto val = static_cast<int8_t>(sv & 0xFF);
 				lit = (type == ChannelType::Gate) ? (sv > 0) : (val != 0);
+			} else if (c.button.shift.is_high()) {
+				// Shift held: illuminate only the currently selected page
+				lit = (i == current_page_);
 			} else {
 				// CV armed or unarmed: chaselight shows current step of focused channel
 				const auto ph = p.GetPlayhead(focused_ch_);
@@ -1554,6 +1601,17 @@ public:
 			const uint8_t gs = GlobalStep(last_touched_step_);
 			for (auto i = 0u; i < Model::NumChans; i++)
 				c.SetEncoderLed(i, StepColorForChannel(i, gs));
+		} else if (c.button.shift.is_high()) {
+			// Shift held (unarmed, no step held): show playhead colors; focused channel blinks white
+			// so the user can see which channel's chaselight is tracked before navigating.
+			const bool blink = (Controls::TimeNow() >> 8) & 1u;
+			for (auto i = 0u; i < Model::NumChans; i++) {
+				const uint8_t ref_step = p.GetPlayhead(i);
+				Color col              = StepColorForChannel(i, ref_step);
+				if (i == focused_ch_)
+					col = blink ? ChaseWhite : col;
+				c.SetEncoderLed(i, col);
+			}
 		} else {
 			// Unarmed idle: show each channel's color at its current playhead step
 			for (auto i = 0u; i < Model::NumChans; i++) {
