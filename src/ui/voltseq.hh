@@ -21,9 +21,9 @@ using Catalyst2::VoltSeq::StepValue;
 inline constexpr uint16_t CvStepCoarse = 350; // ≈ 1 semitone (25 × 14)
 inline constexpr uint16_t CvStepFine   = 14;  // ≈ 1 sub-semitone unit
 
-// Gate length step sizes (0..65535 = 0..100% gate)
-inline constexpr uint16_t GateStepCoarse = 655;  // ≈ 1%
-inline constexpr uint16_t GateStepFine   = 65;   // ≈ 0.1%
+// Gate length step sizes (high byte 0..255 = 0..100% gate)
+inline constexpr uint16_t GateStepCoarse = 5;  // ≈ 2% per detent (~50 detents for full range)
+inline constexpr uint16_t GateStepFine   = 1;  // ≈ 0.4% per detent
 
 class Main : public Abstract {
 	Catalyst2::VoltSeq::Interface &p;
@@ -40,11 +40,9 @@ class Main : public Abstract {
 	uint8_t edit_ch_              = 0;    // focused channel (0-7) in Channel Edit
 	uint8_t channel_edit_last_enc_ = 0xFF; // last encoder turned (drives feedback display)
 
-	// Glide / Ratchet step editor state
+	// Glide step editor state
 	bool    glide_editor_active_   = false;
-	bool    ratchet_editor_active_ = false;
 	uint8_t glide_editor_ch_       = 0;
-	uint8_t ratchet_editor_ch_     = 0;
 
 	// Bitmask: bit i set if an encoder was turned while step i was held (armed Trigger editing).
 	// Used to distinguish tap (toggle) from hold+edit (no toggle).
@@ -314,10 +312,24 @@ class Main : public Abstract {
 	}
 
 	void EditGateStep(uint8_t ch, uint8_t global_step, int32_t inc, bool fine) {
-		const auto old_val = p.GetStepValue(ch, global_step);
-		const int32_t step = fine ? GateStepFine : GateStepCoarse;
-		const int32_t next = static_cast<int32_t>(old_val) + inc * step;
-		p.SetStepValue(ch, global_step, static_cast<StepValue>(std::clamp<int32_t>(next, 0, 65535)));
+		const auto old_val   = p.GetStepValue(ch, global_step);
+		const auto old_len   = static_cast<uint8_t>(old_val >> 8);
+		const uint8_t ratchet = static_cast<uint8_t>(old_val & 0xFF);
+		const int32_t step   = fine ? GateStepFine : GateStepCoarse;
+		const auto new_len   = static_cast<uint8_t>(std::clamp<int32_t>(old_len + inc * step, 0, 255));
+		p.SetStepValue(ch, global_step,
+		               static_cast<StepValue>((static_cast<uint16_t>(new_len) << 8) | ratchet));
+	}
+
+	// Edit the ratchet count for a Gate channel step (low byte).
+	// 0 = no ratchet (single gate), 1–8 = ratchet 1–8x per step.
+	void EditGateRatchet(uint8_t ch, uint8_t global_step, int32_t inc) {
+		const auto old_val   = p.GetStepValue(ch, global_step);
+		const auto gate_len  = static_cast<uint8_t>(old_val >> 8);
+		const auto old_ratchet = static_cast<uint8_t>(old_val & 0xFF);
+		const auto new_ratchet = static_cast<uint8_t>(std::clamp<int32_t>(old_ratchet + inc, 0, 8));
+		p.SetStepValue(ch, global_step,
+		               static_cast<StepValue>((static_cast<uint16_t>(gate_len) << 8) | new_ratchet));
 	}
 
 	void EditTrigStep(uint8_t ch, uint8_t global_step, int32_t inc) {
@@ -329,9 +341,14 @@ class Main : public Abstract {
 
 	// Toggle gate/trigger step on/off (x0x editing)
 	void ToggleGateStep(uint8_t ch, uint8_t global_step) {
-		const auto val = p.GetStepValue(ch, global_step);
-		// Gate: 0 = off, 32768 (50%) = default gate length on
-		p.SetStepValue(ch, global_step, val > 0 ? StepValue{0} : StepValue{32768});
+		const auto val     = p.GetStepValue(ch, global_step);
+		const uint8_t ratchet = static_cast<uint8_t>(val & 0xFF);
+		const bool gate_on = (static_cast<uint8_t>(val >> 8) > 0);
+		// Toggle gate length: off→50% gate; on→0. Ratchet count preserved either way.
+		// Default on-value: high byte 128 = 128/255 ≈ 50%; value = 0x8000 | ratchet.
+		const uint16_t new_val = gate_on ? ratchet
+		                                 : static_cast<uint16_t>((128u << 8) | ratchet);
+		p.SetStepValue(ch, global_step, static_cast<StepValue>(new_val));
 	}
 
 	void ToggleTrigStep(uint8_t ch, uint8_t global_step) {
@@ -355,12 +372,22 @@ class Main : public Abstract {
 		return Palette::Cv::fromLevel(p.shared.data.palette[ch], cv_val, cs.range);
 	}
 
-	// Color representing a gate step's gate length (0=off, non-zero=dim→bright green).
+	// Color representing a gate step's gate length (high byte: 0=off, 1–255=dim→bright green).
 	Color GateStepColor(uint8_t ch, uint8_t global_step) const {
-		const auto sv = p.GetStepValue(ch, global_step);
-		if (sv == 0) return Palette::off;
-		const float frac = static_cast<float>(sv) / 65535.f;
+		const auto sv      = p.GetStepValue(ch, global_step);
+		const auto gate_len = static_cast<uint8_t>(sv >> 8);
+		if (gate_len == 0) return Palette::off;
+		const float frac = static_cast<float>(gate_len) / 255.f;
 		return Palette::off.blend(GateColor(), 0.3f + 0.7f * frac);
+	}
+
+	// Color representing a gate step's ratchet count (low byte: <2 = no ratchet, 2–8 = N pulses).
+	Color GateRatchetColor(uint8_t ch, uint8_t global_step) const {
+		const auto sv      = p.GetStepValue(ch, global_step);
+		const auto ratchet = static_cast<uint8_t>(sv & 0xFF);
+		if (ratchet < 2) return Palette::dim_grey;
+		const float brightness = std::clamp(static_cast<float>(ratchet) / 8.f, 0.f, 1.f);
+		return Palette::off.blend(Palette::green, 0.2f + 0.8f * brightness);
 	}
 
 	// Color representing a trigger step — brightness scales with ratchet/repeat count (1–8).
@@ -612,9 +639,6 @@ public:
 			} else if (glide_editor_active_) {
 				glide_editor_active_   = false;
 				if (!p.IsPlaying()) p.shared.do_save_macro = true;
-			} else if (ratchet_editor_active_) {
-				ratchet_editor_active_ = false;
-				if (!p.IsPlaying()) p.shared.do_save_macro = true;
 			} else if (armed_ch_.has_value()) {
 				armed_ch_                = std::nullopt;
 				trigger_step_enc_turned_ = 0;
@@ -657,7 +681,6 @@ public:
 			perf_settings_active_    = false;
 			channel_edit_active_     = false;
 			glide_editor_active_     = false;
-			ratchet_editor_active_   = false;
 			clear_mode_active_       = false;
 			global_settings_active_   = false;
 			shift_chan_hold_pending_  = false;
@@ -698,11 +721,6 @@ public:
 			UpdateGlideEditor(fine);
 			return;
 		}
-		if (ratchet_editor_active_) {
-			UpdateRatchetEditor(fine);
-			return;
-		}
-
 		// --- GLIDE modifier (unarmed only — armed CV handles Glide internally for per-step flags) ---
 		if (c.button.morph.is_high() && !armed_ch_.has_value()) {
 			UpdateGlideModifier(shift, fine);
@@ -831,6 +849,13 @@ private:
 	}
 
 	void UpdateArmedGate(uint8_t ch, bool fine) {
+		// Glide held: encoder N adjusts ratchet count for step N (0 = no ratchet, 2–8 = N pulses)
+		if (c.button.morph.is_high()) {
+			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
+				EditGateRatchet(ch, GlobalStep(enc), dir);
+			});
+			return;
+		}
 		// Tap page button → toggle step on/off
 		for (auto [i, btn] : countzip(c.button.scene)) {
 			if (btn.just_went_high()) {
@@ -970,14 +995,17 @@ private:
 
 	// --- Glide / Ratchet helpers ---
 
-	// Offset all active gate steps for channel ch by delta (skips off/zero steps)
+	// Offset all active gate steps for channel ch by delta (skips off steps; preserves ratchet byte)
 	void OffsetAllGateSteps(uint8_t ch, int32_t delta) {
 		for (auto s = 0u; s < 64u; s++) {
-			const auto val = p.GetStepValue(ch, static_cast<uint8_t>(s));
-			if (val == 0) continue;
-			const int32_t next = static_cast<int32_t>(val) + delta * GateStepCoarse;
+			const auto val     = p.GetStepValue(ch, static_cast<uint8_t>(s));
+			const auto gate_len = static_cast<uint8_t>(val >> 8);
+			if (gate_len == 0) continue;
+			const uint8_t ratchet = static_cast<uint8_t>(val & 0xFF);
+			const auto new_len = static_cast<uint8_t>(
+			    std::clamp<int32_t>(gate_len + delta * GateStepCoarse, 1, 255));
 			p.SetStepValue(ch, static_cast<uint8_t>(s),
-			               static_cast<StepValue>(std::clamp<int32_t>(next, 1, 65535)));
+			               static_cast<StepValue>((static_cast<uint16_t>(new_len) << 8) | ratchet));
 		}
 	}
 
@@ -1015,43 +1043,54 @@ private:
 			glide_longpress_btn_ = kNoLongpressBtn;
 			const auto type = p.GetData().channel[ch].type;
 
-			if (was_shift || type == ChannelType::Trigger) {
-				// Shift+GLIDE long-press or Trigger channel: Ratchet Step Editor
-				if (type == ChannelType::Trigger) {
-					ratchet_editor_active_ = true;
-					ratchet_editor_ch_     = ch;
+			if (!was_shift) {
+				// Long-press: Glide Step Editor for CV or Gate channels
+				if (type == ChannelType::CV || type == ChannelType::Gate) {
+					glide_editor_active_ = true;
+					glide_editor_ch_     = ch;
 				}
-				// CV/Gate with shift+glide long-press: no effect per spec
-			} else {
-				// Glide Step Editor for CV or Gate
-				glide_editor_active_ = true;
-				glide_editor_ch_     = ch;
+				// Trigger: no glide step editor (ratchet editing is done via armed mode or step+enc)
 			}
 			return;
 		}
 
-		// While no page button is pending long-press: encoder adjustments
-		if (glide_longpress_btn_ == kNoLongpressBtn) {
+		// Step button held + encoder: per-step ratchet edit for Gate channels
+		// (consistency with normal step+enc for CV/Trigger editing)
+		if (glide_longpress_btn_ != kNoLongpressBtn) {
+			const auto step_btn = glide_longpress_btn_;
+			bool enc_turned = false;
 			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
 				auto &cs = p.GetData().channel[enc];
-				if (shift) {
-					// SHIFT+GLIDE + enc: offset all Trigger steps ratchet/repeat
-					if (cs.type == ChannelType::Trigger)
-						OffsetAllTrigSteps(enc, dir);
-				} else {
-					// GLIDE + enc: channel-level parameter
-					if (cs.type == ChannelType::CV) {
-						cs.glide_time = std::clamp(cs.glide_time + dir * 0.1f, 0.f, 10.f);
-					} else if (cs.type == ChannelType::Gate) {
-						OffsetAllGateSteps(enc, dir);
-					} else if (cs.type == ChannelType::Trigger) {
-						cs.pulse_width_ms = static_cast<uint8_t>(
-						    std::clamp<int32_t>(cs.pulse_width_ms + dir, 1, 100));
-					}
+				if (cs.type == ChannelType::Gate) {
+					EditGateRatchet(enc, GlobalStep(step_btn), dir);
+					enc_turned = true;
 				}
-				(void)fine;
 			});
+			if (enc_turned)
+				glide_longpress_btn_ = kNoLongpressBtn; // cancel long-press once enc turned
+			return;
 		}
+
+		// No step held: encoder adjustments apply channel-level parameters
+		ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
+			auto &cs = p.GetData().channel[enc];
+			if (shift) {
+				// SHIFT+GLIDE + enc: offset all Trigger steps ratchet/repeat
+				if (cs.type == ChannelType::Trigger)
+					OffsetAllTrigSteps(enc, dir);
+			} else {
+				// GLIDE + enc: channel-level parameter
+				if (cs.type == ChannelType::CV) {
+					cs.glide_time = std::clamp(cs.glide_time + dir * 0.1f, 0.f, 10.f);
+				} else if (cs.type == ChannelType::Gate) {
+					OffsetAllGateSteps(enc, dir);
+				} else if (cs.type == ChannelType::Trigger) {
+					cs.pulse_width_ms = static_cast<uint8_t>(
+					    std::clamp<int32_t>(cs.pulse_width_ms + dir, 1, 100));
+				}
+			}
+			(void)fine;
+		});
 	}
 
 	// --- Glide Step Editor ---
@@ -1084,42 +1123,8 @@ private:
 				p.SetGlideFlag(ch, gs, dir > 0);
 			} else if (type == ChannelType::Gate) {
 				EditGateStep(ch, gs, dir, fine);
-			} else {
-				// Trigger: transition into Ratchet Step Editor
-				glide_editor_active_   = false;
-				ratchet_editor_active_ = true;
-				ratchet_editor_ch_     = ch;
 			}
 		});
-	}
-
-	// --- Ratchet Step Editor ---
-
-	void UpdateRatchetEditor(bool /*fine*/) {
-		// Exit: Play (handled at top of Update) or GLIDE press.  Same reason as Glide Step Editor:
-		// bare page button exit is unreachable for step 1 on channel 0.
-		if (c.button.morph.just_went_high()) {
-			ratchet_editor_active_ = false;
-			p.shared.do_save_macro = true;
-			return;
-		}
-
-		// Page navigation while Shift held
-		if (c.button.shift.is_high()) {
-			for (auto [i, btn] : countzip(c.button.scene)) {
-				if (btn.just_went_high())
-					NavigatePage(static_cast<uint8_t>(i));
-			}
-			return;
-		}
-
-		const auto ch = ratchet_editor_ch_;
-		if (p.GetData().channel[ch].type == ChannelType::Trigger) {
-			// Enc N edits step N on current page
-			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
-				EditTrigStep(ch, GlobalStep(enc), dir);
-			});
-		}
 	}
 
 	// --- Channel Edit (Shift + CHAN) ---
@@ -1180,6 +1185,7 @@ private:
 
 		// Encoder editing for focused channel
 		auto &cs = p.GetData().channel[edit_ch_];
+
 		ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
 			channel_edit_last_enc_ = enc;
 			switch (enc) {
@@ -1357,17 +1363,6 @@ public:
 			return;
 		}
 
-		// --- Ratchet Step Editor ---
-		if (ratchet_editor_active_) {
-			const auto ch    = ratchet_editor_ch_;
-			const bool blink = (Controls::TimeNow() >> 8) & 1u;
-			for (auto i = 0u; i < Model::NumChans; i++) {
-				c.SetButtonLed(i, i == ch && blink);
-				c.SetEncoderLed(i, TrigStepColor(ch, GlobalStep(static_cast<uint8_t>(i))));
-			}
-			return;
-		}
-
 		// --- Channel Edit mode ---
 		if (channel_edit_active_) {
 			if (Controls::TimeNow() <= length_display_until_) {
@@ -1498,6 +1493,13 @@ public:
 
 		// --- Encoder LEDs ---
 		if (armed_gate_trig) {
+			// Armed Gate + Glide held: show per-step ratchet counts instead of gate state
+			if (type == ChannelType::Gate && c.button.morph.is_high()) {
+				for (auto i = 0u; i < Model::NumChans; i++) {
+					const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));
+					c.SetEncoderLed(i, GateRatchetColor(ch, gs));
+				}
+			} else {
 			// Gate/Trigger armed: each encoder shows step state for the armed channel,
 			// with the currently playing step highlighted (chaselight).
 			// A held page button suppresses the chase blink so the static color is visible while editing.
@@ -1517,6 +1519,7 @@ public:
 				if (i == chase && !c.button.scene[i].is_high())
 					col = blink ? Palette::full_white : col;
 				c.SetEncoderLed(i, col);
+			}
 			}
 		} else if (armed) {
 			// CV armed + Glide held: show per-step glide flags (white = glide on, dim grey = off)

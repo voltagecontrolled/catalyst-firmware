@@ -49,7 +49,7 @@ struct StepFlags {
 struct Data {
 	// Increment current_tag whenever the struct layout changes (fields added/removed/reordered).
 	// validate() checks this tag so WearLevel rejects stale or incompatible flash data gracefully.
-	static constexpr uint32_t current_tag     = 4u;
+	static constexpr uint32_t current_tag     = 5u;
 	uint32_t                  SettingsVersionTag = current_tag;
 
 	static StepGrid DefaultSteps() {
@@ -164,10 +164,14 @@ public:
 
 // Per-channel gate output state (Gate channel type)
 struct GateState {
-	bool     high      = false;
-	bool     pending   = false;  // awaiting output_delay_ms before firing
-	uint32_t fire_tick = 0;      // Controls::TimeNow() when to turn on
-	uint32_t off_tick  = 0;      // Controls::TimeNow() when to turn off
+	bool     high             = false;
+	bool     pending          = false;  // awaiting fire_tick before turning on
+	uint32_t fire_tick        = 0;      // tick when gate turns on (start of current pulse)
+	uint32_t off_tick         = 0;      // tick when gate turns off (end of current pulse)
+	// Gate ratchet: when ratchet_rem > 0, additional pulses fire after the current one
+	uint8_t  ratchet_rem      = 0;      // additional pulses remaining
+	uint32_t ratchet_interval = 0;      // ticks between ratchet pulse starts
+	uint32_t ratchet_dur      = 0;      // duration of each ratchet pulse in ticks
 };
 
 // Per-channel ratchet/repeat state (Trigger channel type)
@@ -408,22 +412,33 @@ class Interface {
 		return data.bpm.bpm_in_ticks * data.channel[ch].division.Read();
 	}
 
-	// Set up gate output for channel ch when its step fires
+	// Set up gate output for channel ch when its step fires.
+	// Gate step value encoding: high byte = gate length (0=off, 1–255 ≈ 0.4%–100%);
+	//                           low byte  = ratchet count (0 or 1 = single gate, 2–8 = N pulses per step).
 	void FireGate(uint8_t ch, uint8_t step_idx) {
 		const auto &cs    = data.channel[ch];
 		const auto  raw   = data.steps[PageOf(step_idx)][StepInPage(step_idx)][ch];
-		const float frac  = static_cast<float>(raw) / 65535.f;
-		if (frac <= 0.f) {
+		const auto gate_len_byte = static_cast<uint8_t>(raw >> 8);
+		if (gate_len_byte == 0) {
 			gate_state[ch] = {};
 			return;
 		}
-		const uint32_t delay = Clock::MsToTicks(cs.output_delay_ms);
-		const uint32_t dur   = static_cast<uint32_t>(frac * StepPeriodTicks(ch));
-		const uint32_t now   = Controls::TimeNow();
-		gate_state[ch].pending   = delay > 0;
-		gate_state[ch].high      = delay == 0;
-		gate_state[ch].fire_tick = now + delay;
-		gate_state[ch].off_tick  = now + delay + (dur > 0 ? dur : 1u);
+		const float frac = static_cast<float>(gate_len_byte) / 255.f;
+		const auto  ratchet_byte  = static_cast<uint8_t>(raw & 0xFF);
+		const uint8_t count       = (ratchet_byte >= 2u) ? ratchet_byte : 1u;
+		const uint32_t delay      = Clock::MsToTicks(cs.output_delay_ms);
+		const uint32_t now        = Controls::TimeNow();
+		const uint32_t period     = StepPeriodTicks(ch);
+		const uint32_t interval   = (count > 1u && period > 0u) ? (period / count) : period;
+		const uint32_t dur        = static_cast<uint32_t>(frac * interval);
+		auto &gs = gate_state[ch];
+		gs.pending          = delay > 0;
+		gs.high             = delay == 0;
+		gs.fire_tick        = now + delay;
+		gs.off_tick         = now + delay + (dur > 0u ? dur : 1u);
+		gs.ratchet_rem      = count > 1u ? (count - 1u) : 0u;
+		gs.ratchet_interval = interval;
+		gs.ratchet_dur      = dur > 0u ? dur : 1u;
 	}
 
 	// Fire a single trigger pulse on channel ch without modifying ratchet/repeat counters.
@@ -658,6 +673,19 @@ public:
 			}
 			if (gs.high && now >= gs.off_tick) {
 				gs.high = false;
+				// Fire next ratchet pulse if any remain
+				if (gs.ratchet_rem > 0) {
+					gs.ratchet_rem--;
+					const uint32_t next_start = gs.fire_tick + gs.ratchet_interval;
+					gs.fire_tick = next_start;
+					gs.off_tick  = next_start + gs.ratchet_dur;
+					if (now >= next_start) {
+						gs.high    = true;
+						gs.pending = false;
+					} else {
+						gs.pending = true;
+					}
+				}
 			}
 		}
 	}

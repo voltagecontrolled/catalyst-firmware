@@ -90,7 +90,7 @@ Hold **Shift + Play/Reset** for 600 ms. All page button LEDs and the Play LED sl
 
 Steps are organized into **8 pages of 8 steps** per channel, giving 64 total steps per channel.
 
-Page navigation is available inside any editor (Channel Edit, Ratchet Step Editor, Performance Page) via **Shift + Page button N**.
+Page navigation is available inside any editor (Channel Edit, Glide Step Editor, Performance Page) via **Shift + Page button N**.
 
 > Page navigation is not available in the main mode while Shift is held — holding Shift alone for 1.5 s enters Global Settings instead.
 
@@ -143,10 +143,11 @@ The slider maps across the channel's configured **Range**.
 
 ### Armed Gate Channel
 
-**Encoder LEDs:** show each step's gate state. Playing step blinks white.
+**Encoder LEDs:** show each step's gate state. Playing step blinks white. While **Glide** is held, LEDs switch to show per-step ratchet counts (dim = no ratchet, bright green = high ratchet).
 
 - **Tap a Page button** → toggle step on/off (x0x)
 - **Encoder N** → adjust gate length for step N (0 = off, up to 100%)
+- **Glide held + Encoder N** → adjust ratchet count for step N (0 = single gate, 2–8 = fire N pulses per step, subdivided within the step period)
 
 ### Armed Trigger Channel
 
@@ -166,17 +167,11 @@ Hold **Glide** to access per-channel live parameters:
 |---|---|---|---|
 | Turn | Glide time (0–10 s) | Offset all gate lengths | Trigger pulse width (1–100 ms) |
 
+**Step held + Glide + Encoder N (Gate channel):** set ratchet count for that specific step of Gate channel N.
+
 **Shift + Glide + encoder N:** offset all ratchet/repeat counts for Trigger channel N.
 
 For CV channels, glide time is a channel-level setting (how long the slew takes). Which steps actually slew is controlled per-step while armed — see **Armed CV Channel** below.
-
-### Ratchet Step Editor
-
-Hold **Glide** and **long-press** (600 ms) a **Page button** on a Trigger channel.
-
-- **Encoder N** adjusts ratchet/repeat count for step N (positive = ratchet, negative = repeat)
-- **Shift + Page button** = navigate pages
-- **Glide** or **Play/Reset** = exit and save
 
 ---
 
@@ -293,7 +288,6 @@ VoltSeq saves automatically at these moments:
 - Play/Stop toggled
 - Global Settings exited
 - Channel Edit exited
-- Ratchet Step Editor exited
 - Performance Page exited
 - Mode switched
 
@@ -309,9 +303,10 @@ VoltSeq saves automatically at these moments:
 | Main mode, step held for editing | Each encoder: that step's color across all channels |
 | Main mode, page buttons | Chaselight for most recently edited channel |
 | Armed CV | Each encoder: step CV color for current page; playing step blinks white |
-| Armed Gate/Trigger | Each encoder: step state for current page; playing step blinks white |
+| Armed Gate | Each encoder: step gate state; playing step blinks white |
+| Armed Gate + Glide held | Each encoder: per-step ratchet count (dim = none, bright green = high) |
+| Armed Trigger | Each encoder: step ratchet/repeat state; playing step blinks white |
 | CHAN held (no page button) | Each encoder: channel type color |
-| Ratchet Step Editor | Active channel's page button blinks |
 | Channel Edit — enc 1 | Brightness = output delay |
 | Channel Edit — enc 2 | Green/Orange/Yellow/Magenta = direction |
 | Channel Edit — enc 7 | Type/scale color |
@@ -342,14 +337,16 @@ VoltSeq saves automatically at these moments:
 | Armed CV + **Encoder N** | Edit step N's CV value |
 | Armed CV + **Shift + Enc 5** | Adjust channel range |
 | Armed CV + **Shift + Enc 7** | Adjust quantizer scale |
-| Armed Gate/Trig + **Encoder N** | Edit gate length / ratchet-repeat for step N |
+| Armed Gate + **Encoder N** | Adjust gate length for step N |
+| Armed Gate + **Glide held + Encoder N** | Adjust ratchet count for step N (0 = single, 2–8 = subdivide) |
 | Armed Gate/Trig + **tap Page N** | Toggle step N on/off |
+| Armed Trigger + **Encoder N** | Adjust ratchet/repeat count for step N |
+| **Hold Glide + step Page N + Encoder M** | Adjust Gate channel M ratchet at step N (unarmed) |
 | Channel Edit + **long-press Page N** | Clear all steps for channel N |
 | Channel Edit + **Shift + Page N** | Navigate to page N |
 | **Hold Glide + Encoder N** | Glide time / gate offset / pulse width for channel N |
 | **Hold Shift + Glide + Encoder N** | Offset all ratchet counts for Trigger channel N |
 | Armed CV + **Hold Glide + Encoder N** | Enable (CW) / disable (CCW) glide on step N |
-| **Hold Glide + long-press Page N** (600 ms) | Enter Ratchet Step Editor (Trigger channels only) |
 | **Fine + Glide** (hold 1.5 s) | Enter Performance Page |
 | **Short Fine + Glide** (tap + release) | Toggle Phase Scrub Lock |
 | **Shift + Tap + Chan.** (hold 1 s) | Switch to VoltSeq mode |

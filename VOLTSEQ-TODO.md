@@ -13,43 +13,6 @@ Backlog for VoltSeq firmware features, known bugs, and porting work.
 
 ---
 
-### Global Settings Entry — Pressing Other Buttons While Holding Shift Does Not Cancel
-**Observed:** Holding Shift then pressing Glide (or Fine) enters global settings anyway — the cancel check doesn't see those button presses.
-
-**Root cause:** `c.button.morph.just_went_high()` and `c.button.fine.just_went_high()` are consumed in `Common()` which runs before `Update()` every tick. By the time the shift-hold cancel check reads them, the events are already cleared. **Fixed in alpha10** by pre-reading `morph_jgh` and `fine_jgh` at the top of `Update()` alongside `bank_jgh` and `play_jgh`.
-
-**Proposed fix — SHIFT+CHAN hold (2s) for Global Settings:**
-- **Short SHIFT+CHAN** (tap) → Channel Edit (already works)
-- **Long SHIFT+CHAN** (hold ≥ 2s) → Global Settings
-
-This is natural (same modifier, deeper hold = deeper menu), avoids all conflicts with Performance Page Shift usage, and removes the dedicated hold-Shift-alone timer entirely. Implementation: in the SHIFT+CHAN handler, start a 2s timer on the first tick both are held; if they're still held at 2s, enter global settings instead of Channel Edit; if released before 2s, enter Channel Edit as today. Remove `shift_hold_pending_` / `kGlobalSettingsHoldTicks` entirely.
-
----
-
-### BPM Color Ranges (Global Settings enc 6)
-**Redesign:** Replace snap-point indicators with a continuous color gradient across the BPM range (ROYGBIV), so the tempo zone is immediately readable:
-
-| BPM range | Color |
-|-----------|-------|
-| < 50 | `red` |
-| 50–79 | `orange` |
-| 80–99 | `yellow` |
-| 100–119 | `green` |
-| 120–149 | `blue` |
-| 150–179 | `teal` |
-| 180+ | `lavender` |
-
-The encoder LED pulses with the clock phase (`PeekPhase()`), blending from `off` to the zone color. This gives both tempo feedback (color zone) and clock-running feedback (pulse).
-
----
-
-### Phase Scrub Lock — No Indicator in VoltSeq Mode
-**Observed:** In CatSeq, locking the slider lights encoder 8 red, and wiggling the locked slider blinks it during pickup. Neither of these indicators is present in VoltSeq mode. The lock toggle (short Fine+Glide) works, but there is no visual confirmation.
-
-**Fix:** Port the encoder 8 LED logic from the CatSeq Performance Page / scrub settings to VoltSeq's PaintLeds. When locked, enc 8 (Panel 8, Random) should show red. During pickup (slider not yet reached the locked position), it should blink red. Reference: `src/ui/seq_scrub_settings.hh` and the Phase Scrub lock display in CatSeq's PaintLeds.
-
----
-
 ### Glide Direction — Possible One-Way Slew Bug
 **Observed:** Glide appears to only work from higher pitch to lower pitch (downward slew). Upward slew may not be audible or may be instant.
 
