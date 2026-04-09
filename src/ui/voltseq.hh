@@ -25,6 +25,10 @@ inline constexpr uint16_t CvStepFine   = 14;  // ≈ 1 sub-semitone unit
 inline constexpr uint16_t GateStepCoarse = 5;  // ≈ 2% per detent (~50 detents for full range)
 inline constexpr uint16_t GateStepFine   = 1;  // ≈ 0.4% per detent
 
+// Chaselight color for the currently playing step in armed mode.
+// Dimmed from full_white so the indicator is visible without drowning out the step colors.
+inline constexpr Color ChaseWhite = Color(110, 110, 110);
+
 class Main : public Abstract {
 	Catalyst2::VoltSeq::Interface &p;
 
@@ -1517,7 +1521,7 @@ public:
 				Color col        = StepColorForChannel(ch, gs);
 				// Chaselight: current step pulses white, unless that step's button is held (editing)
 				if (i == chase && !c.button.scene[i].is_high())
-					col = blink ? Palette::full_white : col;
+					col = blink ? ChaseWhite : col;
 				c.SetEncoderLed(i, col);
 			}
 			}
@@ -1541,7 +1545,7 @@ public:
 					const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));
 					Color col        = StepColorForChannel(ch, gs);
 					if (i == chase && !c.button.scene[i].is_high())
-						col = blink ? Palette::full_white : col;
+						col = blink ? ChaseWhite : col;
 					c.SetEncoderLed(i, col);
 				}
 			}
