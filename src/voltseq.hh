@@ -49,7 +49,7 @@ struct StepFlags {
 struct Data {
 	// Increment current_tag whenever the struct layout changes (fields added/removed/reordered).
 	// validate() checks this tag so WearLevel rejects stale or incompatible flash data gracefully.
-	static constexpr uint32_t current_tag     = 3u;
+	static constexpr uint32_t current_tag     = 4u;
 	uint32_t                  SettingsVersionTag = current_tag;
 
 	static StepGrid DefaultSteps() {
@@ -63,10 +63,10 @@ struct Data {
 	StepGrid                                       steps = DefaultSteps();
 	std::array<ChannelSettings, Model::NumChans>   channel{};
 	std::array<StepFlags, Model::NumChans>         flags{};
-	Direction                                      default_direction = Direction::Forward;
-	Channel::Cv::Range                             default_range     = [] { Channel::Cv::Range r; r.Inc(2); return r; }();
-	uint8_t                                        default_length    = 8;
-	uint8_t                                        _reserved         = 0;
+	bool                                           play_stop_reset    = false; // true = Stop also resets all channels to step 1
+	uint8_t                                        master_reset_steps = 0;    // 0=off; auto-reset every N master clock ticks
+	uint8_t                                        reset_leader_ch    = 0xFF; // 0xFF=off; reset all when this channel wraps
+	uint8_t                                        _reserved          = 0;
 	Clock::Bpm::Data                               bpm{};             // internal BPM
 	Macro::Recorder::Data                          recorder{};        // slider sample buffer (reserved)
 
@@ -82,8 +82,6 @@ struct Data {
 			return false;
 		if (!bpm.Validate())
 			return false;
-		if (default_length < 1)
-			return false;
 		for (const auto &ch : channel) {
 			if (!ch.range.Validate())
 				return false;
@@ -92,7 +90,7 @@ struct Data {
 			if (ch.length < 1)
 				return false;
 		}
-		if (!default_range.Validate())
+		if (reset_leader_ch != 0xFF && reset_leader_ch >= Model::NumChans)
 			return false;
 		return true;
 	}
@@ -203,6 +201,13 @@ class Interface {
 	std::array<GateState,    Model::NumChans> gate_state{};
 	std::array<RatchetState, Model::NumChans> ratchet_state{};
 
+	// Master reset runtime counter (counts master clock ticks; resets when it reaches master_reset_steps)
+	uint8_t                                   master_reset_counter_  = 0;
+
+	// Per-channel wrap flag: set true by AdvanceShadow when a channel's sequence wraps to step 0.
+	// Used by the reset-leader check in OnChannelFired.  Cleared at the start of each AdvanceShadow call.
+	std::array<bool, Model::NumChans>         just_wrapped_{};
+
 	// Orbit / beat-repeat state (driven by slider performance page)
 	bool                                      orbit_active_          = false;
 	uint8_t                                   orbit_pos_             = 0;
@@ -266,7 +271,7 @@ class Interface {
 						beat_repeat_phase_ = 0.f;
 						if (first_entry) {
 							// Snap orbit_center to the current playhead of the longest channel
-							uint8_t ref_len = data.default_length > 0 ? data.default_length : 1u;
+							uint8_t ref_len = 1u;
 							uint8_t ref_ph  = playhead[0];
 							for (auto ch = 0u; ch < Model::NumChans; ch++) {
 								if (data.channel[ch].length > ref_len) {
@@ -295,7 +300,10 @@ class Interface {
 
 		// Advance orbit_pos based on direction setting
 		if (orbit_should_adv) {
-			const uint8_t  ref_len    = data.default_length > 0 ? data.default_length : 1u;
+			// Reference length = longest active channel (used for granular window scaling)
+			uint8_t ref_len = 1u;
+			for (auto ch = 0u; ch < Model::NumChans; ch++)
+				ref_len = std::max(ref_len, data.channel[ch].length);
 			const uint32_t window_ref = (perf_mode == 1)
 			                                ? std::max<uint32_t>(1u, static_cast<uint32_t>(width_pct / 100.f * ref_len + 0.5f))
 			                                : 1u;
@@ -352,14 +360,19 @@ class Interface {
 	static constexpr uint8_t PageOf(uint8_t step)    { return step / Model::NumChans; }
 	static constexpr uint8_t StepInPage(uint8_t step) { return step % Model::NumChans; }
 
-	// Advance shadow playhead for channel ch per its direction setting
+	// Advance shadow playhead for channel ch per its direction setting.
+	// Sets just_wrapped_[ch] = true when the sequence crosses its boundary (Forward: step → 0;
+	// Reverse: step → len-1).  PingPong and Random do not set just_wrapped_ (no clear boundary).
 	void AdvanceShadow(uint8_t ch) {
+		just_wrapped_[ch] = false;
 		const uint8_t len = data.channel[ch].length;
 		switch (data.channel[ch].direction) {
 		case Direction::Forward:
+			just_wrapped_[ch] = (shadow[ch] + 1u >= len);
 			shadow[ch] = (shadow[ch] + 1) % len;
 			break;
 		case Direction::Reverse:
+			just_wrapped_[ch] = (shadow[ch] == 0);
 			shadow[ch] = shadow[ch] == 0 ? len - 1 : shadow[ch] - 1;
 			break;
 		case Direction::PingPong: {
@@ -484,6 +497,14 @@ class Interface {
 		}
 		if (!AnyStepHeld())
 			playhead[ch] = shadow[ch];
+
+		// Reset-leader: when the designated channel wraps its sequence, reset all channels.
+		// Only active when master_reset_steps == 0 (master reset takes priority when both are set).
+		if (just_wrapped_[ch] && data.reset_leader_ch == ch && data.master_reset_steps == 0) {
+			Reset();
+			return; // channels are reset; skip gate/trigger fire for this tick
+		}
+
 		const auto step = GetOutputStep(ch);
 		if (data.channel[ch].type == ChannelType::Gate)
 			FireGate(ch, step);
@@ -530,8 +551,10 @@ public:
 		shadow.fill(0);
 		pingpong_dir.fill(1);
 		primed.fill(false);
-		held_count_ = 0;
-		arp_index_  = 0;
+		just_wrapped_.fill(false);
+		held_count_           = 0;
+		arp_index_            = 0;
+		master_reset_counter_ = 0;
 		gate_state    = {};
 		ratchet_state = {};
 		clock.ResetDividers();
@@ -571,8 +594,13 @@ public:
 	bool AnyStepHeld() const { return held_count_ > 0; }
 
 	// Global step index to use for output this tick (step-lock > orbit > playhead).
+	// When a step is held, channels shorter than the held position wrap via modulo so they
+	// output their equivalent position rather than reading out-of-range (zeroed) grid data.
 	uint8_t GetOutputStep(uint8_t ch) const {
-		if (held_count_ > 0) return held_steps_[arp_index_ % held_count_];
+		if (held_count_ > 0) {
+			const auto raw = held_steps_[arp_index_ % held_count_];
+			return static_cast<uint8_t>(raw % data.channel[ch].length);
+		}
 		if (OrbitActiveForChannel(ch)) return orbit_step_[ch];
 		return playhead[ch];
 	}
@@ -661,6 +689,21 @@ public:
 	// Called once per main-loop tick from VoltSeq::Main::Common().
 	bool UpdateClock() {
 		const bool master_ticked = clock.Update(data.channel);
+
+		// Master reset: count master ticks while playing; reset all channels when the count is reached.
+		// This takes priority over the reset-leader mechanism (leader check is skipped when this fires).
+		if (playing && master_ticked && data.master_reset_steps > 0) {
+			master_reset_counter_++;
+			if (master_reset_counter_ >= data.master_reset_steps) {
+				master_reset_counter_ = 0;
+				Reset(); // clears channel_fired_, so no OnChannelFired calls run below
+				UpdateGates();
+				UpdateTriggers();
+				UpdateOrbit(master_ticked);
+				return master_ticked;
+			}
+		}
+
 		if (master_ticked && AnyStepHeld())
 			TickArp();
 		if (playing) {

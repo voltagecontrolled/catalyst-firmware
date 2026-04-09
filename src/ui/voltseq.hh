@@ -101,12 +101,18 @@ class Main : public Abstract {
 	static constexpr int32_t  kSliderMoveThreshold = 8;
 	static constexpr uint32_t kSliderActiveTicks   = Clock::MsToTicks(400);
 	static constexpr uint32_t kToggleFeedbackTicks = Clock::MsToTicks(600);
-	static constexpr uint32_t kClearHoldTicks      = Clock::MsToTicks(600);
+	static constexpr uint32_t kClearHoldTicks         = Clock::MsToTicks(600);
+	static constexpr uint32_t kGlobalSettingsHoldTicks = Clock::MsToTicks(1500);
 
 	// Clear mode: SHIFT+PLAY held > kClearHoldTicks → enter; tap page N = clear ch N; PLAY = clear all
 	bool     clear_mode_active_   = false;
 	bool     shift_play_pending_  = false;   // armed while we wait for long/short distinction
 	uint32_t shift_play_press_t_  = 0;
+
+	// Global settings modal: Shift held alone ≥1.5 s → enter; Play exits.
+	bool     global_settings_active_ = false;
+	bool     shift_hold_pending_     = false;  // Shift pressed, waiting for 1.5s or cancellation
+	uint32_t shift_hold_start_       = 0;
 
 	// Beat repeat debounce table (matches sequencer)
 	static constexpr std::array<uint32_t, 8> kBeatRepeatDebounce = {
@@ -145,7 +151,7 @@ class Main : public Abstract {
 	static Direction CycleDirection(Direction d, int32_t dir) {
 		constexpr int32_t n = 4; // Forward, Reverse, PingPong, Random
 		const int32_t v = static_cast<int32_t>(d);
-		return static_cast<Direction>(((v + dir) % n + n) % n);
+		return static_cast<Direction>(std::clamp<int32_t>(v + dir, 0, n - 1));
 	}
 
 	// ---- Clear helper ----
@@ -538,11 +544,7 @@ public:
 				}
 			} else if (!c.button.fine.is_high() || !c.button.morph.is_high()) {
 				scrub_hold_pending_ = false;
-				if (perf_page_active_) {
-					// Short release from perf page = exit
-					perf_page_active_     = false;
-					perf_settings_active_ = false;
-				}
+				DoLockToggle();
 			}
 		}
 	}
@@ -556,13 +558,39 @@ public:
 		// got_rising_edge_ set, causing a spurious Channel Edit trigger on the next Shift press).
 		const bool bank_jgh = c.button.bank.just_went_high();
 
+		// --- Shift long-hold: global settings entry ---
+		// Shift held alone for 1.5 s (no other button pressed during the hold) enters the
+		// global settings modal.  Any other button press while Shift is down cancels the timer.
+		if (c.button.shift.just_went_high() && !global_settings_active_) {
+			shift_hold_pending_ = true;
+			shift_hold_start_   = Controls::TimeNow();
+		}
+		if (shift_hold_pending_) {
+			const bool cancelled = !shift
+			    || bank_jgh
+			    || c.button.play.just_went_high()
+			    || c.button.morph.just_went_high()
+			    || c.button.fine.just_went_high()
+			    || c.button.add.just_went_high();
+			if (cancelled) {
+				shift_hold_pending_ = false;
+			} else if (Controls::TimeNow() - shift_hold_start_ >= kGlobalSettingsHoldTicks) {
+				shift_hold_pending_      = false;
+				global_settings_active_  = true;
+				for (auto &b : c.button.scene) b.clear_events();
+			}
+		}
+
 		// --- Play / Stop / Clear-mode entry ---
 		// SHIFT+PLAY: short release (<600ms) = Reset; held ≥600ms = enter Clear mode.
 		// Plain PLAY while in an edit mode: exit that mode (no playback change).
 		// Plain PLAY while armed: disarm (no playback change).
 		// Plain PLAY otherwise: Toggle play/stop.
 		if (c.button.play.just_went_high()) {
-			if (shift) {
+			if (global_settings_active_) {
+				global_settings_active_ = false;
+				p.shared.do_save_macro  = true;
+			} else if (shift) {
 				shift_play_pending_ = true;
 				shift_play_press_t_ = Controls::TimeNow();
 			} else if (perf_page_active_) {
@@ -586,6 +614,9 @@ public:
 				trigger_step_enc_turned_ = 0;
 			} else {
 				p.Toggle();
+				// Play/Stop reset mode: when stopping, also reset all channels to step 1
+				if (!p.IsPlaying() && p.GetData().play_stop_reset)
+					p.Reset();
 				p.shared.do_save_macro = true;
 			}
 		}
@@ -616,13 +647,15 @@ public:
 
 		// --- Mode switch: if mode was changed externally, yield to sequencer ---
 		if (p.shared.mode == Model::Mode::Sequencer) {
-			perf_page_active_      = false;
-			perf_settings_active_  = false;
-			channel_edit_active_   = false;
-			glide_editor_active_   = false;
-			ratchet_editor_active_ = false;
-			clear_mode_active_     = false;
-			shift_play_pending_    = false;
+			perf_page_active_        = false;
+			perf_settings_active_    = false;
+			channel_edit_active_     = false;
+			glide_editor_active_     = false;
+			ratchet_editor_active_   = false;
+			clear_mode_active_       = false;
+			global_settings_active_  = false;
+			shift_hold_pending_      = false;
+			shift_play_pending_      = false;
 			SwitchUiMode(main_ui);
 			return;
 		}
@@ -630,6 +663,12 @@ public:
 		// --- Clear mode ---
 		if (clear_mode_active_) {
 			UpdateClearMode();
+			return;
+		}
+
+		// --- Global Settings modal ---
+		if (global_settings_active_) {
+			UpdateGlobalSettings(fine);
 			return;
 		}
 
@@ -674,16 +713,6 @@ public:
 			return;
 		}
 
-		// --- Shift: page navigation + global settings ---
-		if (shift) {
-			for (auto [i, btn] : countzip(c.button.scene)) {
-				if (btn.just_went_high()) {
-					NavigatePage(i);
-				}
-			}
-			UpdateGlobalSettings(fine);
-			return;
-		}
 
 		// --- Channel arm / type select: CHAN held ---
 		if (chan) {
@@ -740,6 +769,7 @@ private:
 		// While any step is held: encoder N adjusts channel N's value for all held steps
 		if (p.AnyStepHeld()) {
 			ForEachEncoderInc(c, [&](uint8_t enc, int32_t inc) {
+				focused_ch_ = enc; // chaselight follows last-edited channel
 				for (auto i = 0u; i < Model::NumChans; i++) {
 					if (!c.button.scene[i].is_high()) continue;
 					const uint8_t gs = GlobalStep(i);
@@ -752,6 +782,8 @@ private:
 						EditTrigStep(enc, gs, inc); // no accel: ±8 range
 				}
 			});
+		} else {
+			ClearEncoderEvents(c); // drain stale deltas — prevent accumulated turns from firing on next CHAN press
 		}
 	}
 
@@ -1185,23 +1217,38 @@ private:
 		});
 	}
 
-	// --- Global Settings (Shift held in normal mode) ---
+	// --- Global Settings modal (entered via Shift held ≥1.5 s; exits on Play) ---
+	// Panel assignments:
+	//   Panel 1 (Start)       enc 0 — Play/Stop reset mode (clamped off→on; LED red=on, off=off)
+	//   Panel 3 (Length)      enc 2 — Master reset steps (0=off, 1–64; red=snap, orange=other, off=0)
+	//   Panel 6 (BPM/Clk Div) enc 5 — Internal BPM
+	// Page buttons: reset leader channel radio (tap to select, tap selected to deselect)
 
 	void UpdateGlobalSettings(bool fine) {
 		auto &d = p.GetData();
+
+		// Page buttons: reset leader radio selector
+		auto &leader = d.reset_leader_ch;
+		for (auto [i, btn] : countzip(c.button.scene)) {
+			if (btn.just_went_high()) {
+				leader = (leader == static_cast<uint8_t>(i)) ? 0xFF : static_cast<uint8_t>(i);
+			}
+		}
+
+		// Encoders
 		ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
 			switch (enc) {
-			case 1: // Default direction  (Dir.)
-				d.default_direction = CycleDirection(d.default_direction, dir);
+			case 0: { // Panel 1 (Start): Play/Stop reset mode — clamped off/on
+				const int32_t v = std::clamp<int32_t>((d.play_stop_reset ? 1 : 0) + dir, 0, 1);
+				d.play_stop_reset = (v == 1);
 				break;
-			case 2: // Default length     (Length)
-				d.default_length = static_cast<uint8_t>(
-				    std::clamp<int32_t>(d.default_length + dir, 1, 64));
+			}
+			case 2: { // Panel 3 (Length): Master reset steps — 0=off, 1–64, clamped
+				d.master_reset_steps = static_cast<uint8_t>(
+				    std::clamp<int32_t>(d.master_reset_steps + dir, 0, 64));
 				break;
-			case 4: // Default range      (Range)
-				d.default_range.Inc(dir);
-				break;
-			case 5: // Internal BPM       (BPM/Clock Div)
+			}
+			case 5: // Panel 6 (BPM/Clock Div): Internal BPM
 				p.clock.bpm.Inc(dir, fine);
 				break;
 			default:
@@ -1333,15 +1380,23 @@ public:
 				//   enc 1 (Dir):  color = current direction
 				//   enc 6 (Transpose): type/scale color
 				//   enc 7 (Random): white brightness = random amount
+				// Page buttons: focused channel lit solid; current playing step blinks (chaselight).
 				static constexpr std::array<Color, 4> dir_col = {
 				    Palette::green,  // Forward
 				    Palette::orange, // Reverse
 				    Palette::yellow, // PingPong
 				    Palette::magenta // Random
 				};
-				const auto &cs = p.GetData().channel[edit_ch_];
+				const auto &cs       = p.GetData().channel[edit_ch_];
+				const auto  ph_edit  = p.GetPlayhead(edit_ch_);
+				const bool  on_page  = (ph_edit / Model::NumChans == current_page_);
+				const uint8_t chase  = on_page ? static_cast<uint8_t>(ph_edit % Model::NumChans) : 0xFF;
+				const bool  blink    = (Controls::TimeNow() >> 8) & 1u;
 				for (auto i = 0u; i < Model::NumChans; i++) {
-					c.SetButtonLed(i, i == edit_ch_);
+					// Default: focused-channel indicator; chaselight blinks on the playing step
+					bool page_lit = (i == edit_ch_);
+					if (i == chase) page_lit = blink;
+					c.SetButtonLed(i, page_lit);
 					Color col = Palette::dim_grey;
 					if (i == 0) col = Palette::off.blend(Palette::full_white, cs.output_delay_ms / 20.f);
 					else if (i == 1) col = dir_col[static_cast<uint8_t>(cs.direction)];
@@ -1353,21 +1408,41 @@ public:
 			return;
 		}
 
-		// --- SHIFT held (not in any mode): global settings feedback ---
-		// Enc 0 = default direction (color), enc 2 = default range (orange ramp),
-		// enc 5 = default length (white ramp), enc 6 = BPM (yellow, pulses with clock).
-		if (c.button.shift.is_high() && !channel_edit_active_ && !glide_editor_active_ && !ratchet_editor_active_) {
-			static constexpr std::array<Color, 4> dir_col = {
-			    Palette::green, Palette::orange, Palette::yellow, Palette::magenta};
+		// --- Global Settings modal ---
+		// Page buttons: lit = that channel is the reset leader.
+		// Encoder LEDs:
+		//   enc 0 (Panel 1, Start)        = play/stop reset mode → red=on, off=off
+		//   enc 2 (Panel 3, Length)       = master reset steps   → red=snap(8/16/32/64), orange=other, off=0
+		//   enc 5 (Panel 6, BPM/Clk Div)  = BPM                 → yellow, pulses with clock phase
+		if (global_settings_active_) {
 			const auto &d = p.GetData();
+			for (auto i = 0u; i < Model::NumChans; i++)
+				c.SetButtonLed(i, d.reset_leader_ch == static_cast<uint8_t>(i));
 			for (auto i = 0u; i < Model::NumChans; i++) {
-				c.SetButtonLed(i, false);
 				Color col = Palette::dim_grey;
 				switch (i) {
-				case 1: col = dir_col[static_cast<uint8_t>(d.default_direction)]; break;
-				case 2: col = Palette::off.blend(Palette::full_white, d.default_length / 64.f); break;
-				case 4: col = Palette::off.blend(Palette::orange, d.default_range.PosAmount()); break;
-				case 5: col = Palette::off.blend(Palette::yellow, p.clock.bpm.GetPhase()); break;
+				case 0:
+					col = d.play_stop_reset ? Palette::red : Palette::off;
+					break;
+				case 2: {
+					if (d.master_reset_steps == 0) {
+						col = Palette::off;
+					} else {
+						const bool snap = (d.master_reset_steps == 8  || d.master_reset_steps == 16
+						                || d.master_reset_steps == 32 || d.master_reset_steps == 64);
+						col = snap ? Palette::red : Palette::orange;
+					}
+					break;
+				}
+				case 5: {
+					// Pulses yellow with clock phase; snaps to white at 80/100/120/140 BPM
+					const auto bpm_round = static_cast<uint32_t>(p.clock.bpm.GetBpm() + 0.5f);
+					const bool bpm_snap  = (bpm_round == 80 || bpm_round == 100
+					                     || bpm_round == 120 || bpm_round == 140);
+					col = Palette::off.blend(bpm_snap ? Palette::full_white : Palette::yellow,
+					                         p.clock.bpm.GetPhase());
+					break;
+				}
 				default: break;
 				}
 				c.SetEncoderLed(i, col);

@@ -27,9 +27,9 @@ Backlog for VoltSeq firmware features, known bugs, and porting work.
 ---
 
 ### Global Channel Length / Clock Div Sync
-**Desired:** A combo in Global Settings (Shift + encoder) that sets ALL channels to the same length and/or the same clock division simultaneously. Useful for "syncing up" channels after independent editing, especially when setting up a fresh sequence.
+**Desired:** A combo in Global Settings that sets ALL channels to the same length and/or the same clock division simultaneously. Useful for "syncing up" channels after independent editing, especially when setting up a fresh sequence.
 
-**Proposed UX:** Shift held, enc 3 (Length) sets a "default length" as today but also immediately applies it to ALL channels with one extra confirmation press (e.g., press encoder knob or hold for 600ms). Similarly for enc 6 (Clock Div). Alternatively, a dedicated "apply global to all" page-button press while in Global Settings.
+**Proposed UX:** In Global Settings, a dedicated encoder (enc 3 is currently master reset steps — could be a Shift+enc combo or a separate hold gesture) writes a chosen length to all 8 channels. Similarly for clock div. Alternatively, a "apply to all" page-button hold while turning enc 3 in Channel Edit. UX TBD.
 
 ---
 
@@ -111,7 +111,14 @@ These features exist in the firmware but have not been user-tested yet. Each ite
 - **CHAN+encoder no longer causes clock stumble** (alpha6): test type cycling while sequence is running.
 - **Tap tempo requires 3 taps** (alpha5+6, both CatSeq and VoltSeq): confirm first two taps are ignored, third takes effect.
 - **Custom scale fallback** (alpha6): channel saved with a custom scale type should load as unquantized without corrupting step data.
-- **Global settings encoders** (alpha6): enc 2=Dir, 3=Length, 5=Range, 6=BPM — confirm all four respond and save.
+- **Global Settings modal entry** (alpha9): Shift held 1.5 s alone — any other button during hold must cancel entry. Confirm Shift+Play, Shift+Chan, and Shift+other combos still work normally (they cancel the hold, do not enter settings).
+- **Global Settings — Play/Stop reset mode** (alpha9): enc 1 toggles on/off; when on, Stop resets all channels to step 1. Confirm enc 1 LED is red when on, off when off. Confirm normal Play/Stop behavior is unchanged when off.
+- **Global Settings — Master reset steps** (alpha9): enc 3 sets 0–64 steps; LED off at 0, orange at non-snap values, red at 8/16/32/64. Confirm all channels reset to step 1 every N master ticks when non-zero. Confirm overrides reset leader.
+- **Global Settings — Reset leader** (alpha9): page buttons radio-select leader channel; tap lit button to deselect. Confirm leader channel wrap resets all other channels. Confirm no reset when master_reset_steps is non-zero (master takes priority).
+- **Global Settings — BPM snap indicators** (alpha9): enc 6 pulse is yellow; turns white at exactly 80/100/120/140 BPM. Confirm Fine modifier gives 1 BPM steps, non-Fine gives 10 BPM steps.
+- **GetOutputStep wrap fix** (alpha9): short channels repeat correctly on later pages. Test: 8-step trigger on ch 1, 16-step CV on ch 2. Go to page 2, hold a page button — trigger steps should repeat (step 0–7 map to page-2 positions), not be silent.
+- **Chaselight focus** (alpha9): in main mode (unarmed, no step held), chaselight tracks whichever channel's encoder was last turned during step editing. Confirm it does not jump when other encoders are idle.
+- **Direction selector clamped** (alpha9): in Channel Edit enc 2, direction should stop at Forward (CW limit) and Random (CCW limit), not wrap.
 
 ### Core features never formally tested
 - **External clock sync**: patch a clock into Clock In; confirm VoltSeq locks to it, Reset jack resets all channels.
