@@ -100,15 +100,44 @@ int Update(float ratio):
 
 ---
 
+## Needs Hardware Verification
+
+These features exist in the firmware but have not been user-tested yet. Each item should be checked before a stable release.
+
+### Alpha-specific regression checks
+- **Clear mode** (alpha5): SHIFT+PLAY held 600ms → page N clears channel N, PLAY clears all, any other button exits. Short press still resets.
+- **SHIFT+CHAN toggle exits Channel Edit** (alpha6): confirm both entry and exit work, and that the save fires on exit.
+- **Play exits armed mode without stopping playback** (alpha6): confirm plain Play while armed only disarms.
+- **CHAN+encoder no longer causes clock stumble** (alpha6): test type cycling while sequence is running.
+- **Tap tempo requires 3 taps** (alpha5+6, both CatSeq and VoltSeq): confirm first two taps are ignored, third takes effect.
+- **Custom scale fallback** (alpha6): channel saved with a custom scale type should load as unquantized without corrupting step data.
+- **Global settings encoders** (alpha6): enc 2=Dir, 3=Length, 5=Range, 6=BPM — confirm all four respond and save.
+
+### Core features never formally tested
+- **External clock sync**: patch a clock into Clock In; confirm VoltSeq locks to it, Reset jack resets all channels.
+- **Direction modes** (Reverse, Ping-Pong, Random): test with multi-page sequences; verify Ping-Pong wraps correctly at page boundaries.
+- **Per-channel clock divisions** (Channel Edit enc 6): channels running at different rates than master; confirm independence.
+- **Glide time per CV channel** (GLIDE modifier, enc N while Glide held): confirm non-zero glide produces slew on output.
+- **Output delay** (Channel Edit enc 1, 0–20 ms): confirm offset is audible/measurable between channels.
+- **Random amount** (Channel Edit enc 8): confirm non-zero amount introduces step randomisation.
+- **Multi-page patterns**: sequences longer than 8 steps; direction modes crossing page boundaries.
+- **Hold multiple page buttons simultaneously**: multi-channel step editing — all held channels should update.
+- **Orbit follow mask exclusion** (Performance Page page buttons): confirm a channel with its bit cleared is genuinely unaffected by orbit. Was reported as possibly non-functional; persist fix is in but correctness of exclusion not verified.
+- **Granular orbit mode** (green perf mode): only beat repeat was exercised during alpha testing.
+- **Phase rotate** (Channel Edit enc 4): destructive operation, confirm it only moves active steps and leaves steps beyond channel length untouched.
+
+---
+
 ## Main Sequencer Ports (future)
 
 ### Universal "Play/Reset exits any mode"
-VoltSeq exits Channel Edit, Glide Step Editor, Ratchet Step Editor, and Performance Page on Play press. The main sequencer has modal states that don't share this pattern. Port the single-button-exits-everything UX to the main sequencer UI for consistency.
+VoltSeq now exits all modes on Play press. The main sequencer has modal states that don't share this pattern. Port the single-button-exits-everything UX to the main sequencer UI for consistency.
 
 ---
 
 ## Known Quirks / Low Priority
 
+- **Wholetone scale and unquantized CV show the same grey** — both map to `Palette::grey` in the type selector. Low-priority color collision; needs a distinct color for wholetone.
 - In the Glide Step Editor and Ratchet Step Editor, page navigation requires Shift+Page. There is no way to navigate without Shift while in the editor. Consider allowing bare page presses to navigate (since exit is now Glide/Play only, there is no conflict).
-- Phase rotate (Channel Edit enc 3) is destructive with no undo. Add a brief "rotate pending" state where the user must confirm (second turn = commit), or document clearly.
-- Trigger pulse width (Channel Edit enc 4) has no display feedback. Consider a brightness ramp on enc 4 LED (dim = short pulse, bright = long pulse).
+- Phase rotate (Channel Edit enc 4) is destructive with no undo. Add a brief "rotate pending" state where the user must confirm (second turn = commit), or document clearly.
+- Trigger pulse width (Channel Edit enc 5) has no display feedback. Consider a brightness ramp on enc 5 LED (dim = short pulse, bright = long pulse).
