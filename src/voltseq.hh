@@ -136,6 +136,13 @@ public:
 		bpm.Trig();
 	}
 
+	// Returns the Controls::TimeNow() timestamp of the last ExternalClockTick() call.
+	// Used by ResetExternal() to decide whether a clock fired recently enough to have
+	// already advanced to step 0 (i.e., primed should stay true).
+	uint32_t GetLastExternalClockTime() const {
+		return last_tick_time;
+	}
+
 	// Call on rising edge of Tap Tempo button
 	void TapTempo() {
 		bpm.Tap();
@@ -642,16 +649,29 @@ public:
 		clock.SyncStepClock();
 	}
 
-	// Like Reset() but does not clear primed[].  Used for the external reset jack:
-	// if the pattern just naturally wrapped to step 0 (primed=true), keeping primed true
-	// prevents a double-fire of step 0 on the clock pulse that follows the reset pulse.
-	// Manual resets (SHIFT+PLAY, play/stop reset mode) use Reset() and clear primed so that
-	// step 0 plays correctly on the first clock after the restart.
+	// Like Reset() but uses a time-based heuristic to decide whether to clear primed[].
+	// Used for the external reset jack:
+	//
+	// Case A (reset arrives before clock, or simultaneously):
+	//   last_clock_time is ~one-step-period old → clear primed=false
+	//   → step 0 fires on the first post-reset clock (correct).
+	//
+	// Case B (clock fires a few ticks BEFORE reset, e.g. Oxi One sends them slightly apart):
+	//   last_clock_time is very recent (< half step period) → keep primed=true
+	//   → step 0 was just played naturally; next clock advances to step 1, no double-fire.
+	//
+	// Manual resets (SHIFT+PLAY, play/stop reset mode) use Reset() which always clears primed.
 	void ResetExternal() {
+		const auto     now             = Controls::TimeNow();
+		const uint32_t half_step       = std::max<uint32_t>(1u, clock.bpm.GetBpmInTicks() / 2u);
+		const bool     clock_was_recent = (now - clock.GetLastExternalClockTime()) < half_step;
+
 		playhead.fill(0);
 		shadow.fill(0);
 		pingpong_dir.fill(1);
-		// primed intentionally NOT cleared
+		if (!clock_was_recent)
+			primed.fill(false);
+		// When clock_was_recent, primed stays true: step 0 just fired naturally.
 		just_wrapped_.fill(false);
 		held_count_           = 0;
 		arp_index_            = 0;
