@@ -555,8 +555,9 @@ public:
 		const bool chan     = c.button.bank.is_high();
 		// Pre-read rising-edge events that appear in short-circuit conditions so they are
 		// always consumed on the tick they fire (short-circuit eval would otherwise leave
-		// got_rising_edge_ set, causing a spurious Channel Edit trigger on the next Shift press).
+		// got_rising_edge_ set, causing a spurious trigger on the next Shift press).
 		const bool bank_jgh = c.button.bank.just_went_high();
+		const bool play_jgh = c.button.play.just_went_high();
 
 		// --- Shift long-hold: global settings entry ---
 		// Shift held alone for 1.5 s (no other button pressed during the hold) enters the
@@ -568,7 +569,7 @@ public:
 		if (shift_hold_pending_) {
 			const bool cancelled = !shift
 			    || bank_jgh
-			    || c.button.play.just_went_high()
+			    || play_jgh
 			    || c.button.morph.just_went_high()
 			    || c.button.fine.just_went_high()
 			    || c.button.add.just_went_high();
@@ -586,7 +587,7 @@ public:
 		// Plain PLAY while in an edit mode: exit that mode (no playback change).
 		// Plain PLAY while armed: disarm (no playback change).
 		// Plain PLAY otherwise: Toggle play/stop.
-		if (c.button.play.just_went_high()) {
+		if (play_jgh) {
 			if (global_settings_active_) {
 				global_settings_active_ = false;
 				p.shared.do_save_macro  = true;
@@ -739,7 +740,8 @@ public:
 		}
 
 		// Save channel type changes when CHAN is released (deferred from CHAN+encoder handler above).
-		if (c.button.bank.just_went_low())
+		// Only save immediately when stopped; if playing, save is already deferred to next play-stop toggle.
+		if (c.button.bank.just_went_low() && !p.IsPlaying())
 			p.shared.do_save_macro = true;
 
 		// --- Dispatch to arm mode or normal step editing ---
@@ -1435,12 +1437,13 @@ public:
 					break;
 				}
 				case 5: {
-					// Pulses yellow with clock phase; snaps to white at 80/100/120/140 BPM
+					// Pulses yellow with clock phase (PeekPhase advances even when stopped).
+					// Snaps to solid white at 80/100/120/140 BPM so the reference is unmissable.
 					const auto bpm_round = static_cast<uint32_t>(p.clock.bpm.GetBpm() + 0.5f);
 					const bool bpm_snap  = (bpm_round == 80 || bpm_round == 100
 					                     || bpm_round == 120 || bpm_round == 140);
-					col = Palette::off.blend(bpm_snap ? Palette::full_white : Palette::yellow,
-					                         p.clock.bpm.GetPhase());
+					col = bpm_snap ? Palette::full_white
+					               : Palette::off.blend(Palette::yellow, p.clock.bpm.PeekPhase());
 					break;
 				}
 				default: break;

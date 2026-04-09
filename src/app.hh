@@ -398,10 +398,10 @@ class App {
 		const auto mapped   = MapStepValue(ch, raw);
 		const auto quantized = Quantizer::Process(GetScale(ch), mapped);
 
-		// Apply exponential glide if the step's glide flag is set and glide_time > 0
+		// Apply exponential glide whenever glide_time > 0 (per-step flag no longer required)
 		Channel::Cv::type out_cv;
 		const float glide_time = p.GetData().channel[ch].glide_time;
-		if (glide_time > 0.f && p.GlideFlag(ch, step)) {
+		if (glide_time > 0.f) {
 			constexpr float sample_rate = static_cast<float>(Model::sample_rate_hz);
 			const float coef = 1.f / (glide_time * sample_rate + 1.f);
 			const float slewed = static_cast<float>(slew_val[ch]) +
