@@ -19,7 +19,7 @@ VoltSeq uses the same physical panel as the Catalyst Sequencer. Panel controls a
 | Tap Tempo | Tap tempo |
 | Glide | GLIDE modifier (hold for glide time / gate offset / pulse width) |
 | Chan. | Channel arm / Channel Edit |
-| Shift | Modifier; hold 1.5 s alone = Global Settings |
+| Shift | Modifier; Shift+Chan. (hold 2 s) = Global Settings |
 | Fine | Fine-adjust modifier; Fine+Glide = Performance page / lock |
 | Clock In | External clock input |
 | Reset jack | Hardware reset trigger |
@@ -56,9 +56,9 @@ Default range for new channels is **−5V to +5V**. Changing a channel's type do
 
 ## Clock
 
-- **External clock:** patch a signal into **Clock In**. VoltSeq locks to it automatically.
+- **External clock:** patch a signal into **Clock In**. VoltSeq locks to it automatically at 1 pulse per 16th note (16 PPQN). When the cable is removed, the internal clock resumes at the same tempo.
 - **Internal clock:** tap **Tap Tempo** to set BPM (first two taps are ignored; BPM updates on the third tap and beyond). Fine-tune BPM in Global Settings (encoder 6).
-- **Reset jack:** a trigger resets all channels to step 1.
+- **Reset jack:** a trigger resets all channels to step 1 immediately and fires the first step's output, so the sequence is in sync from the moment the pulse arrives.
 
 ---
 
@@ -223,25 +223,18 @@ Press a **Page button** to focus that channel. Encoders edit per-channel setting
 | Encoder | Panel label | Parameter | LED |
 |---|---|---|---|
 | 1 | Start | Play/Stop reset mode | Red = on (Stop also resets to step 1), off = off |
-| 3 | Length | Master reset steps | Red = musical snap (8/16/32/64), orange = other value, off = disabled |
 | 6 | BPM/Clock Div | Internal BPM | Yellow pulse = current phase; **white** pulse at 80/100/120/140 BPM |
 
 ### Play/Stop Reset Mode
 
 When **on** (encoder 1 red): pressing Stop resets all channels to step 1 in addition to stopping playback. Useful for performance situations where you always want sequences to restart from the top.
 
-### Master Reset
-
-When non-zero (encoder 3): all channels automatically reset to step 1 every N master clock ticks. At **8, 16, 32, or 64** steps the LED turns red — these align to musical bar lengths at common channel lengths.
-
 ### Reset Leader
 
-**Page buttons** select a **reset leader channel** (radio select — only one at a time). When the leader channel completes its sequence and wraps back to step 1, all other channels reset with it, keeping everything phase-locked.
+**Page buttons** select a **reset leader channel** (radio select — only one at a time). When the leader channel completes its sequence and wraps back to step 1, all channels reset with it and fire their step 1 outputs immediately — keeping everything phase-locked with no timing gap.
 
 - Tap a page button to select that channel as leader (button lights up)
 - Tap the lit button again to deselect (no leader)
-
-**Priority:** if Master Reset is set (encoder 3 ≠ 0), it overrides the Reset Leader.
 
 ---
 
@@ -325,7 +318,6 @@ VoltSeq saves automatically at these moments:
 | Channel Edit — page buttons | Chaselight for focused channel |
 | Channel Edit, Shift held | Page buttons: current page lit solid (not focused channel) |
 | Global Settings — enc 1 | Red = play/stop reset on, off = off |
-| Global Settings — enc 3 | Red = snap steps (8/16/32/64), orange = other, off = disabled |
 | Global Settings — enc 6 | BPM color zone pulse (red <50, orange 50–79, yellow 80–99, green 100–119, blue 120–149, teal 150–179, lavender 180+) |
 | Global Settings — page buttons | Lit = reset leader channel |
 | Performance Page | Each encoder: channel's current output step color |

@@ -220,7 +220,7 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 | 7 | Transpose | Channel type / quantizer scale (CV scales → Gate → Trigger, clamped) |
 | 8 | Random | Random amount (0–100%) |
 
-**Global Settings (Shift held 1.5 s alone — any other button cancels):** Exit via Play/Reset. Enc 1 (Start) = play/stop reset mode; Enc 3 (Length) = master reset steps (0–64; red at 8/16/32/64 snap values); Enc 6 (BPM) = internal BPM with ROYGBIV color zone. Page buttons select reset leader channel (radio; tap to set, tap again to clear).
+**Global Settings (Shift+Chan. held 2 s):** Exit via Play/Reset. Enc 1 (Start) = play/stop reset mode; Enc 6 (BPM) = internal BPM with ROYGBIV color zone. Page buttons select reset leader channel (radio; tap to set, tap again to clear). When the leader channel wraps, all channels snap to step 1 and fire immediately.
 
 **Performance Page (Fine + Glide held 1.5s):** Phase Scrub orbit engine ported from CatSeq. Slider controls orbit center; Page buttons toggle per-channel orbit follow. Settings sub-page (Fine + Glide held 1.5s again) exposes mode, width/debounce, direction, and Phase Scrub Lock — same as CatSeq scrub settings.
 
@@ -248,6 +248,12 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 | alpha18 | Fix beat repeat (blue/cyan perf modes): Gate and Trigger channels now fire at the subdivision rate set by the performance page zone; previously channels only fired at their own clock division rate and the orbit window was always 1 (center step only), so no stuttering occurred; orbit-following channels are now suppressed from their normal clock fires during beat repeat and instead fire via the orbit advance timer using `beat_repeat_safe_period_` for gate/ratchet duration |
 | alpha19 | Remove Channel Edit long-press clear: page button in Channel Edit is now tap-to-focus only (immediate on rising edge, no timer); channel clearing exclusively via SHIFT+PLAY → Clear Mode; removes accidental-clear hazard during editing; `channel_edit_clear_timer_`, `channel_edit_clear_btn_`, `kNoLongpressBtn`, and `kLongpressMs` removed |
 | alpha20 | Remove dead step-edit block from UpdatePerfPage: `ForEachEncoderInc` guarded by `AnyStepHeld()` was unreachable since Perf Page never calls `SetStepHeld()`; block and `fine` parameter removed |
+| alpha21 | Fix step clock rate for external clock: bypass sub-clock entirely in external mode — channels now fire directly on each incoming pulse rather than being driven by the internal sub-divider at bpm_in_ticks/4 |
+| alpha22 | Add Play LED (lit while playing); fix external clock: each pulse fires channel dividers exactly once |
+| alpha23 | Fix external reset: process reset jack before clock jack in Common(); add SyncStepClock() to prime sub-counter so next tick fires immediately after reset |
+| alpha24–26 | Iterative attempts to fix external reset alignment using primed-mechanism heuristics and a CatSeq-style 50ms post-reset clock guard — all insufficient |
+| alpha28 | Fix external reset alignment: root cause identified as the `primed` mechanism consuming an extra clock cycle after every reset. `ResetExternal()` now sets `primed=true` and fires step 0 immediately, so the first post-reset clock advances to step 1 (matching CatSeq behavior). Also fix BPM handoff: `ExternalClockTick()` scales `bpm_in_ticks` ×4 so internal clock resumes at the correct quarter-note tempo when external clock is removed |
+| alpha29 | Fix primed-mechanism flam in master reset and reset leader: both now call `ResetExternal()` instead of `Reset()`, so step 0 fires immediately with no phantom extra trigger. `Play()` also fires step 0 immediately when starting from a reset state. Master reset removed (caused clock stutter when combined with `ResetExternal()`'s sub-clock reset; reset leader covers the primary use case). `current_tag` bumped to 6 (struct layout change: `master_reset_steps` field removed) |
 
 **Deviations from spec (`docs/planned/VOLTSEQ.md`):**
 - Slider recording uses the channel Range parameter directly; separate `slider_base_v`/`slider_span_v` fields were removed.
@@ -256,7 +262,7 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 - Phase rotate operates only on active steps (0 to length-1); unused steps beyond length are untouched.
 - Disarming requires Chan. + Page button (bare page-button disarm removed to allow all steps to be edited while armed, including step 1 of the armed channel).
 - Only two WAV builds per release (catseq-catcon, catseq-voltseq); the voltseq-catcon variant is deferred.
-- `VoltSeq::Data::current_tag = 5u` (bumped in alpha11; Gate step encoding changed to high byte = gate length, low byte = ratchet count).
+- `VoltSeq::Data::current_tag = 6u` (bumped in alpha29; `master_reset_steps` field removed from `Data`, shifting all subsequent fields).
 
 **Implementation notes:**
 

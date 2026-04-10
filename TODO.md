@@ -23,6 +23,16 @@ Implementation phases (see spec for detail):
 
 ## v1.4.7
 
+### CatSeq step clock resolution — needs verification
+
+**Observed:** VoltSeq (alpha21) now advances steps at 16th-note rate (bpm_in_ticks / 4 per step via sub-clock). CatSeq advances steps at quarter-note rate (`seqclock.Update()` fires every `bpm_in_ticks` ticks, one step per fire). This is a 4× difference in step rate at the same BPM setting.
+
+**Status:** Needs hardware verification with a reliable MIDI clock source before changing CatSeq. If CatSeq should also be 16th-note resolution, the fix is similar to VoltSeq: add a 16th-note sub-counter in `Sequencer::Interface::Update()` (`src/sequencer.hh`) that drives `per_chan_step` 4× per beat while keeping `seqclock` at quarter-note rate for phase tracking, beat repeat, and ratchet sub-step detection.
+
+**Caution:** CatSeq is at v1.4.6 (hardware verified). The gate track follow, ratchet sub-step detection, and beat repeat all depend on `seqclock` phase — those must remain on the quarter-note clock. Only `per_chan_step` advancement needs to change.
+
+---
+
 ### Conditional auto-reset on firmware upgrade
 
 

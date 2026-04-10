@@ -13,12 +13,14 @@ See `docs/planned/VOLTSEQ-ITERATIVE-PROBABILITY.md`.
 
 ## Active / Next Up
 
-### Manual reset timing under external clock
-**Observed:** Not yet hardware-verified. SHIFT+PLAY calls `Reset()` which sets `primed=false`. While running on external clock, the next clock primes (fires step 0, no advance) and the second clock advances to step 1 — a 1-step drift relative to the external clock source.
+### Manual reset punch-in under external clock
+**Observed (hardware verified):** SHIFT+PLAY cannot be punched in time to resync to an external clock. `Reset()` sets `primed=false` so the first post-reset clock primes rather than advances — adds ~1 step of latency that makes beat-accurate manual reset impractical.
 
-**Proposed fix:** Same as `ResetExternal()`: fire step 0 immediately and set `primed=true`. Either call `ResetExternal()` from the SHIFT+PLAY handler instead of `Reset()`, or make `Reset()` itself fire step 0 when `playing=true`.
+**Impact:** Low priority — not needed for typical use. Would matter for live performance with a band.
 
-**Caution:** `Reset()` is also used for play/stop reset mode (stopping while stopped) where firing step 0 immediately may not be desirable. May need a separate `ResetWhilePlaying()` path.
+**Proposed fix:** Call `ResetExternal()` from the SHIFT+PLAY handler instead of `Reset()` when the sequencer is playing. `Reset()` is still correct for play/stop reset mode (stopping while stopped).
+
+**Caution:** May need a separate `ResetWhilePlaying()` path to avoid firing step 0 gates unintentionally on a deliberate stop.
 
 ---
 
