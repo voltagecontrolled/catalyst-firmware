@@ -130,6 +130,9 @@ public:
 	uint32_t GetBpmInTicks() const {
 		return static_cast<uint32_t>(bpm_in_ticks);
 	}
+	void SetBpmInTicks(uint32_t ticks) {
+		bpm_in_ticks = static_cast<int16_t>(ticks);
+	}
 
 	bool Update() {
 		const uint32_t bpm = bpm_in_ticks;

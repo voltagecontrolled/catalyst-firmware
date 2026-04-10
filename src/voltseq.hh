@@ -64,7 +64,6 @@ struct Data {
 	std::array<ChannelSettings, Model::NumChans>   channel{};
 	std::array<StepFlags, Model::NumChans>         flags{};
 	bool                                           play_stop_reset    = false; // true = Stop also resets all channels to step 1
-	uint8_t                                        master_reset_steps = 0;    // 0=off; auto-reset every N master clock ticks
 	uint8_t                                        reset_leader_ch    = 0xFF; // 0xFF=off; reset all when this channel wraps
 	uint8_t                                        _reserved          = 0;
 	Clock::Bpm::Data                               bpm{};             // internal BPM
@@ -127,13 +126,21 @@ public:
 		: bpm{data} {
 	}
 
-	// Call on rising edge of Clock In jack
+	// Call on rising edge of Clock In jack.
+	// External clock runs at 16 PPQN (1 pulse per 16th note). bpm.Trig() sets
+	// bpm_in_ticks to the inter-pulse interval (a 16th note period). Scale by 4
+	// so bpm_in_ticks represents a quarter note — matching the internal clock's
+	// expectation — and the BPM display / tap tempo handoff are correct.
 	void ExternalClockTick() {
 		const auto now       = Controls::TimeNow();
 		tick_intervals[interval_idx % NumIntervalSamples] = now - last_tick_time;
 		last_tick_time                                     = now;
 		interval_idx++;
 		bpm.Trig();
+		// Re-scale: bpm.Trig() stored the 16th-note interval; multiply by 4 for quarter-note.
+		const auto sixteenth = bpm.GetBpmInTicks();
+		bpm.SetBpmInTicks(std::clamp<uint32_t>(sixteenth * 4u,
+		    Clock::Bpm::absolute_min_ticks, Clock::Bpm::absolute_max_ticks));
 	}
 
 	// Returns the Controls::TimeNow() timestamp of the last ExternalClockTick() call.
@@ -255,8 +262,6 @@ class Interface {
 	std::array<GateState,    Model::NumChans> gate_state{};
 	std::array<RatchetState, Model::NumChans> ratchet_state{};
 
-	// Master reset runtime counter (counts master clock ticks; resets when it reaches master_reset_steps)
-	uint8_t                                   master_reset_counter_  = 0;
 
 	// Per-channel wrap flag: set true by AdvanceShadow when a channel's sequence wraps to step 0.
 	// Used by the reset-leader check in OnChannelFired.  Cleared at the start of each AdvanceShadow call.
@@ -586,10 +591,10 @@ class Interface {
 			playhead[ch] = shadow[ch];
 
 		// Reset-leader: when the designated channel wraps its sequence, reset all channels.
-		// Only active when master_reset_steps == 0 (master reset takes priority when both are set).
-		if (just_wrapped_[ch] && data.reset_leader_ch == ch && data.master_reset_steps == 0) {
-			Reset();
-			return; // channels are reset; skip gate/trigger fire for this tick
+		// Uses ResetExternal() so step 0 fires immediately and primed stays true — no priming pause.
+		if (just_wrapped_[ch] && data.reset_leader_ch == ch) {
+			ResetExternal();
+			return;
 		}
 
 		const auto step = GetOutputStep(ch);
@@ -622,6 +627,18 @@ public:
 
 	void Play() {
 		playing = true;
+		// If starting from a reset state (primed=false), fire step 0 immediately so the first
+		// clock advances to step 1 rather than wasting a clock on the priming pause.
+		if (!primed[0]) {
+			primed.fill(true);
+			for (auto ch = 0u; ch < Model::NumChans; ch++) {
+				const auto step = GetOutputStep(ch);
+				if (data.channel[ch].type == ChannelType::Gate)
+					FireGate(ch, step);
+				else if (data.channel[ch].type == ChannelType::Trigger)
+					FireTrigger(ch, step);
+			}
+		}
 		clock.SyncStepClock();
 	}
 	void Stop() {
@@ -642,7 +659,7 @@ public:
 		just_wrapped_.fill(false);
 		held_count_           = 0;
 		arp_index_            = 0;
-		master_reset_counter_ = 0;
+
 		gate_state    = {};
 		ratchet_state = {};
 		clock.ResetDividers();
@@ -661,7 +678,7 @@ public:
 		just_wrapped_.fill(false);
 		held_count_           = 0;
 		arp_index_            = 0;
-		master_reset_counter_ = 0;
+
 		gate_state    = {};
 		ratchet_state = {};
 		clock.ResetDividers();
@@ -819,20 +836,6 @@ public:
 	// Called once per main-loop tick from VoltSeq::Main::Common().
 	bool UpdateClock() {
 		const bool master_ticked = clock.Update(data.channel);
-
-		// Master reset: count master ticks while playing; reset all channels when the count is reached.
-		// This takes priority over the reset-leader mechanism (leader check is skipped when this fires).
-		if (playing && master_ticked && data.master_reset_steps > 0) {
-			master_reset_counter_++;
-			if (master_reset_counter_ >= data.master_reset_steps) {
-				master_reset_counter_ = 0;
-				Reset(); // clears channel_fired_, so no OnChannelFired calls run below
-				UpdateGates();
-				UpdateTriggers();
-				UpdateOrbit(master_ticked);
-				return master_ticked;
-			}
-		}
 
 		if (master_ticked && AnyStepHeld())
 			TickArp();

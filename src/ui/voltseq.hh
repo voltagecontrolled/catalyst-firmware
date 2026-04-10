@@ -1146,10 +1146,9 @@ private:
 		});
 	}
 
-	// --- Global Settings modal (entered via Shift held ≥1.5 s; exits on Play) ---
+	// --- Global Settings modal (SHIFT+CHAN held ≥2 s; exits on Play) ---
 	// Panel assignments:
 	//   Panel 1 (Start)       enc 0 — Play/Stop reset mode (clamped off→on; LED red=on, off=off)
-	//   Panel 3 (Length)      enc 2 — Master reset steps (0=off, 1–64; red=snap, orange=other, off=0)
 	//   Panel 6 (BPM/Clk Div) enc 5 — Internal BPM
 	// Page buttons: reset leader channel radio (tap to select, tap selected to deselect)
 
@@ -1170,11 +1169,6 @@ private:
 			case 0: { // Panel 1 (Start): Play/Stop reset mode — clamped off/on
 				const int32_t v = std::clamp<int32_t>((d.play_stop_reset ? 1 : 0) + dir, 0, 1);
 				d.play_stop_reset = (v == 1);
-				break;
-			}
-			case 2: { // Panel 3 (Length): Master reset steps — 0=off, 1–64, clamped
-				d.master_reset_steps = static_cast<uint8_t>(
-				    std::clamp<int32_t>(d.master_reset_steps + dir, 0, 64));
 				break;
 			}
 			case 5: // Panel 6 (BPM/Clock Div): Internal BPM
@@ -1329,16 +1323,6 @@ public:
 				case 0:
 					col = d.play_stop_reset ? Palette::red : Palette::off;
 					break;
-				case 2: {
-					if (d.master_reset_steps == 0) {
-						col = Palette::off;
-					} else {
-						const bool snap = (d.master_reset_steps == 8  || d.master_reset_steps == 16
-						                || d.master_reset_steps == 32 || d.master_reset_steps == 64);
-						col = snap ? Palette::red : Palette::orange;
-					}
-					break;
-				}
 				case 5: {
 					// Pulses with clock phase (PeekPhase advances even when stopped).
 					// Color zone indicates BPM range (ROYGBIV):

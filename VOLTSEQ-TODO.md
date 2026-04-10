@@ -13,6 +13,15 @@ See `docs/planned/VOLTSEQ-ITERATIVE-PROBABILITY.md`.
 
 ## Active / Next Up
 
+### Manual reset timing under external clock
+**Observed:** Not yet hardware-verified. SHIFT+PLAY calls `Reset()` which sets `primed=false`. While running on external clock, the next clock primes (fires step 0, no advance) and the second clock advances to step 1 — a 1-step drift relative to the external clock source.
+
+**Proposed fix:** Same as `ResetExternal()`: fire step 0 immediately and set `primed=true`. Either call `ResetExternal()` from the SHIFT+PLAY handler instead of `Reset()`, or make `Reset()` itself fire step 0 when `playing=true`.
+
+**Caution:** `Reset()` is also used for play/stop reset mode (stopping while stopped) where firing step 0 immediately may not be desirable. May need a separate `ResetWhilePlaying()` path.
+
+---
+
 ### Step Probability / Random Amount — Needs Investigation
 **Observed:** Random amount (Channel Edit enc 8) has not been confirmed working. Test on CV, Gate, and Trigger channels at various amounts and confirm steps are being skipped/randomized as expected.
 
