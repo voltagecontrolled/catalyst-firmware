@@ -991,21 +991,20 @@ private:
 				}
 				break;
 			case 7: { // Lock toggle — state synced immediately; flash write deferred to Play/Reset exit
-				// DoLockToggle() is NOT used here: it calls do_save_shared which causes a blocking
-				// flash write per encoder step, stalling the sequencer when turned fast.
-				// Perf page exit (Play/Reset) already saves shared data.
-				if (!phase_locked_ && !picking_up_) {
-					phase_locked_ = true;
-					locked_raw_   = c.ReadSlider();
-				} else if (phase_locked_) {
-					phase_locked_ = false;
-					picking_up_   = true;
-				} else {
-					picking_up_ = false;
+				// Directional: CW = lock, CCW = unlock. Idempotent — no surprise multi-toggles
+				// from fast spinning. Flash write deferred to Play/Reset exit.
+				if (inc > 0 && !phase_locked_ && !picking_up_) {
+					phase_locked_              = true;
+					locked_raw_                = c.ReadSlider();
+					p.shared.data.phase_locked = true;
+					p.shared.data.locked_raw   = locked_raw_;
+					lock_toggle_time_          = Controls::TimeNow();
+				} else if (inc < 0 && (phase_locked_ || picking_up_)) {
+					phase_locked_              = false;
+					picking_up_                = false;
+					p.shared.data.phase_locked = false;
+					lock_toggle_time_          = Controls::TimeNow();
 				}
-				p.shared.data.phase_locked = phase_locked_;
-				p.shared.data.locked_raw   = locked_raw_;
-				lock_toggle_time_          = Controls::TimeNow();
 				break;
 			}
 			default:
