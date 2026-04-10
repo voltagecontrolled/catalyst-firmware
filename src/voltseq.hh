@@ -117,7 +117,8 @@ class ClockEngine {
 	std::array<bool, Model::NumChans>           channel_fired_{};
 
 	// 16th-note sub-clock: counts up; resets and fires channel dividers every sub_period ticks.
-	uint32_t sub_counter_ = 0;
+	uint32_t sub_counter_  = 0;
+	bool     step_ticked_  = false; // true the tick the 16th-note sub-clock (or ext pulse) fires
 
 public:
 	Clock::Bpm::Interface bpm;
@@ -175,23 +176,29 @@ public:
 	bool Update(const std::array<ChannelSettings, Model::NumChans> &channels) {
 		const bool master_ticked = bpm.Update();
 		channel_fired_.fill(false);
+		step_ticked_ = false;
 
 		if (bpm.external) {
 			// External clock: each incoming pulse fires channel dividers once.
 			// sub_counter_ is held at 0 so the internal sub-clock is clean on return to internal.
 			sub_counter_ = 0;
 			if (master_ticked) {
+				step_ticked_ = true;
 				for (auto ch = 0u; ch < Model::NumChans; ch++)
 					channel_fired_[ch] = dividers[ch].Update(channels[ch].division);
 			}
 		} else {
 			// Internal clock: 16th-note sub-clock drives step advances.
-			if (master_ticked)
-				sub_counter_ = 0; // re-sync sub-clock to quarter-note master on each beat
+			// sub_counter_ runs freely — no re-sync to the master beat.
+			// Re-syncing caused audible hiccups when the quarter-note master fired just as a step
+			// was about to advance, delaying it by up to a full sub_period.  Integer rounding of
+			// bpm_in_ticks/4 causes at most 1 tick of drift per beat (< 0.1% at any practical BPM),
+			// which is inaudible and negligible compared to tap-tempo imprecision.
 			const uint32_t sub_period = std::max<uint32_t>(1u, bpm.GetBpmInTicks() / 4u);
 			sub_counter_++;
 			if (sub_counter_ >= sub_period) {
 				sub_counter_ = 0;
+				step_ticked_ = true;
 				for (auto ch = 0u; ch < Model::NumChans; ch++)
 					channel_fired_[ch] = dividers[ch].Update(channels[ch].division);
 			}
@@ -199,6 +206,8 @@ public:
 
 		return master_ticked;
 	}
+
+	bool StepTicked() const { return step_ticked_; }
 
 	bool ChannelFired(uint8_t ch) const {
 		return channel_fired_[ch];
@@ -837,7 +846,7 @@ public:
 	bool UpdateClock() {
 		const bool master_ticked = clock.Update(data.channel);
 
-		if (master_ticked && AnyStepHeld())
+		if (clock.StepTicked() && AnyStepHeld())
 			TickArp();
 
 		// During beat repeat (perf_mode 2 or 3), orbit-following channels are driven by the

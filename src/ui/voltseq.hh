@@ -115,11 +115,16 @@ class Main : public Abstract {
 
 	void DoLockToggle() {
 		if (!phase_locked_ && !picking_up_) {
+			// Unlocked: lock at current slider position
 			phase_locked_ = true;
 			locked_raw_   = c.ReadSlider();
-		} else {
+		} else if (phase_locked_) {
+			// Locked: unlock and enter pickup mode
 			phase_locked_ = false;
 			picking_up_   = true;
+		} else {
+			// In pickup mode: second tap cancels pickup and fully unlocks
+			picking_up_ = false;
 		}
 		lock_toggle_time_              = Controls::TimeNow();
 		p.shared.data.phase_locked     = phase_locked_;
@@ -438,57 +443,62 @@ public:
 			}
 		}
 
+		// Read slider once for the entire Common() tick — reused by movement gate, pickup,
+		// orbit machinery, and RecordSlider below.
+		const uint16_t slider_raw = c.ReadSlider();
+
 		// Slider movement gate: track whether slider is in motion.
-		{
-			const auto slider_now = c.ReadSlider();
-			if (record_slider_prev_ == 0xFFFF) record_slider_prev_ = slider_now;
-			if (std::abs(static_cast<int32_t>(slider_now) - static_cast<int32_t>(record_slider_prev_)) >= kRecordMoveThreshold) {
-				record_slider_prev_  = slider_now;
-				record_active_until_ = Controls::TimeNow() + kRecordActiveTicks;
-			}
+		if (record_slider_prev_ == 0xFFFF) record_slider_prev_ = slider_raw;
+		if (std::abs(static_cast<int32_t>(slider_raw) - static_cast<int32_t>(record_slider_prev_)) >= kRecordMoveThreshold) {
+			record_slider_prev_  = slider_raw;
+			record_active_until_ = Controls::TimeNow() + kRecordActiveTicks;
 		}
 		const bool record_active = Controls::TimeNow() < record_active_until_;
 
-		// Slider recording: on each master tick while a CV channel is armed and slider is moving.
-		const bool armed_cv = armed_ch_.has_value()
-		                   && p.GetData().channel[armed_ch_.value()].type == ChannelType::CV
-		                   && !perf_page_active_
-		                   && record_active;
+		// Armed-on-CV: slider belongs to recording; orbit machinery yields.
+		const bool armed_on_cv = armed_ch_.has_value()
+		                      && p.GetData().channel[armed_ch_.value()].type == ChannelType::CV;
+
+		// Slider recording: on each step tick while a CV channel is armed and slider is moving.
+		const bool armed_cv = armed_on_cv && !perf_page_active_ && record_active;
 		if (armed_cv) {
 			const auto ch = armed_ch_.value();
-			if (ticked && p.IsPlaying()) {
-				RecordSlider(ch, p.GetShadow(ch));
+			if (p.clock.StepTicked() && p.IsPlaying()) {
+				// Use cached slider_raw; same value RecordSlider would read from hardware.
+				const auto sv = SliderToStepValue(ch, slider_raw);
+				p.SetStepValue(ch, p.GetShadow(ch), sv);
 			} else if (!p.IsPlaying()) {
-				RecordSlider(ch, GlobalStep(last_touched_step_));
+				const auto sv = SliderToStepValue(ch, slider_raw);
+				p.SetStepValue(ch, GlobalStep(last_touched_step_), sv);
 			}
 		}
 
 		// ---- Slider / orbit / beat-repeat machinery (mirrors seq_common.hh) ----
+		// Yielded to recording when armed on a CV channel — orbit center is frozen while recording.
 		const auto perf_mode = p.shared.data.slider_perf_mode;
-		if (perf_mode > 0) {
-			const auto slider_now = c.ReadSlider();
 
-			// Pickup mode: slider must reach locked_raw_ before orbit center updates
-			if (picking_up_) {
-				if (std::abs(static_cast<int32_t>(slider_now) - static_cast<int32_t>(locked_raw_))
-				    <= kPickupThreshold) {
-					picking_up_ = false;
-				}
+		// Pickup resolution runs regardless of perf_mode so lock state never gets stuck.
+		if (picking_up_) {
+			if (std::abs(static_cast<int32_t>(slider_raw) - static_cast<int32_t>(locked_raw_))
+			    <= kPickupThreshold) {
+				picking_up_ = false;
 			}
+		}
 
-			const uint16_t effective_slider = (phase_locked_ || picking_up_) ? locked_raw_ : slider_now;
+		if (perf_mode > 0 && !armed_on_cv) {
+			const uint16_t effective_slider = (phase_locked_ || picking_up_) ? locked_raw_ : slider_raw;
 
 			// Slider movement tracking for lock indicator
-			if (std::abs(static_cast<int32_t>(slider_now) - static_cast<int32_t>(last_slider_raw_))
+			if (std::abs(static_cast<int32_t>(slider_raw) - static_cast<int32_t>(last_slider_raw_))
 			    > kSliderMoveThreshold) {
-				last_slider_raw_       = slider_now;
+				last_slider_raw_       = slider_raw;
 				last_slider_move_time_ = Controls::TimeNow();
 			}
 
 			if (perf_mode >= 2) {
 				// Beat repeat: orbit_pickup entry mode — hold snapped center until slider moves away
 				if (orbit_pickup_) {
-					if (std::abs(static_cast<int32_t>(slider_now) - static_cast<int32_t>(orbit_pickup_slider_))
+					if (std::abs(static_cast<int32_t>(slider_raw) - static_cast<int32_t>(orbit_pickup_slider_))
 					    > kPickupThreshold) {
 						orbit_pickup_ = false;
 						p.shared.orbit_center = static_cast<float>(effective_slider) / 4095.f;
@@ -535,7 +545,7 @@ public:
 						orbit_pickup_ = false;
 					} else if (was_off) {
 						p.shared.beat_repeat_snap_pending = true;
-						orbit_pickup_slider_              = slider_now;
+						orbit_pickup_slider_              = slider_raw;
 						orbit_pickup_                     = true;
 					}
 				}
@@ -548,9 +558,9 @@ public:
 		// Fine+Glide hold detection: entry into perf page (or settings from within perf page)
 		const bool both_held  = c.button.fine.is_high() && c.button.morph.is_high();
 		const bool either_just = c.button.fine.just_went_high() || c.button.morph.just_went_high();
-		// Perf Page entry is allowed from Main Mode (armed or unarmed) and from within Perf Page
-		// itself (to re-enter Perf Settings). All other modals block entry.
-		const bool perf_entry_blocked = clear_mode_active_ || global_settings_active_ || channel_edit_active_;
+		// Perf Page entry is allowed from Main Mode (unarmed) and from within Perf Page itself.
+		// Blocked while armed: Fine+Glide has a different meaning (glide flag editing on armed CV).
+		const bool perf_entry_blocked = clear_mode_active_ || global_settings_active_ || channel_edit_active_ || armed_ch_.has_value();
 		if (both_held && either_just && !scrub_hold_pending_ && !perf_entry_blocked) {
 			scrub_hold_pending_ = true;
 			scrub_hold_start_   = Controls::TimeNow();
@@ -934,12 +944,10 @@ private:
 			return;
 		}
 
-		// Page buttons: toggle per-channel orbit follow mask
+		// Page buttons: toggle per-channel orbit follow mask — save deferred to Play/Reset exit
 		for (auto [i, btn] : countzip(c.button.scene)) {
-			if (btn.just_went_high()) {
+			if (btn.just_went_high())
 				p.shared.data.scrub_ignore_mask ^= static_cast<uint8_t>(1u << i);
-				p.shared.do_save_shared = true;
-			}
 		}
 
 	}
@@ -982,20 +990,33 @@ private:
 					else if (inc < 0 && d > 0) d--;
 				}
 				break;
-			case 7: // Lock toggle
-				DoLockToggle();
+			case 7: { // Lock toggle — state synced immediately; flash write deferred to Play/Reset exit
+				// DoLockToggle() is NOT used here: it calls do_save_shared which causes a blocking
+				// flash write per encoder step, stalling the sequencer when turned fast.
+				// Perf page exit (Play/Reset) already saves shared data.
+				if (!phase_locked_ && !picking_up_) {
+					phase_locked_ = true;
+					locked_raw_   = c.ReadSlider();
+				} else if (phase_locked_) {
+					phase_locked_ = false;
+					picking_up_   = true;
+				} else {
+					picking_up_ = false;
+				}
+				p.shared.data.phase_locked = phase_locked_;
+				p.shared.data.locked_raw   = locked_raw_;
+				lock_toggle_time_          = Controls::TimeNow();
 				break;
+			}
 			default:
 				break;
 			}
 		});
 
-		// Page buttons: toggle per-channel orbit follow mask
+		// Page buttons: toggle per-channel orbit follow mask — save deferred to Play/Reset exit
 		for (auto [i, btn] : countzip(c.button.scene)) {
-			if (btn.just_went_high()) {
+			if (btn.just_went_high())
 				p.shared.data.scrub_ignore_mask ^= static_cast<uint8_t>(1u << i);
-				p.shared.do_save_shared = true;
-			}
 		}
 	}
 
