@@ -839,11 +839,11 @@ private:
 	void UpdateArmedCV(uint8_t ch, bool fine) {
 		auto &cs = p.GetData().channel[ch];
 
-		// Glide held: encoder N sets (CW) or clears (CCW) the per-step glide flag for step N.
-		// Glide time is set separately via the unarmed Glide modifier (Glide + encoder in normal mode).
+		// Glide held + any encoder: adjust glide time for this channel. Fully CCW = 0 = off.
+		// Same parameter as unarmed Glide+enc — just accessible directly while armed.
 		if (c.button.morph.is_high()) {
-			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
-				p.SetGlideFlag(ch, GlobalStep(enc), dir > 0);
+			ForEachEncoderInc(c, [&](uint8_t /*enc*/, int32_t dir) {
+				cs.glide_time = std::clamp(cs.glide_time + dir * 0.1f, 0.f, 10.f);
 			});
 			return;
 		}
@@ -1050,13 +1050,16 @@ private:
 	// --- GLIDE modifier (called when c.button.morph is held) ---
 
 	void UpdateGlideModifier(bool shift, bool fine) {
-		// Page button held + encoder: per-step ratchet edit for Gate channels
+		// Page button held + encoder: Gate = per-step ratchet edit; CV = adjust glide time
 		for (auto [i, btn] : countzip(c.button.scene)) {
 			if (btn.is_high()) {
 				const auto step_btn = static_cast<uint8_t>(i);
 				ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
 					if (p.GetData().channel[enc].type == ChannelType::Gate)
 						EditGateRatchet(enc, GlobalStep(step_btn), dir);
+					else if (p.GetData().channel[enc].type == ChannelType::CV)
+						p.GetData().channel[enc].glide_time = std::clamp(
+						    p.GetData().channel[enc].glide_time + dir * 0.1f, 0.f, 10.f);
 				});
 				return;
 			}
@@ -1440,12 +1443,12 @@ public:
 			}
 			}
 		} else if (armed) {
-			// CV armed + Glide held: show per-step glide flags (white = glide on, dim grey = off)
+			// CV armed + Glide held: all encoders show glide time as brightness (off = 0s, full = 10s)
 			if (c.button.morph.is_high()) {
-				for (auto i = 0u; i < Model::NumChans; i++) {
-					const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));
-					c.SetEncoderLed(i, p.GlideFlag(ch, gs) ? Palette::full_white : Palette::dim_grey);
-				}
+				const float brightness = p.GetData().channel[ch].glide_time / 10.f;
+				const Color glide_col  = Palette::off.blend(Palette::full_white, brightness);
+				for (auto i = 0u; i < Model::NumChans; i++)
+					c.SetEncoderLed(i, glide_col);
 			} else {
 				// CV armed: each encoder shows that step's CV value color for the armed channel,
 				// with the currently playing step highlighted (chaselight).
@@ -1464,10 +1467,20 @@ public:
 				}
 			}
 		} else if (p.AnyStepHeld()) {
-			// Step held for editing: show each channel's color at the held step so edits are visible live.
+			// Step held for editing:
+			//   - in-range, non-zero value: channel step color
+			//   - in-range, zero value:     white (editable but empty)
+			//   - out of range:             off (not editable)
 			const uint8_t gs = GlobalStep(last_touched_step_);
-			for (auto i = 0u; i < Model::NumChans; i++)
-				c.SetEncoderLed(i, StepColorForChannel(i, gs));
+			for (auto i = 0u; i < Model::NumChans; i++) {
+				if (gs >= p.GetData().channel[i].length) {
+					c.SetEncoderLed(i, Palette::off);
+				} else if (p.GetStepValue(i, gs) == 0) {
+					c.SetEncoderLed(i, Palette::full_white);
+				} else {
+					c.SetEncoderLed(i, StepColorForChannel(i, gs));
+				}
+			}
 		} else if (c.button.shift.is_high()) {
 			// Shift held (unarmed, no step held): show playhead colors; focused channel blinks white
 			// so the user can see which channel's chaselight is tracked before navigating.

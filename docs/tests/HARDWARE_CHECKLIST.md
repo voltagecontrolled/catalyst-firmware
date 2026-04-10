@@ -88,9 +88,9 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
 - [ ] **Encoder N**: edits step N's CV value; **Fine** = sub-semitone; fast spinning accelerates
 - [ ] **Shift + Enc 5** (Range): adjusts channel voltage range; slider recording window follows
 - [ ] **Shift + Enc 7** (Transpose): adjusts quantizer scale
-- [ ] **Glide held**: encoder LEDs switch to per-step glide flags (white = on, dim = off)
-- [ ] **Glide held + Encoder N CW**: enable glide on step N
-- [ ] **Glide held + Encoder N CCW**: disable glide on step N
+- [ ] **Glide held**: all encoder LEDs show glide time as brightness (fully off = 0 s / disabled, full white = 10 s)
+- [ ] **Glide held + any Encoder CW**: increase glide time; LEDs brighten
+- [ ] **Glide held + any Encoder CCW**: decrease glide time; LEDs dim; fully CCW = off (no glide)
 
 ### Armed Gate Channel
 
