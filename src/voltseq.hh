@@ -856,8 +856,14 @@ public:
 		if (playing) {
 			for (auto ch = 0u; ch < Model::NumChans; ch++) {
 				if (clock.ChannelFired(ch)) {
-					if (beat_repeat_active && OrbitActiveForChannel(ch))
+					if (beat_repeat_active && OrbitActiveForChannel(ch)) {
+						// Keep shadow advancing so playhead re-syncs correctly when beat repeat releases.
+						if (primed[ch])
+							AdvanceShadow(ch);
+						else
+							primed[ch] = true;
 						continue;
+					}
 					OnChannelFired(ch);
 				}
 			}
