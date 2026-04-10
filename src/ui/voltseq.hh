@@ -93,7 +93,7 @@ class Main : public Abstract {
 	static constexpr uint32_t kSliderActiveTicks   = Clock::MsToTicks(400);
 	static constexpr uint32_t kToggleFeedbackTicks = Clock::MsToTicks(600);
 	static constexpr uint32_t kClearHoldTicks         = Clock::MsToTicks(600);
-	static constexpr uint32_t kGlobalSettingsHoldTicks = Clock::MsToTicks(2000);
+	static constexpr uint32_t kGlobalSettingsHoldTicks = Clock::MsToTicks(1000);
 
 	// Clear mode: SHIFT+PLAY held > kClearHoldTicks → enter; tap page N = clear ch N; PLAY = clear all
 	bool     clear_mode_active_   = false;
@@ -1314,9 +1314,16 @@ public:
 		//   enc 2 (Panel 3, Length)       = master reset steps   → red=snap(8/16/32/64), orange=other, off=0
 		//   enc 5 (Panel 6, BPM/Clk Div)  = BPM                 → yellow, pulses with clock phase
 		if (global_settings_active_) {
-			const auto &d = p.GetData();
-			for (auto i = 0u; i < Model::NumChans; i++)
-				c.SetButtonLed(i, d.reset_leader_ch == static_cast<uint8_t>(i));
+			const auto &d       = p.GetData();
+			const auto  ph_foc  = p.GetPlayhead(focused_ch_);
+			const bool  on_pg   = (ph_foc / Model::NumChans == current_page_);
+			const uint8_t chase = on_pg ? static_cast<uint8_t>(ph_foc % Model::NumChans) : 0xFF;
+			const bool  blink   = (Controls::TimeNow() >> 8) & 1u;
+			for (auto i = 0u; i < Model::NumChans; i++) {
+				bool lit = (d.reset_leader_ch == static_cast<uint8_t>(i));
+				if (i == chase) lit = blink;
+				c.SetButtonLed(i, lit);
+			}
 			for (auto i = 0u; i < Model::NumChans; i++) {
 				Color col = Palette::dim_grey;
 				switch (i) {
