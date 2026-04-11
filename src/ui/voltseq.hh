@@ -97,11 +97,14 @@ class Main : public Abstract {
 	static constexpr uint32_t kToggleFeedbackTicks = Clock::MsToTicks(600);
 	static constexpr uint32_t kClearHoldTicks         = Clock::MsToTicks(600);
 	static constexpr uint32_t kGlobalSettingsHoldTicks = Clock::MsToTicks(1000);
+	static constexpr uint32_t kSaveHoldTicks           = Clock::MsToTicks(800);
 
 	// Clear mode: SHIFT+PLAY held > kClearHoldTicks → enter; tap page N = clear ch N; PLAY = clear all
 	bool     clear_mode_active_   = false;
 	bool     shift_play_pending_  = false;   // armed while we wait for long/short distinction
 	uint32_t shift_play_press_t_  = 0;
+	bool     save_play_pending_   = false;   // armed when Play pressed while stopped (short=play, long=save)
+	uint32_t save_play_press_t_   = 0;
 
 	// Global settings modal: SHIFT+CHAN held ≥2 s → enter; short SHIFT+CHAN → Channel Edit; Play exits.
 	bool     global_settings_active_  = false;
@@ -161,7 +164,6 @@ class Main : public Abstract {
 		const StepValue zero = (p.GetData().channel[ch].type == ChannelType::CV) ? 32768u : 0u;
 		for (uint8_t s = 0; s < 64; s++)
 			p.SetStepValue(ch, s, zero);
-		p.shared.do_save_macro = true;
 		p.shared.blinker.Set(3, 300); // 3-flash confirmation on page buttons
 	}
 
@@ -633,7 +635,6 @@ public:
 				} else {
 					channel_edit_last_enc_ = 0xFF;
 					length_display_until_  = 0;
-					if (!p.IsPlaying()) p.shared.do_save_macro = true;
 				}
 			} else if (Controls::TimeNow() - shift_chan_hold_start_ >= kGlobalSettingsHoldTicks) {
 				shift_chan_hold_pending_ = false;
@@ -650,7 +651,6 @@ public:
 		if (play_jgh) {
 			if (global_settings_active_) {
 				global_settings_active_ = false;
-				p.shared.do_save_macro  = true;
 			} else if (shift) {
 				shift_play_pending_ = true;
 				shift_play_press_t_ = Controls::TimeNow();
@@ -662,21 +662,18 @@ public:
 				channel_edit_active_   = false;
 				channel_edit_last_enc_ = 0xFF;
 				length_display_until_  = 0;
-				if (!p.IsPlaying()) p.shared.do_save_macro = true;
-				// else: save deferred to next play-stop toggle
 			} else if (armed_ch_.has_value()) {
 				armed_ch_                = std::nullopt;
 				trigger_step_enc_turned_ = 0;
+			} else if (p.IsPlaying()) {
+				// Already playing → stop immediately
+				p.Stop();
+				if (p.GetData().play_stop_reset)
+					p.Reset();
 			} else {
-				p.Toggle();
-				if (!p.IsPlaying()) {
-					// Play/Stop reset mode: when stopping, also reset all channels to step 1
-					if (p.GetData().play_stop_reset)
-						p.Reset();
-					// Save on stop only — saving on play blocks the CPU with a synchronous
-					// flash write, consuming step 0's gate duration and making it inaudible.
-					p.shared.do_save_macro = true;
-				}
+				// Stopped → defer: short press = start playback, long press = save
+				save_play_pending_ = true;
+				save_play_press_t_ = Controls::TimeNow();
 			}
 		}
 		if (shift_play_pending_) {
@@ -688,7 +685,6 @@ public:
 				if (Controls::TimeNow() - shift_play_press_t_ < kClearHoldTicks) {
 					// Short press: reset
 					p.Reset();
-					p.shared.do_save_macro = true;
 				}
 				// Long press released before threshold: nothing (clear_mode_active_ not set yet)
 				shift_play_pending_ = false;
@@ -700,6 +696,22 @@ public:
 				// Consume all button edges so nothing fires when we return
 				for (auto &b : c.button.scene)
 					b.clear_events();
+				c.button.play.clear_events();
+			}
+		}
+
+		// --- Long-press Play while stopped: save state ---
+		if (save_play_pending_) {
+			if (c.button.play.just_went_low()) {
+				// Released before threshold → short press, start playback
+				save_play_pending_ = false;
+				if (Controls::TimeNow() - save_play_press_t_ < kSaveHoldTicks)
+					p.Play();
+			} else if (Controls::TimeNow() - save_play_press_t_ >= kSaveHoldTicks) {
+				// Held long enough → save; 6-blink confirmation on all page buttons
+				save_play_pending_ = false;
+				p.shared.do_save_macro = true;
+				p.shared.blinker.Set(6, 600);
 				c.button.play.clear_events();
 			}
 		}
@@ -774,11 +786,6 @@ public:
 			});
 			return;
 		}
-
-		// Save channel type changes when CHAN is released (deferred from CHAN+encoder handler above).
-		// Only save immediately when stopped; if playing, save is already deferred to next play-stop toggle.
-		if (c.button.bank.just_went_low() && !p.IsPlaying())
-			p.shared.do_save_macro = true;
 
 		// --- Dispatch to arm mode or normal step editing ---
 		if (armed_ch_.has_value()) {
