@@ -73,7 +73,7 @@ inline constexpr auto absolute_min_ticks = 1;
 struct Data {
 	static constexpr auto original_sample_rate_hz = Legacy::V1_0::Model::sample_rate_hz;
 
-	int16_t bpm_in_ticks = BpmToTicks(120);
+	int16_t bpm_in_ticks = static_cast<int16_t>((60.f * original_sample_rate_hz) / 120.f); // legacy 4kHz format; PostLoad converts to current 3kHz ticks
 
 	void PostLoad() {
 		const auto bpm = (60.f * original_sample_rate_hz) / bpm_in_ticks;
