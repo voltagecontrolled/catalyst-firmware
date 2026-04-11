@@ -1484,7 +1484,7 @@ public:
 			} else {
 				// Step held for editing:
 				//   - in-range, non-empty value: channel step color
-				//   - in-range, empty value:     white (editable but at default)
+				//   - in-range, empty value:     dim_grey (editable but at default)
 				//   - out of range:              off (not editable)
 				for (auto i = 0u; i < Model::NumChans; i++) {
 					if (gs >= p.GetData().channel[i].length) {
