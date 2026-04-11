@@ -244,6 +244,11 @@ public:
 	void Reset() {
 		counter = 0;
 	}
+	// Prime the counter so the next Update() fires immediately regardless of division.
+	// Used when resetting dividers at play/reset so all channels fire on the first sub-clock.
+	void ResetToReady(uint32_t div_read) {
+		counter = div_read > 0 ? div_read - 1 : 0;
+	}
 };
 
 } // namespace Catalyst2::Clock

@@ -212,9 +212,12 @@ public:
 		return channel_fired_[ch];
 	}
 
-	void ResetDividers() {
-		for (auto &d : dividers)
-			d.Reset();
+	// Reset all dividers and prime each one so the first sub-clock fires every channel
+	// immediately, regardless of division.  Without priming, a div=N channel would be
+	// silent for (N-1) sub-clocks before its first step, making step 0 appear late.
+	void ResetDividers(const std::array<ChannelSettings, Model::NumChans> &channels) {
+		for (auto ch = 0u; ch < dividers.size(); ch++)
+			dividers[ch].ResetToReady(channels[ch].division.Read());
 		channel_fired_.fill(false);
 		sub_counter_ = 0;
 	}
@@ -620,7 +623,7 @@ public:
 	void Play() {
 		playing = true;
 		if (!primed[0]) {
-			clock.ResetDividers();
+			clock.ResetDividers(data.channel);
 		} else {
 			clock.SyncStepClock();
 		}
@@ -645,7 +648,7 @@ public:
 
 		gate_state    = {};
 		ratchet_state = {};
-		clock.ResetDividers();
+		clock.ResetDividers(data.channel);
 		// primed=false, shadow=0: first clock after Play (or next clock if already playing)
 		// will prime without advancing, then fire step 0.
 	}
@@ -662,7 +665,7 @@ public:
 
 		gate_state    = {};
 		ratchet_state = {};
-		clock.ResetDividers();
+		clock.ResetDividers(data.channel);
 	}
 
 	// ---- Step-lock / arpeggiation API (called from UI) ----
