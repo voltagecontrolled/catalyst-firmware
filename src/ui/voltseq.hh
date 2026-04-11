@@ -107,9 +107,10 @@ class Main : public Abstract {
 	bool     save_hold_pending_   = false;   // armed when CHAN+GLIDE both held (save gesture)
 	uint32_t save_hold_start_     = 0;
 
-	// Global settings modal: SHIFT+CHAN held ≥2 s → enter; short SHIFT+CHAN → Channel Edit; Play exits.
+	// Global settings modal: SHIFT+CHAN held ≥1 s → enter; short SHIFT+CHAN → toggle Channel Edit; Play exits.
 	bool     global_settings_active_  = false;
 	bool     shift_chan_hold_pending_  = false;
+	bool     shift_chan_from_edit_     = false; // snapshot: were we in channel edit when hold started?
 	uint32_t shift_chan_hold_start_    = 0;
 
 	// Beat repeat debounce table (matches sequencer)
@@ -649,40 +650,51 @@ public:
 		// always consumed on the tick they fire (short-circuit eval would otherwise leave
 		// got_rising_edge_ set, causing spurious triggers on the next button press).
 		const bool bank_jgh  = c.button.bank.just_went_high();
-		const bool morph_jgh = c.button.morph.just_went_high();
 		const bool play_jgh  = c.button.play.just_went_high();
+		// Note: c.button.morph.just_went_high() is consumed in Common() (perf page entry check)
+		// and always reads false here — do not pre-read it.
 
-		// --- SHIFT+CHAN hold: global settings (≥2 s) or channel edit (short tap) ---
-		// Timer starts when CHAN goes high while Shift is already held (or simultaneously).
-		// Held ≥2 s → Global Settings.  Released before 2 s → toggle Channel Edit as before.
-		// Channel Edit / Global Settings entry is allowed only from Main Mode (armed or unarmed).
-		// All other modals block entry — modals do not stack, except Armed → Channel Edit which
-		// is handled naturally since armed_ch_ is not a modal flag.
-		const bool any_modal = clear_mode_active_ || global_settings_active_ || perf_page_active_ || channel_edit_active_;
-		if (shift && bank_jgh && !any_modal) {
-			shift_chan_hold_pending_ = true;
-			shift_chan_hold_start_   = Controls::TimeNow();
-		}
-		if (shift_chan_hold_pending_) {
-			if (!shift || c.button.bank.just_went_low()) {
-				// Released before 2 s: short tap → toggle Channel Edit
-				shift_chan_hold_pending_ = false;
-				channel_edit_active_ = !channel_edit_active_;
-				if (channel_edit_active_) {
-					// Show focused channel's length passively on entry
-					channel_edit_last_enc_ = 2;
-					length_display_until_  = Controls::TimeNow() + Clock::MsToTicks(600);
-					// Sync current_page_ to the focused channel's playhead page so the
-					// chaselight and step display are immediately on the correct page.
-					current_page_ = static_cast<uint8_t>(p.GetPlayhead(edit_ch_) / Model::NumChans);
-				} else {
-					channel_edit_last_enc_ = 0xFF;
-					length_display_until_  = 0;
+		// --- SHIFT+CHAN: channel edit toggle or global settings ---
+		// Short tap  (<1 s): toggle channel edit (exit if active, enter if not).
+		// Long hold  (≥1 s): enter global settings (exits channel edit first if needed).
+		// Blocked entirely while clear mode, global settings, or perf page is active.
+		// The hold timer starts on press regardless of whether channel edit is active —
+		// this allows a single continuous hold to go from channel edit straight to global settings.
+		{
+			const bool block_entry = clear_mode_active_ || global_settings_active_ || perf_page_active_;
+			if (shift && bank_jgh && !block_entry) {
+				shift_chan_hold_pending_ = true;
+				shift_chan_hold_start_   = Controls::TimeNow();
+				shift_chan_from_edit_    = channel_edit_active_; // snapshot entry state
+			}
+			if (shift_chan_hold_pending_) {
+				c.button.bank.just_went_low(); // drain CHAN release events while timer is pending
+				const uint32_t elapsed = Controls::TimeNow() - shift_chan_hold_start_;
+				if (!shift) {
+					// SHIFT released before timer: toggle channel edit
+					shift_chan_hold_pending_ = false;
+					if (shift_chan_from_edit_) {
+						// Was in channel edit: exit it
+						channel_edit_active_   = false;
+						channel_edit_last_enc_ = 0xFF;
+						length_display_until_  = 0;
+					} else {
+						// Was not in channel edit: enter it
+						channel_edit_active_     = true;
+						channel_edit_last_enc_   = 2;
+						length_display_until_    = Controls::TimeNow() + Clock::MsToTicks(600);
+						// Sync current_page_ to the focused channel's playhead page.
+						current_page_ = static_cast<uint8_t>(p.GetPlayhead(edit_ch_) / Model::NumChans);
+					}
+				} else if (elapsed >= kGlobalSettingsHoldTicks) {
+					// Long hold: enter global settings (exit channel edit if we came from there)
+					shift_chan_hold_pending_ = false;
+					channel_edit_active_     = false;
+					channel_edit_last_enc_   = 0xFF;
+					length_display_until_    = 0;
+					global_settings_active_  = true;
+					for (auto &b : c.button.scene) b.clear_events();
 				}
-			} else if (Controls::TimeNow() - shift_chan_hold_start_ >= kGlobalSettingsHoldTicks) {
-				shift_chan_hold_pending_ = false;
-				global_settings_active_  = true;
-				for (auto &b : c.button.scene) b.clear_events();
 			}
 		}
 
@@ -744,7 +756,7 @@ public:
 		{
 			const bool chan_high  = c.button.bank.is_high();
 			const bool glide_high = c.button.morph.is_high();
-			if (!shift && ((bank_jgh && glide_high) || (morph_jgh && chan_high))) {
+			if (!shift && (bank_jgh && glide_high)) {
 				save_hold_pending_ = true;
 				save_hold_start_   = Controls::TimeNow();
 			}
@@ -1429,9 +1441,9 @@ public:
 		// --- Global Settings modal ---
 		// Page buttons: lit = that channel is the reset leader.
 		// Encoder LEDs:
-		//   enc 0 (Panel 1, Start)        = play/stop reset mode → red=on, off=off
-		//   enc 2 (Panel 3, Length)       = master reset steps   → red=snap(8/16/32/64), orange=other, off=0
-		//   enc 5 (Panel 6, BPM/Clk Div)  = BPM                 → yellow, pulses with clock phase
+		//   enc 0 (Panel 1, Start)       = play/stop reset mode → red=on, off=off
+		//   enc 5 (Panel 6, BPM/Clk Div) = BPM                 → color zone, pulses with clock phase
+		//   all others: off (unassigned)
 		if (global_settings_active_) {
 			const auto &d       = p.GetData();
 			const auto  ph_foc  = p.GetPlayhead(focused_ch_);
@@ -1443,7 +1455,7 @@ public:
 				c.SetButtonLed(i, lit);
 			}
 			for (auto i = 0u; i < Model::NumChans; i++) {
-				Color col = Palette::dim_grey;
+				Color col = Palette::off;
 				switch (i) {
 				case 0:
 					col = d.play_stop_reset ? Palette::red : Palette::off;
@@ -1647,6 +1659,7 @@ public:
 				c.SetEncoderLed(7, ((t >> 7) & 1u) ? Palette::red : Palette::off);
 			}
 		}
+
 	}
 };
 

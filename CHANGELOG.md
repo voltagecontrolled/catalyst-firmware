@@ -10,7 +10,7 @@ All changes relative to upstream 4ms-company/catalyst-firmware v1.3.
 | v1.4.4 | Linked Tracks: CV transpose follow + gate track clock follow | Hardware verified |
 | v1.4.5 | Gate clock step-only mode, CV replace follow, bugfixes | Hardware verified |
 | v1.4.6 | Phase Scrub Performance Page: granular sequencing, beat repeat, lock persistence, sub-step page nav | Released |
-| v1.5.0 | VoltSeq mode: 8-channel step sequencer replacing Macro mode; three build variants (CatSeq+CatCon, CatSeq+VoltSeq, VoltSeq+CatCon) | Alpha50 — branch: voltseq |
+| v1.5.0 | VoltSeq mode: 8-channel step sequencer replacing Macro mode; three build variants (CatSeq+CatCon, CatSeq+VoltSeq, VoltSeq+CatCon) | Alpha55 — branch: voltseq |
 
 **Note on preset compatibility:** v1.4.2 expanded `sizeof(Step)` from 4 to 8 bytes. Presets saved under v1.3 are not compatible and are discarded on first boot. The firmware detects the mismatch via a version tag and resets to defaults automatically -- no manual factory reset needed.
 
@@ -172,6 +172,8 @@ Page buttons toggle per-track scrub participation: lit = track follows scrub, un
 
 ### VoltSeq mode (v1.5.0)
 
+> **Branch:** `voltseq` branched from `main` after v1.4.6 release (`898c7fe`). Not yet merged. All v1.5.0 development lives here; v1.4.x patches would go on main independently.
+
 A second firmware personality for the Catalyst Sequencer panel. Replaces Macro mode with an 8-channel step sequencer in the style of Voltage Block. Ships as a separate build variant (`catseq-voltseq`).
 
 **Mode switching (in-firmware, no reflash):**
@@ -254,7 +256,18 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 | alpha24–26 | Iterative attempts to fix external reset alignment using primed-mechanism heuristics and a CatSeq-style 50ms post-reset clock guard — all insufficient |
 | alpha28 | Fix external reset alignment: root cause identified as the `primed` mechanism consuming an extra clock cycle after every reset. `ResetExternal()` now sets `primed=true` and fires step 0 immediately, so the first post-reset clock advances to step 1 (matching CatSeq behavior). Also fix BPM handoff: `ExternalClockTick()` scales `bpm_in_ticks` ×4 so internal clock resumes at the correct quarter-note tempo when external clock is removed |
 | alpha29 | Fix primed-mechanism flam in master reset and reset leader: both now call `ResetExternal()` instead of `Reset()`, so step 0 fires immediately with no phantom extra trigger. `Play()` also fires step 0 immediately when starting from a reset state. Master reset removed (caused clock stutter when combined with `ResetExternal()`'s sub-clock reset; reset leader covers the primary use case). `current_tag` bumped to 6 (struct layout change: `master_reset_steps` field removed) |
+| alpha30 | Global settings chaselight on encoder LEDs; entry hold timer tightened to 1 s; hardware verification checklist added to docs |
+| alpha31 | Arp timing fix; slider recording fix; play-start hiccup fix; perf page flash-write stall fix (was stalling the clock during saves while playing) |
+| alpha32 | Enc 8 lock toggle clamped to directional: CW = lock only, CCW = unlock only — prevents surprise multi-toggles from fast spinning |
+| alpha33 | Beat repeat playhead freeze on release fixed; empty step LEDs dimmed; glide collapsed to channel-level time (per-step flag requirement removed); per-step glide amounts added as explicit 0–255 values in `StepFlags[]`; type-aware white LED for empty steps; reset leader removed (was accidentally triggerable from Global Settings page buttons); default BPM corruption on fresh data wipe fixed |
+| alpha34–45 | *Year of Hell: same build re-flashed ~12 times due to a missing build dependency. No new feature content — all alpha33 changes had already landed in the codebase but could not be verified until the build environment was restored. Alpha35 commit exists inside this range (remove reset leader; fix `Play()` step-0 period; fix default BPM on fresh init) but is a transitional reset fix superseded by alpha46.* |
+| alpha46 | Final reset fix: `primed=false` for all reset paths — removes fire-and-prime, no gate fires on reset, first clock fires step 0 naturally; save deferred to stop only (was stalling clock on every play/stop toggle); armed gate LED fixes. `current_tag` bumped to 8 |
+| alpha47–49 | Table-based channel clock divisions (enc positions match CatSeq musical output); clock divider first-step offset fixed (prime dividers to fire on first sub-clock tick); intentional save only — long-press Play while stopped saves with 6-blink confirmation |
+| alpha50 | Save gesture replaced: CHAN+GLIDE hold replaces long-press Play; intentional save UX finalized |
 | alpha51 | Channel Edit enc 5 (Range) and enc 7 (Transpose) redesigned: Range sets voltage span {1,2,3,4,5,10,15}V; Transpose sets floor in whole volts; together they define the channel voltage window [Transpose, Transpose+Range]. All recorded steps and slider/encoder recording are window-relative — shifting the window transposes the sequence. Enc 5 and enc 7 are inactive (dark) for Gate/Trigger channels. Type selector removed from Channel Edit enc 7 and Armed Shift+enc 7 (type selection remains via CHAN+encoder in main mode). Armed CV Shift+enc 5/7: all other encoder LEDs go dark. `VoltSeqRange` replaces `Channel::Cv::Range` in `ChannelSettings`; `int8_t transpose` field added. `current_tag` bumped to 9. |
+| alpha52 | Orbit activation fix on disarm (force pickup lock to 0 on both disarm paths); Play LED slow-blinks in any modal mode to signal that Play exits the modal rather than toggling play/stop |
+| alpha53–54 | Global settings entry debugging: added diagnostic encoder LED, identified root cause as `MuxedButton` having no debounce — stale falling-edge events on CHAN were firing `just_went_low()` inside the hold-timer block on the very next tick, cancelling the timer before it could reach 1 s. |
+| alpha55 | Fix global settings entry: drain CHAN `just_went_low()` events silently while hold timer is pending; act only on SHIFT release for the short-tap path. Timer now runs to completion regardless of CHAN bounce. Global settings encoder LEDs: unused encoders now dark (were dim-grey). |
 
 **Deviations from spec (`docs/planned/VOLTSEQ.md`):**
 - Slider recording uses the channel Range parameter directly; separate `slider_base_v`/`slider_span_v` fields were removed.
