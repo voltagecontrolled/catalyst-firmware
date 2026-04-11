@@ -708,6 +708,8 @@ public:
 			} else if (armed_ch_.has_value()) {
 				armed_ch_                = std::nullopt;
 				trigger_step_enc_turned_ = 0;
+				picking_up_              = true;
+				locked_raw_              = 0;
 			} else {
 				p.Toggle();
 				if (!p.IsPlaying() && p.GetData().play_stop_reset)
@@ -811,8 +813,10 @@ public:
 			for (auto [i, btn] : countzip(c.button.scene)) {
 				if (btn.just_went_high()) {
 					if (armed_ch_ == std::optional<uint8_t>{i}) {
-						armed_ch_ = std::nullopt;
+						armed_ch_                = std::nullopt;
 						trigger_step_enc_turned_ = 0;
+						picking_up_              = true;
+						locked_raw_              = 0;
 					} else {
 						armed_ch_   = i;
 						focused_ch_ = static_cast<uint8_t>(i);
