@@ -103,8 +103,8 @@ class Main : public Abstract {
 	bool     clear_mode_active_   = false;
 	bool     shift_play_pending_  = false;   // armed while we wait for long/short distinction
 	uint32_t shift_play_press_t_  = 0;
-	bool     save_play_pending_   = false;   // armed when Play pressed while stopped (short=play, long=save)
-	uint32_t save_play_press_t_   = 0;
+	bool     save_hold_pending_   = false;   // armed when CHAN+GLIDE both held (save gesture)
+	uint32_t save_hold_start_     = 0;
 
 	// Global settings modal: SHIFT+CHAN held ≥2 s → enter; short SHIFT+CHAN → Channel Edit; Play exits.
 	bool     global_settings_active_  = false;
@@ -606,8 +606,9 @@ public:
 		// Pre-read rising-edge events that appear in short-circuit conditions so they are
 		// always consumed on the tick they fire (short-circuit eval would otherwise leave
 		// got_rising_edge_ set, causing spurious triggers on the next button press).
-		const bool bank_jgh = c.button.bank.just_went_high();
-		const bool play_jgh = c.button.play.just_went_high();
+		const bool bank_jgh  = c.button.bank.just_went_high();
+		const bool morph_jgh = c.button.morph.just_went_high();
+		const bool play_jgh  = c.button.play.just_went_high();
 
 		// --- SHIFT+CHAN hold: global settings (≥2 s) or channel edit (short tap) ---
 		// Timer starts when CHAN goes high while Shift is already held (or simultaneously).
@@ -665,15 +666,10 @@ public:
 			} else if (armed_ch_.has_value()) {
 				armed_ch_                = std::nullopt;
 				trigger_step_enc_turned_ = 0;
-			} else if (p.IsPlaying()) {
-				// Already playing → stop immediately
-				p.Stop();
-				if (p.GetData().play_stop_reset)
-					p.Reset();
 			} else {
-				// Stopped → defer: short press = start playback, long press = save
-				save_play_pending_ = true;
-				save_play_press_t_ = Controls::TimeNow();
+				p.Toggle();
+				if (!p.IsPlaying() && p.GetData().play_stop_reset)
+					p.Reset();
 			}
 		}
 		if (shift_play_pending_) {
@@ -700,19 +696,24 @@ public:
 			}
 		}
 
-		// --- Long-press Play while stopped: save state ---
-		if (save_play_pending_) {
-			if (c.button.play.just_went_low()) {
-				// Released before threshold → short press, start playback
-				save_play_pending_ = false;
-				if (Controls::TimeNow() - save_play_press_t_ < kSaveHoldTicks)
-					p.Play();
-			} else if (Controls::TimeNow() - save_play_press_t_ >= kSaveHoldTicks) {
-				// Held long enough → save; 6-blink confirmation on all page buttons
-				save_play_pending_ = false;
-				p.shared.do_save_macro = true;
-				p.shared.blinker.Set(6, 600);
-				c.button.play.clear_events();
+		// --- CHAN+GLIDE hold-to-save gesture ---
+		{
+			const bool chan_high  = c.button.bank.is_high();
+			const bool glide_high = c.button.morph.is_high();
+			if (!shift && ((bank_jgh && glide_high) || (morph_jgh && chan_high))) {
+				save_hold_pending_ = true;
+				save_hold_start_   = Controls::TimeNow();
+			}
+			if (save_hold_pending_) {
+				if (!chan_high || !glide_high) {
+					save_hold_pending_ = false;
+				} else if (Controls::TimeNow() - save_hold_start_ >= kSaveHoldTicks) {
+					save_hold_pending_      = false;
+					p.shared.do_save_macro  = true;
+					p.shared.blinker.Set(6, 600);
+					c.button.bank.clear_events();
+					c.button.morph.clear_events();
+				}
 			}
 		}
 
@@ -1402,6 +1403,16 @@ public:
 				default: break;
 				}
 				c.SetEncoderLed(i, col);
+			}
+			return;
+		}
+
+		// --- CHAN+GLIDE save gesture in progress: fast pulse on all page buttons ---
+		if (save_hold_pending_) {
+			const bool blink = (Controls::TimeNow() >> 7u) & 0x01u; // ~12 Hz
+			for (auto i = 0u; i < Model::NumChans; i++) {
+				c.SetButtonLed(i, blink);
+				c.SetEncoderLed(i, Palette::off);
 			}
 			return;
 		}
