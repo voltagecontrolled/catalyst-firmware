@@ -259,9 +259,9 @@ All 8 encoders control the focused channel (`edit_ch_`). Turning any encoder set
 | 1 | Dir. | direction (Forward/Reverse/PingPong/Random, clamped) |
 | 2 | Length | length 1–64; also sets current_page_ = (length-1)/8; restarts 600ms display |
 | 3 | Phase | RotateChannel (destructive) |
-| 4 | Range / PW | CV: range preset; Trigger: pulse_width_ms 1–100 |
+| 4 | Range | CV: voltage span — index into {1,2,3,4,5,10,15}V; clamps Transpose on change; inactive for Gate/Trigger |
 | 5 | BPM/Clock Div | clock division |
-| 6 | Transpose | type selector (CV scales → Gate → Trigger, clamped) |
+| 6 | Transpose | CV: floor voltage ±1V, clamped to [−5, 10−span]; inactive for Gate/Trigger |
 | 7 | Random | random_amount 0–1 in 0.05 steps |
 
 ### LED — Length display (active when `TimeNow() <= length_display_until_`)

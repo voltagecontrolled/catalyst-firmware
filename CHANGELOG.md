@@ -254,6 +254,7 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 | alpha24–26 | Iterative attempts to fix external reset alignment using primed-mechanism heuristics and a CatSeq-style 50ms post-reset clock guard — all insufficient |
 | alpha28 | Fix external reset alignment: root cause identified as the `primed` mechanism consuming an extra clock cycle after every reset. `ResetExternal()` now sets `primed=true` and fires step 0 immediately, so the first post-reset clock advances to step 1 (matching CatSeq behavior). Also fix BPM handoff: `ExternalClockTick()` scales `bpm_in_ticks` ×4 so internal clock resumes at the correct quarter-note tempo when external clock is removed |
 | alpha29 | Fix primed-mechanism flam in master reset and reset leader: both now call `ResetExternal()` instead of `Reset()`, so step 0 fires immediately with no phantom extra trigger. `Play()` also fires step 0 immediately when starting from a reset state. Master reset removed (caused clock stutter when combined with `ResetExternal()`'s sub-clock reset; reset leader covers the primary use case). `current_tag` bumped to 6 (struct layout change: `master_reset_steps` field removed) |
+| alpha51 | Channel Edit enc 5 (Range) and enc 7 (Transpose) redesigned: Range sets voltage span {1,2,3,4,5,10,15}V; Transpose sets floor in whole volts; together they define the channel voltage window [Transpose, Transpose+Range]. All recorded steps and slider/encoder recording are window-relative — shifting the window transposes the sequence. Enc 5 and enc 7 are inactive (dark) for Gate/Trigger channels. Type selector removed from Channel Edit enc 7 and Armed Shift+enc 7 (type selection remains via CHAN+encoder in main mode). Armed CV Shift+enc 5/7: all other encoder LEDs go dark. `VoltSeqRange` replaces `Channel::Cv::Range` in `ChannelSettings`; `int8_t transpose` field added. `current_tag` bumped to 9. |
 
 **Deviations from spec (`docs/planned/VOLTSEQ.md`):**
 - Slider recording uses the channel Range parameter directly; separate `slider_base_v`/`slider_span_v` fields were removed.
@@ -262,7 +263,7 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 - Phase rotate operates only on active steps (0 to length-1); unused steps beyond length are untouched.
 - Disarming requires Chan. + Page button (bare page-button disarm removed to allow all steps to be edited while armed, including step 1 of the armed channel).
 - Only two WAV builds per release (catseq-catcon, catseq-voltseq); the voltseq-catcon variant is deferred.
-- `VoltSeq::Data::current_tag = 6u` (bumped in alpha29; `master_reset_steps` field removed from `Data`, shifting all subsequent fields).
+- `VoltSeq::Data::current_tag = 9u` (bumped in alpha51; `VoltSeqRange range` + `int8_t transpose` replace `Channel::Cv::Range range` in `ChannelSettings`).
 
 **Implementation notes:**
 

@@ -379,24 +379,26 @@ class App {
 		return Quantizer::scale[mode.GetScaleIdx()];
 	}
 
-	// Map a VoltSeq StepValue (0..65535) into Channel::Cv::type (0..Cv::max) within the channel range.
+	// Map a VoltSeq StepValue (0..65535) into Channel::Cv::type (0..Cv::max) within the channel window.
+	// Window = [transpose, transpose + span] volts; StepValue 0 = floor, 65535 = ceiling.
 	Channel::Cv::type MapStepValue(uint8_t ch, StepValue raw) const {
-		const auto &range   = p.GetData().channel[ch].range;
-		const auto  cv_min  = Channel::Cv::RangeToMin(range);
-		const auto  cv_max  = Channel::Cv::RangeToMax(range);
-		const float t       = static_cast<float>(raw) / 65535.f;
+		const auto &cs    = p.GetData().channel[ch];
+		const float min_v = static_cast<float>(cs.transpose);
+		const float max_v = min_v + cs.range.Span();
+		const float t     = static_cast<float>(raw) / 65535.f;
+		const float v     = min_v + t * (max_v - min_v);
+		const float cv    = (v - Model::min_output_voltage) / Model::output_octave_range
+		                    * static_cast<float>(Channel::Cv::max);
 		return static_cast<Channel::Cv::type>(
-			std::clamp<float>(t * static_cast<float>(cv_max - cv_min) + cv_min,
-			                  static_cast<float>(cv_min),
-			                  static_cast<float>(cv_max)));
+			std::clamp(cv, 0.f, static_cast<float>(Channel::Cv::max)));
 	}
 
 	Model::Output::type CvOutput(uint8_t ch) {
-		const auto step     = p.GetOutputStep(ch);
-		const auto raw      = p.GetStepValue(ch, step);
-		const auto &range   = p.GetData().channel[ch].range;
-		const auto mapped   = MapStepValue(ch, raw);
-		const auto quantized = Quantizer::Process(GetScale(ch), mapped);
+		const auto &cs      = p.GetData().channel[ch];
+		const auto  step    = p.GetOutputStep(ch);
+		const auto  raw     = p.GetStepValue(ch, step);
+		const auto  mapped  = MapStepValue(ch, raw);
+		const auto  quantized = Quantizer::Process(GetScale(ch), mapped);
 
 		// Apply exponential glide when this step has a non-zero per-step glide amount
 		Channel::Cv::type out_cv;
@@ -412,7 +414,12 @@ class App {
 		}
 		slew_val[ch] = out_cv;
 
-		const auto scaled = Channel::Output::ScaleCv(out_cv, range);
+		// Map out_cv back to voltage, clamp to channel window, then to DAC output.
+		const float t_out = static_cast<float>(out_cv) / static_cast<float>(Channel::Cv::max);
+		const float v_out = Model::min_output_voltage + t_out * Model::output_octave_range;
+		const float min_v = static_cast<float>(cs.transpose);
+		const float max_v = min_v + cs.range.Span();
+		const auto  scaled = Channel::Output::from_volts(std::clamp(v_out, min_v, max_v));
 		return Calibration::Dac::Process(p.shared.data.dac_calibration.channel[ch], scaled);
 	}
 

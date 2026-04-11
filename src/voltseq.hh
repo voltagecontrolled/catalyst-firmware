@@ -29,17 +29,32 @@ enum class Direction : uint8_t { Forward, Reverse, PingPong, Random };
 // extending Channel::Mode's index space is not required for basic output routing.
 enum class ChannelType : uint8_t { CV, Gate, Trigger };
 
+// Voltage span for CV channels: 7 options from 1V to the full 15V hardware range.
+// Used with transpose (int8_t, whole volts) to define the control window [transpose, transpose+Span()].
+class VoltSeqRange {
+	static constexpr std::array<uint8_t, 7> spans = {1, 2, 3, 4, 5, 10, 15};
+	static constexpr uint8_t count                = 7;
+	uint8_t                  val                  = 4; // default index 4 = 5V span
+
+public:
+	void          Inc(int32_t inc) { val = static_cast<uint8_t>(std::clamp<int32_t>(val + inc, 0, count - 1)); }
+	constexpr float    Span() const { return static_cast<float>(spans[val]); }
+	constexpr uint8_t  Index() const { return val; }
+	bool          Validate() const { return val < count; }
+};
+
 struct ChannelSettings {
-	ChannelType          type            = ChannelType::CV;          // CV, Gate, or Trigger
-	uint8_t              length          = 8;                        // 1..64 steps
-	Clock::Divider::type division        = {};                       // clock division (1–256)
-	Channel::Cv::Range   range           = [] { Channel::Cv::Range r; r.Inc(2); return r; }(); // default: −5V to +5V
-	Channel::Mode        scale           = {};                       // quantizer scale (CV only)
+	ChannelType          type            = ChannelType::CV;   // CV, Gate, or Trigger
+	uint8_t              length          = 8;                 // 1..64 steps
+	Clock::Divider::type division        = {};                // clock division (1–256)
+	VoltSeqRange         range           = {};                // CV span: index into {1,2,3,4,5,10,15}V (default 5V)
+	int8_t               transpose       = 0;                 // CV floor in whole volts; window = [transpose, transpose+span]
+	Channel::Mode        scale           = {};                // quantizer scale (CV only)
 	Direction            direction       = Direction::Forward;
-	uint8_t              pulse_width_ms  = 10;                       // trigger pulse width ms (Trigger only)
-	uint8_t              output_delay_ms = 0;                        // output delay ms (Gate/Trigger)
-	float                random_amount   = 0.f;                      // 0 = deterministic, 1 = fully random
-	float                glide_time      = 0.f;                      // seconds; 0 = disabled (CV only)
+	uint8_t              pulse_width_ms  = 10;                // trigger pulse width ms (Trigger only)
+	uint8_t              output_delay_ms = 0;                 // output delay ms
+	float                random_amount   = 0.f;               // 0 = deterministic, 1 = fully random (CV only)
+	float                glide_time      = 0.f;               // seconds; 0 = disabled (CV only)
 };
 
 struct StepFlags {
@@ -51,14 +66,14 @@ struct StepFlags {
 struct Data {
 	// Increment current_tag whenever the struct layout changes (fields added/removed/reordered).
 	// validate() checks this tag so WearLevel rejects stale or incompatible flash data gracefully.
-	static constexpr uint32_t current_tag     = 8u;
+	static constexpr uint32_t current_tag     = 9u;
 	uint32_t                  SettingsVersionTag = current_tag;
 
 	static StepGrid DefaultSteps() {
 		StepGrid g{};
 		for (auto &page : g)
 			for (auto &row : page)
-				row.fill(32768); // center = 0V for default bipolar −5V to +5V range
+				row.fill(32768); // midpoint of default 5V span (0V–5V) = 2.5V
 		return g;
 	}
 

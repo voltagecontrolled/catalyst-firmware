@@ -15,6 +15,7 @@ using Catalyst2::VoltSeq::ChannelSettings;
 using Catalyst2::VoltSeq::ChannelType;
 using Catalyst2::VoltSeq::Direction;
 using Catalyst2::VoltSeq::StepValue;
+using Catalyst2::VoltSeq::VoltSeqRange;
 
 // Encoder step sizes for VoltSeq's 0..65535 StepValue space.
 // Channel::Cv::type spans 0..4500 (15V), so VoltSeq units are ~14.6× larger.
@@ -289,12 +290,12 @@ class Main : public Abstract {
 
 	// ---- Slider recording ----
 
-	// Map 0..4095 slider ADC value to StepValue using the channel's Range.
-	// Slider travel maps linearly from range.Min() to range.Max().
+	// Map 0..4095 slider ADC value to StepValue using the channel window [transpose, transpose+span].
+	// Full slider travel = full channel window.
 	StepValue SliderToStepValue(uint8_t ch, uint16_t adc) const {
-		const auto &range = p.GetData().channel[ch].range;
-		const float min_v = range.Min();
-		const float max_v = range.Max();
+		const auto &cs    = p.GetData().channel[ch];
+		const float min_v = static_cast<float>(cs.transpose);
+		const float max_v = min_v + cs.range.Span();
 		const float v     = min_v + (static_cast<float>(adc) / 4095.f) * (max_v - min_v);
 		const float norm  = (v - Model::min_output_voltage) / (Model::max_output_voltage - Model::min_output_voltage);
 		return static_cast<StepValue>(std::clamp(norm * 65535.f, 0.f, 65535.f));
@@ -365,14 +366,55 @@ class Main : public Abstract {
 
 	// Color representing a CV channel's value at a given step
 	Color CvStepColor(uint8_t ch, uint8_t global_step) const {
-		const auto &cs   = p.GetData().channel[ch];
-		const auto  sv   = p.GetStepValue(ch, global_step);
-		// Map StepValue to Channel::Cv::type for palette color lookup
-		const auto  cv_min  = Channel::Cv::RangeToMin(cs.range);
-		const auto  cv_max  = Channel::Cv::RangeToMax(cs.range);
-		const float t       = static_cast<float>(sv) / 65535.f;
-		const auto  cv_val  = static_cast<Channel::Cv::type>(cv_min + t * (cv_max - cv_min));
-		return Palette::Cv::fromLevel(p.shared.data.palette[ch], cv_val, cs.range);
+		const auto &cs    = p.GetData().channel[ch];
+		const auto  sv    = p.GetStepValue(ch, global_step);
+		const float min_v = static_cast<float>(cs.transpose);
+		const float max_v = min_v + cs.range.Span();
+		const float t     = static_cast<float>(sv) / 65535.f;
+		const float v     = min_v + t * (max_v - min_v);
+		const auto  out   = Channel::Output::from_volts(v);
+		return Palette::Cv::fromOutput(p.shared.data.palette[ch], out);
+	}
+
+	// LED color for the Range encoder (enc4) in Channel Edit and Armed (+Shift).
+	// 7 options indexed 0–6 for spans {1,2,3,4,5,10,15}V.
+	static Color RangeColor(const VoltSeqRange &r) {
+		static constexpr std::array<Color, 7> colors = {
+			Palette::Range::Positive[0], // 1V  — blue
+			Palette::Range::Positive[1], // 2V  — cyan
+			Palette::Range::Positive[2], // 3V  — green
+			Palette::Range::Positive[3], // 4V  — yellow
+			Palette::Range::Positive[4], // 5V  — orange
+			Palette::Range::Positive[5], // 10V — magenta
+			Palette::full_white,         // 15V — white (full hardware range)
+		};
+		return colors[r.Index()];
+	}
+
+	// LED color for the Transpose encoder (enc6) in Channel Edit and Armed (+Shift).
+	// Negative = warm (red/orange/pink), zero = grey, positive = cool (blue/violet/white).
+	static Color TransposeColor(int8_t t) {
+		if (t < 0) {
+			static constexpr std::array<Color, 5> neg = {
+				Palette::red,        // −5V
+				Palette::bright_red, // −4V
+				Palette::orange,     // −3V
+				Palette::salmon,     // −2V
+				Palette::pink,       // −1V
+			};
+			return neg[std::clamp<int>(t + 5, 0, 4)];
+		}
+		if (t == 0)
+			return Palette::grey;
+		static constexpr std::array<Color, 6> pos = {
+			Palette::blue,      // +1V
+			Palette::cyan,      // +2V
+			Palette::teal,      // +3V
+			Palette::lavender,  // +4V
+			Palette::magenta,   // +5V
+			Palette::full_white // +6V and above
+		};
+		return pos[std::clamp<int>(t - 1, 0, 5)];
 	}
 
 	// Color representing a gate step's gate length (high byte: 0=off, 1–255=dim→bright green).
@@ -876,15 +918,22 @@ private:
 		}
 
 		if (c.button.shift.is_high()) {
-			// Shift held: page navigation + enc 4 (Range) / enc 6 (Transpose).
-			// Slider range IS the recording range, so adjusting Range also changes recording.
+			// Shift held: page navigation + enc 4 (Range) / enc 6 (Transpose) for CV channels.
+			// Adjusting Range also changes the slider recording window immediately.
 			for (auto [i, btn] : countzip(c.button.scene)) {
 				if (btn.just_went_high())
 					NavigatePage(static_cast<uint8_t>(i));
 			}
 			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
-				if (enc == 4) cs.range.Inc(dir);
-				else if (enc == 6) CycleTypeSel(ch, dir);
+				if (enc == 4) {
+					cs.range.Inc(dir);
+					const auto max_xpose = static_cast<int8_t>(10 - static_cast<int>(cs.range.Span()));
+					cs.transpose = std::clamp<int8_t>(cs.transpose, -5, max_xpose);
+				} else if (enc == 6) {
+					const auto max_xpose = static_cast<int8_t>(10 - static_cast<int>(cs.range.Span()));
+					cs.transpose = std::clamp<int8_t>(
+					    static_cast<int8_t>(cs.transpose + static_cast<int8_t>(dir)), -5, max_xpose);
+				}
 			});
 			return;
 		}
@@ -1119,10 +1168,10 @@ private:
 	//   enc 1 = Direction     (Dir.)
 	//   enc 2 = Length        (Length)
 	//   enc 3 = Phase rotate  (Phase)  — rotates only active steps [0, length-1]
-	//   enc 4 = Range/PW      (Range)
-	//   enc 5 = Clock div     (BPM/Clock Div)
-	//   enc 6 = Type selector (Transpose)
-	//   enc 7 = Random        (Random)
+	//   enc 4 = Range         (Range)      — CV only; inactive for Gate/Trigger
+	//   enc 5 = Clock div    (BPM/Clock Div)
+	//   enc 6 = Transpose    (Transpose)  — CV only; inactive for Gate/Trigger
+	//   enc 7 = Random       (Random)     — CV only
 
 	void UpdateChannelEdit(bool fine) {
 		// Exit: Play is handled at the top of Update() before we get here.
@@ -1175,20 +1224,25 @@ private:
 			case 3: // Phase rotate — rotates only active steps [0, length-1]
 				RotateChannel(edit_ch_, dir);
 				break;
-			case 4: // Range (CV) / Pulse width (Trigger) — no accel: few options
-				if (cs.type == ChannelType::CV)
+			case 4: // Range — CV only; inactive for Gate/Trigger
+				if (cs.type == ChannelType::CV) {
 					cs.range.Inc(dir);
-				else if (cs.type == ChannelType::Trigger)
-					cs.pulse_width_ms = static_cast<uint8_t>(
-					    std::clamp<int32_t>(cs.pulse_width_ms + dir, 1, 100));
+					// Clamp transpose so window stays within hardware limits
+					const auto max_xpose = static_cast<int8_t>(10 - static_cast<int>(cs.range.Span()));
+					cs.transpose = std::clamp<int8_t>(cs.transpose, -5, max_xpose);
+				}
 				break;
 			case 5: // Clock division — steps through shared musical table (see Clock::DivisionTables)
 				Clock::Divider::Step(cs.division, Clock::DivisionTables::VoltSeq, dir);
 				division_display_until_ = Controls::TimeNow() + Clock::MsToTicks(600);
 				length_display_until_   = 0;
 				break;
-			case 6: // Type selector (unquantized CV → scales → Gate → Trigger, clamped) — no accel
-				CycleTypeSel(edit_ch_, dir);
+			case 6: // Transpose (±1V per detent, whole volts) — CV only; inactive for Gate/Trigger
+				if (cs.type == ChannelType::CV) {
+					const auto max_xpose = static_cast<int8_t>(10 - static_cast<int>(cs.range.Span()));
+					cs.transpose = std::clamp<int8_t>(
+					    static_cast<int8_t>(cs.transpose + static_cast<int8_t>(dir)), -5, max_xpose);
+				}
 				break;
 			case 7: // Random amount (0..1 in 0.05 increments) — no accel: narrow range
 				cs.random_amount = std::clamp(cs.random_amount + dir * 0.05f, 0.f, 1.f);
@@ -1324,8 +1378,9 @@ public:
 				// Encoder LEDs match panel layout:
 				//   enc 0 (Start/delay): white brightness = delay amount
 				//   enc 1 (Dir):  color = current direction
-				//   enc 5 (Clock Div): blue = divided, dim_grey = 1/1
-				//   enc 6 (Transpose): type/scale color
+				//   enc 4 (Range): range color — CV only; off for Gate/Trigger
+				//   enc 5 (Clock Div): active color = divided, dim_grey = 1/1
+				//   enc 6 (Transpose): transpose color — CV only; off for Gate/Trigger
 				//   enc 7 (Random): white brightness = random amount
 				// Page buttons: focused channel lit solid; current playing step blinks (chaselight).
 				static constexpr std::array<Color, 4> dir_col = {
@@ -1335,6 +1390,7 @@ public:
 				    Palette::magenta // Random
 				};
 				const auto &cs       = p.GetData().channel[edit_ch_];
+				const bool  cv_ch    = (cs.type == ChannelType::CV);
 				const auto  ph_edit  = p.GetPlayhead(edit_ch_);
 				const bool  on_page  = (ph_edit / Model::NumChans == current_page_);
 				const uint8_t chase  = on_page ? static_cast<uint8_t>(ph_edit % Model::NumChans) : 0xFF;
@@ -1350,10 +1406,11 @@ public:
 					}
 					c.SetButtonLed(i, page_lit);
 					Color col = Palette::dim_grey;
-					if (i == 0) col = Palette::off.blend(Palette::full_white, cs.output_delay_ms / 20.f);
+					if      (i == 0) col = Palette::off.blend(Palette::full_white, cs.output_delay_ms / 20.f);
 					else if (i == 1) col = dir_col[static_cast<uint8_t>(cs.direction)];
+					else if (i == 4) col = cv_ch ? RangeColor(cs.range)          : Palette::off;
 					else if (i == 5) col = Palette::Setting::active;
-					else if (i == 6) col = ChannelTypeColor(edit_ch_);
+					else if (i == 6) col = cv_ch ? TransposeColor(cs.transpose)  : Palette::off;
 					else if (i == 7) col = Palette::off.blend(Palette::full_white, cs.random_amount);
 					c.SetEncoderLed(i, col);
 				}
@@ -1490,8 +1547,15 @@ public:
 			}
 			}
 		} else if (armed) {
-			// CV armed + Glide held: each encoder shows its step's glide amount as brightness
-			if (c.button.morph.is_high()) {
+			// CV armed + Shift held: show only enc4 (Range) and enc6 (Transpose); all others dark.
+			if (c.button.shift.is_high()) {
+				const auto &cs = p.GetData().channel[ch];
+				for (auto i = 0u; i < Model::NumChans; i++)
+					c.SetEncoderLed(i, Palette::off);
+				c.SetEncoderLed(4, RangeColor(cs.range));
+				c.SetEncoderLed(6, TransposeColor(cs.transpose));
+			} else if (c.button.morph.is_high()) {
+				// CV armed + Glide held: each encoder shows its step's glide amount as brightness
 				for (auto i = 0u; i < Model::NumChans; i++) {
 					const uint8_t gs   = GlobalStep(static_cast<uint8_t>(i));
 					const float    amt = p.GetData().flags[ch].glide[gs] / 255.f;

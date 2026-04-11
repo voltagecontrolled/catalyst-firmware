@@ -136,20 +136,26 @@ The **Phase Scrub slider** records in real time:
 - While **playing**: slider value is written to the current step on every clock tick.
 - While **stopped**: slider continuously sets the last-touched step.
 
-The slider maps across the channel's configured **Range**.
+The slider maps across the channel's configured **voltage window** (Range + Transpose).
+
+Each CV channel has a **voltage window** defined by two parameters:
+- **Range** — the span in volts: 1, 2, 3, 4, 5, 10, or 15V.
+- **Transpose** — the floor voltage in whole volts (e.g. −5V, 0V, +2V).
+
+The window is **[Transpose, Transpose + Range]**. All recorded steps and all control input (slider, encoder in main mode) are relative to this window — moving the window transposes the whole sequence; narrowing it zooms the playable range.
 
 **Encoder LEDs:** show the CV step color for each step on the current page. The playing step blinks white (chaselight). The blink is suppressed on any held Page button so the color stays visible while editing.
 
 **Encoder N:** directly edits step N's CV value. Fine = sub-semitone; fast spinning accelerates.
 
-**Glide held while armed:** encoder LEDs switch to show per-step glide flags (white = glide on, dim = off). Turn encoder N CW to enable glide on step N; CCW to disable. Glide time (the slew duration) is set separately via the unarmed GLIDE modifier.
+**Glide held while armed:** encoder LEDs switch to show per-step glide amounts (brightness = amount). Turn encoder N to adjust glide on step N; fully CCW = no glide.
 
-**Shift held while armed:**
+**Shift held while armed:** all encoder LEDs go dark except enc 5 (Range) and enc 7 (Transpose). Inactive on Gate and Trigger channels.
 
 | Encoder | Panel label | Parameter |
 |---|---|---|
-| 5 | Range | Channel voltage range (also sets slider recording window) |
-| 7 | Transpose | Quantizer scale |
+| 5 | Range | Voltage span: 1 / 2 / 3 / 4 / 5 / 10 / 15V — clamped; shifts sequence when changed |
+| 7 | Transpose | Floor voltage ±1V per detent, clamped to keep window within hardware limits |
 
 ### Armed Gate Channel
 
@@ -201,9 +207,9 @@ Press a **Page button** to focus that channel. Encoders edit per-channel setting
 | 2 | Dir. | Direction | Forward / Reverse / Ping-Pong / Random — clamped; LED color = direction |
 | 3 | Length | Step length | 1–64 steps |
 | 4 | Phase | Phase rotate | Destructive; rotates active steps only |
-| 5 | Range | Voltage range (CV) / Pulse width (Trigger) | CV: range preset; Trigger: 1–100 ms |
+| 5 | Range | Voltage span (CV only) | 1 / 2 / 3 / 4 / 5 / 10 / 15V — clamped; LED color = span; inactive for Gate/Trigger |
 | 6 | BPM/Clock Div | Per-channel clock division | Turning shows division selection on encoder LEDs (enc 0 = ÷1, enc 7 = ÷16) |
-| 7 | Transpose | Channel type / scale | CV scales → Gate → Trigger; LED = type color |
+| 7 | Transpose | Floor voltage (CV only) | ±1V per detent, clamped to keep window within hardware limits; LED color = floor; inactive for Gate/Trigger |
 | 8 | Random | Random amount | 0–100%; LED brightness = amount |
 
 **Exit:** **Shift + Chan.** (short tap) or **Play/Reset** — saves and returns.
@@ -304,9 +310,11 @@ All other settings — steps, channel types, lengths, clock divisions, global se
 | Armed Gate + Glide held | Each encoder: per-step ratchet count (dim = none, bright green = high) |
 | Armed Trigger | Each encoder: step ratchet/repeat state; playing step blinks white |
 | CHAN held (no page button) | Each encoder: channel type color |
+| Armed CV, Shift held | Enc 5 = Range color; Enc 7 = Transpose color; all others dark |
 | Channel Edit — enc 1 | Brightness = output delay |
 | Channel Edit — enc 2 | Green/Orange/Yellow/Magenta = direction |
-| Channel Edit — enc 7 | Type/scale color |
+| Channel Edit — enc 5 | Range color (blue→cyan→green→yellow→orange→magenta→white for 1–15V); off for Gate/Trigger |
+| Channel Edit — enc 7 | Transpose color (red/orange/pink = negative, grey = 0V, blue/teal/violet/white = positive); off for Gate/Trigger |
 | Channel Edit — enc 8 | Brightness = random amount |
 | Channel Edit — page buttons | Chaselight for focused channel |
 | Channel Edit, Shift held | Page buttons: current page lit solid (not focused channel) |
