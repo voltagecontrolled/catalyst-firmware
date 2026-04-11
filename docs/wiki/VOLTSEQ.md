@@ -78,7 +78,7 @@ The **main mode** is VoltSeq's default state — reached on boot, after disarmin
 | **Shift + Play** (short, < 600 ms) | Reset all channels to step 1 |
 | **Shift + Play** (hold ≥ 600 ms) | Enter Clear mode |
 | **Play/Reset** while armed | Disarm channel (playback continues) |
-| **Play/Reset** while in any edit mode | Exit that mode and save |
+| **Play/Reset** while in any edit mode | Exit that mode |
 
 Settings are saved to flash whenever play/stop is toggled.
 
@@ -202,7 +202,7 @@ Press a **Page button** to focus that channel. Encoders edit per-channel setting
 | 3 | Length | Step length | 1–64 steps |
 | 4 | Phase | Phase rotate | Destructive; rotates active steps only |
 | 5 | Range | Voltage range (CV) / Pulse width (Trigger) | CV: range preset; Trigger: 1–100 ms |
-| 6 | BPM/Clock Div | Per-channel clock division | — |
+| 6 | BPM/Clock Div | Per-channel clock division | Turning shows division selection on encoder LEDs (enc 0 = ÷1, enc 7 = ÷16) |
 | 7 | Transpose | Channel type / scale | CV scales → Gate → Trigger; LED = type color |
 | 8 | Random | Random amount | 0–100%; LED brightness = amount |
 
@@ -228,13 +228,6 @@ Press a **Page button** to focus that channel. Encoders edit per-channel setting
 ### Play/Stop Reset Mode
 
 When **on** (encoder 1 red): pressing Stop resets all channels to step 1 in addition to stopping playback. Useful for performance situations where you always want sequences to restart from the top.
-
-### Reset Leader
-
-**Page buttons** select a **reset leader channel** (radio select — only one at a time). When the leader channel completes its sequence and wraps back to step 1, all channels reset with it and fire their step 1 outputs immediately — keeping everything phase-locked with no timing gap.
-
-- Tap a page button to select that channel as leader (button lights up)
-- Tap the lit button again to deselect (no leader)
 
 ---
 
@@ -286,15 +279,15 @@ Lock state persists across power cycles.
 
 ## Saving
 
-VoltSeq saves automatically at these moments:
+VoltSeq uses **intentional saving** — data is only written to flash when you explicitly trigger a save.
 
-- Play/Stop toggled
-- Global Settings exited
-- Channel Edit exited
-- Performance Page exited
-- Mode switched
+**To save:** hold **Glide**, then press and hold **Chan.** Keep both held for ~800 ms. All page buttons fast-blink while the hold is counted, then blink 6 times to confirm the save completed.
 
-> **Note:** settings changed while playing (channel type, length, range, etc.) are not written to flash until the next play/stop toggle. Power-cycling before stopping will lose those changes.
+> **Order matters:** press **Glide first**, then **Chan.** Pressing Chan. first blocks the gesture — the module will show channel type colors instead.
+
+**Performance Page** settings (orbit, lock state) are saved automatically when you exit the Performance Page via Play/Reset.
+
+All other settings — steps, channel types, lengths, clock divisions, global settings — are saved only via the GLIDE+CHAN gesture. Power-cycling without saving will lose any unsaved changes.
 
 ---
 
@@ -319,7 +312,8 @@ VoltSeq saves automatically at these moments:
 | Channel Edit, Shift held | Page buttons: current page lit solid (not focused channel) |
 | Global Settings — enc 1 | Red = play/stop reset on, off = off |
 | Global Settings — enc 6 | BPM color zone pulse (red <50, orange 50–79, yellow 80–99, green 100–119, blue 120–149, teal 150–179, lavender 180+) |
-| Global Settings — page buttons | Lit = reset leader channel |
+| GLIDE+CHAN save (in progress) | All page buttons fast-blink (~12 Hz) |
+| GLIDE+CHAN save (confirmed) | All page buttons blink 6 times |
 | Performance Page | Each encoder: channel's current output step color |
 | Perf Settings — enc 8 | Red = locked; blinks red during pickup |
 
@@ -356,5 +350,6 @@ VoltSeq saves automatically at these moments:
 | Armed CV + **Hold Glide + Encoder N** | Enable (CW) / disable (CCW) glide on step N |
 | **Fine + Glide** (hold 1.5 s) | Enter Performance Page |
 | **Short Fine + Glide** (tap + release) | Toggle Phase Scrub Lock |
+| **Glide + Chan.** (hold ~800 ms) | Save to flash (Glide must be pressed first) |
 | **Shift + Tap + Chan.** (hold 1 s) | Switch to VoltSeq mode |
 | **Fine + Play + Glide** (hold 1 s) | Switch to Sequencer mode |

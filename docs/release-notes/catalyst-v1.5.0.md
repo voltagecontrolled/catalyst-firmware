@@ -54,7 +54,7 @@ Focus a channel with a page button, then use encoders:
 | 3 | Length | Step length (1–64 steps) |
 | 4 | Phase | Phase rotate (destructive) |
 | 5 | Range | Voltage range (CV) or pulse width ms (Trigger) |
-| 6 | BPM/Clock Div | Per-channel clock division (enc 0 = quarter note … enc 7 = quadruple whole) |
+| 6 | BPM/Clock Div | Per-channel clock division; turning shows selection on encoder LEDs (enc 0 = ÷1 … enc 7 = ÷16) |
 | 7 | Transpose | Channel type and quantizer scale |
 | 8 | Random | Random amount (0–100%) |
 
@@ -75,10 +75,18 @@ Exit with **Play/Reset**.
 
 ### Performance Page (Fine + Glide — hold 1.5 s)
 
-The Phase Scrub slider controls an orbit engine that manipulates playback positions. Page buttons toggle per-channel orbit follow. Beat repeat available in blue/cyan modes. Exit with **Play/Reset**.
+The Phase Scrub slider controls an orbit engine that manipulates playback positions. Page buttons toggle per-channel orbit follow. Beat repeat available in blue/cyan modes. Exit with **Play/Reset** (saves performance settings).
 
 ---
 
 ### Saving
 
-VoltSeq saves automatically on **Stop** and when **Global Settings** or the **Performance Page** are exited. Exiting **Channel Edit** while playing defers the save to the next Stop — power-cycling before stopping will lose any changes made in that session.
+VoltSeq uses **intentional saving** — data is only written to flash when you explicitly trigger it.
+
+**To save:** press and hold **Glide**, then press and hold **Chan.** Keep both held for ~800 ms. All page buttons fast-blink while the hold is counted, then blink 6 times to confirm.
+
+> **Order matters:** press **Glide first**, then **Chan.** Pressing Chan. first will not activate the gesture — the module will show channel type colors on the encoder LEDs instead.
+
+**Performance Page** settings (orbit, lock state) are saved automatically on Performance Page exit.
+
+All other data (steps, channel types, lengths, clock divisions, global settings) must be saved manually. Power-cycling without saving will lose any unsaved changes.
