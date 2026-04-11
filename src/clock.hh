@@ -207,23 +207,24 @@ private:
 } // namespace Bpm
 
 // Musical division tables for per-channel clock division.
-// Both tables share the same index → same musical speed in each mode.
-// CatSeq divides the quarter-note master clock; VoltSeq divides the 16th-note sub-clock (4× faster),
-// so VoltSeq values are exactly 4× the CatSeq values.
+// Both tables use the same raw values so the same encoder position = the same division ratio
+// relative to each mode's base clock.  The base clocks differ (CatSeq = quarter note,
+// VoltSeq = 16th note), so absolute musical speed differs between modes at the same position —
+// but the ratio behaviour (enc 0 = full speed, enc 1 = half speed, …) is identical.
 //
-// Index  CatSeq  VoltSeq  Musical name
-//   0       1       4     quarter note
-//   1       2       8     half note
-//   2       3      12     dotted half
-//   3       4      16     whole note
-//   4       6      24     dotted whole
-//   5       8      32     double whole
-//   6      12      48     dotted double whole
-//   7      16      64     quadruple whole
+// Index  Value  Ratio
+//   0      1    ÷1  (full speed)
+//   1      2    ÷2
+//   2      3    ÷3
+//   3      4    ÷4
+//   4      6    ÷6
+//   5      8    ÷8
+//   6     12    ÷12
+//   7     16    ÷16
 namespace DivisionTables
 {
 inline constexpr std::array<uint8_t, 8> CatSeq  = {1,  2,  3,  4,  6,  8,  12, 16};
-inline constexpr std::array<uint8_t, 8> VoltSeq = {4,  8,  12, 16, 24, 32, 48, 64};
+inline constexpr std::array<uint8_t, 8> VoltSeq = {1,  2,  3,  4,  6,  8,  12, 16};
 } // namespace DivisionTables
 
 class Divider {
