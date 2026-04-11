@@ -43,13 +43,15 @@ struct ChannelSettings {
 };
 
 struct StepFlags {
-	uint64_t glide = 0; // bit N = glide flag for step N (steps 0..63); CV channels only
+	// Per-step glide amount: 0 = no glide, 1–255 maps linearly to 0–2 s portamento time.
+	// CV channels only; Gate/Trigger ignore this field.
+	std::array<uint8_t, 64> glide{};
 };
 
 struct Data {
 	// Increment current_tag whenever the struct layout changes (fields added/removed/reordered).
 	// validate() checks this tag so WearLevel rejects stale or incompatible flash data gracefully.
-	static constexpr uint32_t current_tag     = 6u;
+	static constexpr uint32_t current_tag     = 7u;
 	uint32_t                  SettingsVersionTag = current_tag;
 
 	static StepGrid DefaultSteps() {
@@ -765,14 +767,25 @@ public:
 	}
 
 	bool GlideFlag(uint8_t ch, uint8_t global_step) const {
-		return (data.flags[ch].glide >> global_step) & 1u;
+		return data.flags[ch].glide[global_step] > 0;
 	}
 
-	void SetGlideFlag(uint8_t ch, uint8_t global_step, bool on) {
-		if (on)
-			data.flags[ch].glide |=  (uint64_t{1} << global_step);
-		else
-			data.flags[ch].glide &= ~(uint64_t{1} << global_step);
+	// Returns glide time in seconds for the given step (0 = no glide, max = 2 s)
+	float GlideAmount(uint8_t ch, uint8_t global_step) const {
+		return (data.flags[ch].glide[global_step] / 255.f) * 2.0f;
+	}
+
+	// Adjust per-step glide amount by dir, clamped to 0–255
+	void AdjustGlideAmount(uint8_t ch, uint8_t global_step, int32_t dir) {
+		auto &val = data.flags[ch].glide[global_step];
+		val = static_cast<uint8_t>(std::clamp<int32_t>(val + dir, 0, 255));
+	}
+
+	// Adjust glide amount for all steps within channel length simultaneously
+	void OffsetAllGlideAmounts(uint8_t ch, int32_t dir) {
+		const uint8_t len = data.channel[ch].length;
+		for (auto s = 0u; s < len; s++)
+			AdjustGlideAmount(ch, static_cast<uint8_t>(s), dir);
 	}
 
 	// ---- Output state accessors (called from App::Update()) ----

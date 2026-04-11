@@ -398,6 +398,18 @@ class Main : public Abstract {
 		return Palette::off.blend(Palette::teal, brightness);               // repeat
 	}
 
+	// Returns true when a step is at its default/empty value for its channel type.
+	// Used to show white (editable but empty) vs a color (has a value) during step hold.
+	bool IsStepEmpty(uint8_t ch, uint8_t global_step) const {
+		const auto sv = p.GetStepValue(ch, global_step);
+		switch (p.GetData().channel[ch].type) {
+		case ChannelType::CV:      return sv == 32768;            // center = 0V default
+		case ChannelType::Gate:    return (sv >> 8) == 0;         // gate length = 0
+		case ChannelType::Trigger: return (sv & 0xFF) == 0;       // rest
+		}
+		return true;
+	}
+
 	Color StepColorForChannel(uint8_t ch, uint8_t global_step) const {
 		switch (p.GetData().channel[ch].type) {
 		case ChannelType::CV:      return CvStepColor(ch, global_step);
@@ -839,11 +851,11 @@ private:
 	void UpdateArmedCV(uint8_t ch, bool fine) {
 		auto &cs = p.GetData().channel[ch];
 
-		// Glide held + any encoder: adjust glide time for this channel. Fully CCW = 0 = off.
-		// Same parameter as unarmed Glide+enc — just accessible directly while armed.
+		// Glide held + encoder N: adjust per-step glide amount for step N on this channel.
+		// Fully CCW = 0 = no glide. LED brightness tracks amount.
 		if (c.button.morph.is_high()) {
-			ForEachEncoderInc(c, [&](uint8_t /*enc*/, int32_t dir) {
-				cs.glide_time = std::clamp(cs.glide_time + dir * 0.1f, 0.f, 10.f);
+			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
+				p.AdjustGlideAmount(ch, GlobalStep(enc), dir);
 			});
 			return;
 		}
@@ -1058,8 +1070,7 @@ private:
 					if (p.GetData().channel[enc].type == ChannelType::Gate)
 						EditGateRatchet(enc, GlobalStep(step_btn), dir);
 					else if (p.GetData().channel[enc].type == ChannelType::CV)
-						p.GetData().channel[enc].glide_time = std::clamp(
-						    p.GetData().channel[enc].glide_time + dir * 0.1f, 0.f, 10.f);
+						p.AdjustGlideAmount(enc, GlobalStep(step_btn), dir);
 				});
 				return;
 			}
@@ -1073,9 +1084,9 @@ private:
 				if (cs.type == ChannelType::Trigger)
 					OffsetAllTrigSteps(enc, dir);
 			} else {
-				// GLIDE + enc: channel-level parameter
+				// GLIDE + enc: offset all steps' glide amounts within channel length
 				if (cs.type == ChannelType::CV) {
-					cs.glide_time = std::clamp(cs.glide_time + dir * 0.1f, 0.f, 10.f);
+					p.OffsetAllGlideAmounts(enc, dir);
 				} else if (cs.type == ChannelType::Gate) {
 					OffsetAllGateSteps(enc, dir);
 				} else if (cs.type == ChannelType::Trigger) {
@@ -1443,12 +1454,13 @@ public:
 			}
 			}
 		} else if (armed) {
-			// CV armed + Glide held: all encoders show glide time as brightness (off = 0s, full = 10s)
+			// CV armed + Glide held: each encoder shows its step's glide amount as brightness
 			if (c.button.morph.is_high()) {
-				const float brightness = p.GetData().channel[ch].glide_time / 10.f;
-				const Color glide_col  = Palette::off.blend(Palette::full_white, brightness);
-				for (auto i = 0u; i < Model::NumChans; i++)
-					c.SetEncoderLed(i, glide_col);
+				for (auto i = 0u; i < Model::NumChans; i++) {
+					const uint8_t gs   = GlobalStep(static_cast<uint8_t>(i));
+					const float    amt = p.GetData().flags[ch].glide[gs] / 255.f;
+					c.SetEncoderLed(i, Palette::off.blend(Palette::full_white, amt));
+				}
 			} else {
 				// CV armed: each encoder shows that step's CV value color for the armed channel,
 				// with the currently playing step highlighted (chaselight).
@@ -1467,18 +1479,31 @@ public:
 				}
 			}
 		} else if (p.AnyStepHeld()) {
-			// Step held for editing:
-			//   - in-range, non-zero value: channel step color
-			//   - in-range, zero value:     white (editable but empty)
-			//   - out of range:             off (not editable)
 			const uint8_t gs = GlobalStep(last_touched_step_);
-			for (auto i = 0u; i < Model::NumChans; i++) {
-				if (gs >= p.GetData().channel[i].length) {
-					c.SetEncoderLed(i, Palette::off);
-				} else if (p.GetStepValue(i, gs) == 0) {
-					c.SetEncoderLed(i, Palette::full_white);
-				} else {
-					c.SetEncoderLed(i, StepColorForChannel(i, gs));
+			if (c.button.morph.is_high()) {
+				// Step held + Glide: show per-step glide amount as brightness for each CV channel;
+				// Gate/Trigger show off (glide not applicable).
+				for (auto i = 0u; i < Model::NumChans; i++) {
+					if (p.GetData().channel[i].type == ChannelType::CV) {
+						const float amt = p.GetData().flags[i].glide[gs] / 255.f;
+						c.SetEncoderLed(i, Palette::off.blend(Palette::full_white, amt));
+					} else {
+						c.SetEncoderLed(i, Palette::off);
+					}
+				}
+			} else {
+				// Step held for editing:
+				//   - in-range, non-empty value: channel step color
+				//   - in-range, empty value:     white (editable but at default)
+				//   - out of range:              off (not editable)
+				for (auto i = 0u; i < Model::NumChans; i++) {
+					if (gs >= p.GetData().channel[i].length) {
+						c.SetEncoderLed(i, Palette::off);
+					} else if (IsStepEmpty(i, gs)) {
+						c.SetEncoderLed(i, Palette::full_white);
+					} else {
+						c.SetEncoderLed(i, StepColorForChannel(i, gs));
+					}
 				}
 			}
 		} else if (c.button.shift.is_high()) {
