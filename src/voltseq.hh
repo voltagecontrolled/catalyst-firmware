@@ -51,7 +51,7 @@ struct StepFlags {
 struct Data {
 	// Increment current_tag whenever the struct layout changes (fields added/removed/reordered).
 	// validate() checks this tag so WearLevel rejects stale or incompatible flash data gracefully.
-	static constexpr uint32_t current_tag     = 7u;
+	static constexpr uint32_t current_tag     = 8u;
 	uint32_t                  SettingsVersionTag = current_tag;
 
 	static StepGrid DefaultSteps() {
@@ -66,8 +66,7 @@ struct Data {
 	std::array<ChannelSettings, Model::NumChans>   channel{};
 	std::array<StepFlags, Model::NumChans>         flags{};
 	bool                                           play_stop_reset    = false; // true = Stop also resets all channels to step 1
-	uint8_t                                        reset_leader_ch    = 0xFF; // 0xFF=off; reset all when this channel wraps
-	uint8_t                                        _reserved          = 0;
+	uint8_t                                        _reserved[2]       = {};
 	Clock::Bpm::Data                               bpm{};             // internal BPM
 	Macro::Recorder::Data                          recorder{};        // slider sample buffer (reserved)
 
@@ -91,8 +90,6 @@ struct Data {
 			if (ch.length < 1)
 				return false;
 		}
-		if (reset_leader_ch != 0xFF && reset_leader_ch >= Model::NumChans)
-			return false;
 		return true;
 	}
 };
@@ -275,9 +272,6 @@ class Interface {
 
 
 	// Per-channel wrap flag: set true by AdvanceShadow when a channel's sequence wraps to step 0.
-	// Used by the reset-leader check in OnChannelFired.  Cleared at the start of each AdvanceShadow call.
-	std::array<bool, Model::NumChans>         just_wrapped_{};
-
 	// Orbit / beat-repeat state (driven by slider performance page)
 	bool                                      orbit_active_          = false;
 	uint8_t                                   orbit_pos_             = 0;
@@ -436,18 +430,13 @@ class Interface {
 	static constexpr uint8_t StepInPage(uint8_t step) { return step % Model::NumChans; }
 
 	// Advance shadow playhead for channel ch per its direction setting.
-	// Sets just_wrapped_[ch] = true when the sequence crosses its boundary (Forward: step → 0;
-	// Reverse: step → len-1).  PingPong and Random do not set just_wrapped_ (no clear boundary).
 	void AdvanceShadow(uint8_t ch) {
-		just_wrapped_[ch] = false;
 		const uint8_t len = data.channel[ch].length;
 		switch (data.channel[ch].direction) {
 		case Direction::Forward:
-			just_wrapped_[ch] = (shadow[ch] + 1u >= len);
 			shadow[ch] = (shadow[ch] + 1) % len;
 			break;
 		case Direction::Reverse:
-			just_wrapped_[ch] = (shadow[ch] == 0);
 			shadow[ch] = shadow[ch] == 0 ? len - 1 : shadow[ch] - 1;
 			break;
 		case Direction::PingPong: {
@@ -601,13 +590,6 @@ class Interface {
 		if (!AnyStepHeld())
 			playhead[ch] = shadow[ch];
 
-		// Reset-leader: when the designated channel wraps its sequence, reset all channels.
-		// Uses ResetExternal() so step 0 fires immediately and primed stays true — no priming pause.
-		if (just_wrapped_[ch] && data.reset_leader_ch == ch) {
-			ResetExternal();
-			return;
-		}
-
 		const auto step = GetOutputStep(ch);
 		if (data.channel[ch].type == ChannelType::Gate)
 			FireGate(ch, step);
@@ -638,9 +620,10 @@ public:
 
 	void Play() {
 		playing = true;
-		// If starting from a reset state (primed=false), fire step 0 immediately so the first
-		// clock advances to step 1 rather than wasting a clock on the priming pause.
 		if (!primed[0]) {
+			// Starting from a reset state: fire step 0 immediately and give it a full period
+			// before the first advance. ResetDividers resets sub_counter to 0 so step 0 lasts
+			// one full 16th-note before the clock advances to step 1.
 			primed.fill(true);
 			for (auto ch = 0u; ch < Model::NumChans; ch++) {
 				const auto step = GetOutputStep(ch);
@@ -649,8 +632,11 @@ public:
 				else if (data.channel[ch].type == ChannelType::Trigger)
 					FireTrigger(ch, step);
 			}
+			clock.ResetDividers();
+		} else {
+			// Resuming from stop (no reset): advance to the next step promptly.
+			clock.SyncStepClock();
 		}
-		clock.SyncStepClock();
 	}
 	void Stop() {
 		playing = false;
@@ -667,7 +653,6 @@ public:
 		shadow.fill(0);
 		pingpong_dir.fill(1);
 		primed.fill(false);
-		just_wrapped_.fill(false);
 		held_count_           = 0;
 		arp_index_            = 0;
 
@@ -686,7 +671,6 @@ public:
 		shadow.fill(0);
 		pingpong_dir.fill(1);
 		primed.fill(true);
-		just_wrapped_.fill(false);
 		held_count_           = 0;
 		arp_index_            = 0;
 
@@ -695,13 +679,16 @@ public:
 		clock.ResetDividers();
 		clock.SyncStepClock();
 
-		// Fire step 0 immediately so it produces output from this tick.
-		for (auto ch = 0u; ch < Model::NumChans; ch++) {
-			const auto step = GetOutputStep(ch);
-			if (data.channel[ch].type == ChannelType::Gate)
-				FireGate(ch, step);
-			else if (data.channel[ch].type == ChannelType::Trigger)
-				FireTrigger(ch, step);
+		// Fire step 0 immediately — only when playing, so a reset-jack trigger while stopped
+		// repositions the playhead without firing outputs.
+		if (playing) {
+			for (auto ch = 0u; ch < Model::NumChans; ch++) {
+				const auto step = GetOutputStep(ch);
+				if (data.channel[ch].type == ChannelType::Gate)
+					FireGate(ch, step);
+				else if (data.channel[ch].type == ChannelType::Trigger)
+					FireTrigger(ch, step);
+			}
 		}
 	}
 

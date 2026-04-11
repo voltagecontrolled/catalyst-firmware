@@ -102,8 +102,7 @@ These features exist in the firmware but have not been user-tested yet. Each ite
 - **Custom scale fallback** (alpha6): channel saved with a custom scale type should load as unquantized without corrupting step data.
 - **Global Settings modal entry** (alpha10): SHIFT+CHAN held 2 s alone — any other button during hold must cancel entry. Confirm Shift+Play, and other Shift combos still work normally (they interrupt the hold timer).
 - **Global Settings — Play/Stop reset mode** (alpha9): enc 1 toggles on/off; when on, Stop resets all channels to step 1. Confirm enc 1 LED is red when on, off when off.
-- **Global Settings — Master reset steps** (alpha9): enc 3 sets 0–64 steps; LED off at 0, orange at non-snap values, red at 8/16/32/64. Confirm all channels reset to step 1 every N master ticks when non-zero. Confirm overrides reset leader.
-- **Global Settings — Reset leader** (alpha9): page buttons radio-select leader channel; tap lit button to deselect. Confirm leader channel wrap resets all other channels. Confirm no reset when master_reset_steps is non-zero (master takes priority).
+- **Global Settings — Master reset steps** (alpha9): enc 3 sets 0–64 steps; LED off at 0, orange at non-snap values, red at 8/16/32/64. Confirm all channels reset to step 1 every N master ticks when non-zero.
 - **Global Settings — BPM color zones** (alpha10): enc 6 pulse color changes with BPM range (red <50, orange 50–79, yellow 80–99, green 100–119, blue 120–149, teal 150–179, lavender 180+).
 - **GetOutputStep wrap fix** (alpha9): short channels repeat correctly on later pages. Test: 8-step trigger on ch 1, 16-step CV on ch 2. Go to page 2, hold a page button — trigger steps should repeat (step 0–7 map to page-2 positions), not be silent.
 - **Direction selector clamped** (alpha9): in Channel Edit enc 2, direction should stop at Forward (CW limit) and Random (CCW limit), not wrap.

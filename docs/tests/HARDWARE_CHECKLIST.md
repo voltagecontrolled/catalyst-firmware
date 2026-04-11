@@ -156,9 +156,6 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
   - [ ] Blue 120–149 BPM
   - [ ] Teal 150–179 BPM
   - [ ] Lavender 180+ BPM
-- [ ] **Page button N**: sets channel N as reset leader (radio; tap again to clear)
-- [ ] Reset leader: when leader channel wraps, all channels snap to step 1 and fire immediately
-- [ ] No reset leader set (0xFF): channels run independently
 - [ ] **Play/Reset**: exits and saves
 
 ---
@@ -183,14 +180,6 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
 - [ ] Patch trigger into **Reset jack**: all channels snap to step 1 immediately
 - [ ] Step 1 outputs fire on the reset pulse (no extra clock cycle delay)
 - [ ] Sequence is in sync from the moment the reset pulse arrives
-- [ ] Reset leader channel still wraps correctly after a jack reset
-
-### Reset Leader (set via Global Settings page buttons)
-
-- [ ] When leader channel completes its sequence, all channels snap to step 1 together
-- [ ] All channels fire step 1 outputs immediately (no flam / timing gap)
-- [ ] Works at multiple sequence lengths (e.g. leader = 8 steps, others = 7 or 16)
-
 ---
 
 ## Performance Page (entry: hold **Fine + Glide** for 1.5 s)

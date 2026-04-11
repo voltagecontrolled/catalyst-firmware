@@ -399,7 +399,7 @@ class Main : public Abstract {
 	}
 
 	// Returns true when a step is at its default/empty value for its channel type.
-	// Used to show white (editable but empty) vs a color (has a value) during step hold.
+	// Used to show dim_grey (editable but empty) vs a color (has a value) during step hold.
 	bool IsStepEmpty(uint8_t ch, uint8_t global_step) const {
 		const auto sv = p.GetStepValue(ch, global_step);
 		switch (p.GetData().channel[ch].type) {
@@ -1184,18 +1184,9 @@ private:
 	// Panel assignments:
 	//   Panel 1 (Start)       enc 0 — Play/Stop reset mode (clamped off→on; LED red=on, off=off)
 	//   Panel 6 (BPM/Clk Div) enc 5 — Internal BPM
-	// Page buttons: reset leader channel radio (tap to select, tap selected to deselect)
 
 	void UpdateGlobalSettings(bool fine) {
 		auto &d = p.GetData();
-
-		// Page buttons: reset leader radio selector
-		auto &leader = d.reset_leader_ch;
-		for (auto [i, btn] : countzip(c.button.scene)) {
-			if (btn.just_went_high()) {
-				leader = (leader == static_cast<uint8_t>(i)) ? 0xFF : static_cast<uint8_t>(i);
-			}
-		}
 
 		// Encoders
 		ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
@@ -1354,8 +1345,7 @@ public:
 			const uint8_t chase = on_pg ? static_cast<uint8_t>(ph_foc % Model::NumChans) : 0xFF;
 			const bool  blink   = (Controls::TimeNow() >> 8) & 1u;
 			for (auto i = 0u; i < Model::NumChans; i++) {
-				bool lit = (d.reset_leader_ch == static_cast<uint8_t>(i));
-				if (i == chase) lit = blink;
+				const bool lit = (i == chase) ? blink : false;
 				c.SetButtonLed(i, lit);
 			}
 			for (auto i = 0u; i < Model::NumChans; i++) {
@@ -1500,7 +1490,7 @@ public:
 					if (gs >= p.GetData().channel[i].length) {
 						c.SetEncoderLed(i, Palette::off);
 					} else if (IsStepEmpty(i, gs)) {
-						c.SetEncoderLed(i, Palette::full_white);
+						c.SetEncoderLed(i, Palette::dim_grey);
 					} else {
 						c.SetEncoderLed(i, StepColorForChannel(i, gs));
 					}
