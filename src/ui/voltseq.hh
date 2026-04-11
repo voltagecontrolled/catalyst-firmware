@@ -28,7 +28,10 @@ inline constexpr uint16_t GateStepFine   = 1;  // ≈ 0.4% per detent
 
 // Chaselight color for the currently playing step in armed mode.
 // Dimmed from full_white so the indicator is visible without drowning out the step colors.
-inline constexpr Color ChaseWhite = Color(110, 110, 110);
+inline constexpr Color ChaseWhite = Color(60, 60, 60);
+
+// Max brightness for probability/deviation ramps — bright enough to read, not blinding.
+inline constexpr Color ProbMaxWhite = Color(120, 120, 120);
 
 class Main : public Abstract {
 	Catalyst2::VoltSeq::Interface &p;
@@ -384,7 +387,7 @@ class Main : public Abstract {
 		const float t = static_cast<float>(prob) / 100.f;
 		if (t < 0.5f)
 			return Palette::lavender.blend(Palette::grey, t * 2.f);
-		return Palette::grey.blend(Palette::full_white, (t - 0.5f) * 2.f);
+		return Palette::grey.blend(ProbMaxWhite, (t - 0.5f) * 2.f);
 	}
 
 	// LED color for deviation amount (int8_t signed volts; 0 = off).
@@ -394,10 +397,10 @@ class Main : public Abstract {
 		const float t = static_cast<float>(std::abs(static_cast<int>(amount_v))) / 15.f;
 		if (amount_v > 0) {
 			if (t < 0.5f) return Palette::grey.blend(Palette::blue, t * 2.f);
-			return Palette::blue.blend(Palette::full_white, (t - 0.5f) * 2.f);
+			return Palette::blue.blend(ProbMaxWhite, (t - 0.5f) * 2.f);
 		}
 		if (t < 0.5f) return Palette::salmon.blend(Palette::bright_red, t * 2.f);
-		return Palette::bright_red.blend(Palette::full_white, (t - 0.5f) * 2.f);
+		return Palette::bright_red.blend(ProbMaxWhite, (t - 0.5f) * 2.f);
 	}
 
 	// LED color for the Range encoder (enc4) in Channel Edit and Armed (+Shift).

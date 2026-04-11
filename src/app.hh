@@ -407,7 +407,7 @@ class App {
 			const float max_v  = min_v + cs.range.Span();
 			const float t_in   = static_cast<float>(mapped) / static_cast<float>(Channel::Cv::max);
 			const float v_in   = Model::min_output_voltage + t_in * Model::output_octave_range;
-			const float v_dev  = std::clamp(v_in + dev_v, min_v, max_v);
+			const float v_dev  = v_in + dev_v;
 			const float cv_dev = (v_dev - Model::min_output_voltage) / Model::output_octave_range
 			                     * static_cast<float>(Channel::Cv::max);
 			pre_quantize = static_cast<Channel::Cv::type>(

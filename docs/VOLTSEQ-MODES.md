@@ -262,7 +262,7 @@ All 8 encoders control the focused channel (`edit_ch_`). Turning any encoder set
 | 4 | Range | CV: voltage span — index into {1,2,3,4,5,10,15}V; clamps Transpose on change; inactive for Gate/Trigger |
 | 5 | BPM/Clock Div | clock division |
 | 6 | Transpose | CV: floor voltage ±1V, clamped to [−5, 10−span]; inactive for Gate/Trigger |
-| 7 | Random | random_amount 0–1 in 0.05 steps |
+| 7 | Random | random_amount_v: signed int8, ±1V per detent, −15..+15; CV only (inactive for Gate/Trigger) |
 
 ### LED — Length display (active when `TimeNow() <= length_display_until_`)
 
@@ -276,7 +276,7 @@ All 8 encoders control the focused channel (`edit_ch_`). Turning any encoder set
 - **Encoder 1:** direction color (green/orange/yellow/magenta).
 - **Encoder 2–5:** dim_grey.
 - **Encoder 6:** ChannelTypeColor(edit_ch_).
-- **Encoder 7:** white brightness = random_amount.
+- **Encoder 7:** `RandomAmountColor(random_amount_v)` — grey→blue→white (unipolar +N); salmon→red→white (bipolar −N); off at 0; off for Gate/Trigger.
 
 ---
 
@@ -436,11 +436,15 @@ While playing: writes to shadow step (current playing position). While stopped: 
 - Encoders still edit ratchet/repeat counts as normal
 - Glide button has no visible effect
 
-### 4. Shift+Glide collision in armed CV
+### 4. Shift+Glide in armed mode — probability editing
 
-`UpdateArmedCV` checks Glide first, then Shift. If both are held simultaneously:
-- Glide wins (per-step glide flag editing)
-- Shift+enc 4/6 (range/scale/page) is inaccessible while Glide is held
+All three armed handlers check `shift && morph` first, before the individual Shift and Glide checks. While both are held:
+
+- Enc 0–7 adjust `step_prob[step]` for the armed channel (0–100).
+- Encoder LEDs show `StepProbColor(step_prob[gs])` — violet→grey→white ramp.
+- Individual Shift-only and Glide-only paths are unreachable while both are held.
+
+Previously this combo was a collision in armed CV (Glide handler fired, Shift+enc range/transpose was inaccessible). The dedicated SHIFT+Glide check resolves it.
 
 ### 5. ~~Dead step-edit block in UpdatePerfPage~~ — Resolved
 

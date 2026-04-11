@@ -144,7 +144,7 @@ Each CV channel has a **voltage window** defined by two parameters:
 
 The window is **[Transpose, Transpose + Range]**. All recorded steps and all control input (slider, encoder in main mode) are relative to this window — moving the window transposes the whole sequence; narrowing it zooms the playable range.
 
-**Encoder LEDs:** show the CV step color for each step on the current page. The playing step blinks white (chaselight). The blink is suppressed on any held Page button so the color stays visible while editing.
+**Encoder LEDs:** show the CV step color for each step on the current page. The playing step blinks (chaselight). The blink is suppressed on any held Page button so the color stays visible while editing.
 
 **Encoder N:** directly edits step N's CV value. Fine = sub-semitone; fast spinning accelerates.
 
@@ -157,21 +157,57 @@ The window is **[Transpose, Transpose + Range]**. All recorded steps and all con
 | 5 | Range | Voltage span: 1 / 2 / 3 / 4 / 5 / 10 / 15V — clamped; shifts sequence when changed |
 | 7 | Transpose | Floor voltage ±1V per detent, clamped to keep window within hardware limits |
 
+**Shift + Glide held while armed:** encoder LEDs switch to a **violet → grey → white** ramp showing the per-step randomness amount. Turn encoder N to set the probability of random deviation for step N (0 = never deviates, 100 = always deviates). See [Per-Step Probability](#per-step-probability) below.
+
 ### Armed Gate Channel
 
-**Encoder LEDs:** show each step's gate state. Playing step blinks white. While **Glide** is held, LEDs switch to show per-step ratchet counts (dim = no ratchet, bright green = high ratchet).
+**Encoder LEDs:** show each step's gate state. Playing step blinks (chaselight). While **Glide** is held, LEDs switch to show per-step ratchet counts (dim = no ratchet, bright green = high ratchet).
 
 - **Tap a Page button** → toggle step on/off (x0x)
 - **Encoder N** → adjust gate length for step N (0 = off, up to 100%)
 - **Glide held + Encoder N** → adjust ratchet count for step N (0 = single gate, 2–8 = fire N pulses per step, subdivided within the step period)
 
+**Shift + Glide held while armed:** encoder LEDs switch to a **violet → grey → white** ramp showing the per-step randomness amount. Turn encoder N to set the suppression probability for step N (0 = always fires, 100 = never fires). See [Per-Step Probability](#per-step-probability) below.
+
 ### Armed Trigger Channel
 
-**Encoder LEDs:** show ratchet/repeat state. Playing step blinks white.
+**Encoder LEDs:** show ratchet/repeat state. Playing step blinks (chaselight).
 
 - **Tap a Page button** → toggle step between rest and single trigger
 - **Encoder N CW** → increase ratchet count (subdivide; 1–8)
 - **Encoder N CCW** → increase repeat count (extend; negative values)
+
+**Shift + Glide held while armed:** same probability editing as Gate. See [Per-Step Probability](#per-step-probability) below.
+
+---
+
+## Per-Step Probability
+
+Each step on each channel has an independent **randomness amount** (0–100), edited in armed mode via **Shift + Glide + Encoder N**.
+
+The encoder LEDs switch to a **violet → grey → white** ramp while Shift + Glide are both held. Releasing either button reverts the display.
+
+The randomness amount means different things by channel type:
+
+| Channel type | 0 | 100 | CW direction |
+|---|---|---|---|
+| **CV** | Step always plays as recorded | Step always applies a random deviation | More deviation |
+| **Gate** | Step always fires | Step is always suppressed | More suppression |
+| **Trigger** | Step always fires (with all its ratchets) | Step is always suppressed | More suppression |
+
+For Gate and Trigger channels, suppression affects the entire step — all ratchets and repeats are suppressed together, not individually.
+
+### CV Deviation Amount
+
+For CV channels, the deviation amount and type are set in **Channel Edit, encoder 8**:
+
+| Value | Type | Deviation range |
+|---|---|---|
+| CW from 0 (+N) | **Unipolar** | Random offset in [0, +N] V upward from the recorded value |
+| 0 | Off | No deviation regardless of step probability |
+| CCW from 0 (−N) | **Bipolar** | Random offset in [−N, +N] V symmetric around the recorded value |
+
+Range: ±1V per detent, ±15V maximum. The deviated value is clamped to the hardware output range, then quantized/scaled the same as the recorded step. LED: grey → blue → white (unipolar); salmon → red → white (bipolar).
 
 ---
 
@@ -210,7 +246,7 @@ Press a **Page button** to focus that channel. Encoders edit per-channel setting
 | 5 | Range | Voltage span (CV only) | 1 / 2 / 3 / 4 / 5 / 10 / 15V — clamped; LED color = span; inactive for Gate/Trigger |
 | 6 | BPM/Clock Div | Per-channel clock division | Turning shows division selection on encoder LEDs (enc 0 = ÷1, enc 7 = ÷16) |
 | 7 | Transpose | Floor voltage (CV only) | ±1V per detent, clamped to keep window within hardware limits; LED color = floor; inactive for Gate/Trigger |
-| 8 | Random | Random amount | 0–100%; LED brightness = amount |
+| 8 | Random | CV deviation amount (CV only) | CW = unipolar (+N V upward); CCW = bipolar (±N V); 0 = off; LED: grey→blue→white (unipolar), salmon→red→white (bipolar); inactive for Gate/Trigger |
 
 **Exit:** **Shift + Chan.** (short tap) or **Play/Reset** — saves and returns.
 
@@ -305,17 +341,18 @@ All other settings — steps, channel types, lengths, clock divisions, global se
 | Main mode, step held for editing | Each encoder: that step's color across all channels |
 | Main mode, page buttons | Chaselight for most recently focused channel |
 | Main mode, Shift held | Page buttons: current page lit solid; focused encoder blinks white |
-| Armed CV | Each encoder: step CV color for current page; playing step blinks white |
-| Armed Gate | Each encoder: step gate state; playing step blinks white |
+| Armed CV | Each encoder: step CV color for current page; playing step blinks |
+| Armed Gate | Each encoder: step gate state; playing step blinks |
 | Armed Gate + Glide held | Each encoder: per-step ratchet count (dim = none, bright green = high) |
-| Armed Trigger | Each encoder: step ratchet/repeat state; playing step blinks white |
+| Armed Trigger | Each encoder: step ratchet/repeat state; playing step blinks |
+| Armed (any type) + Shift + Glide held | Each encoder: per-step randomness amount (violet→grey→white ramp; off = 0) |
 | CHAN held (no page button) | Each encoder: channel type color |
 | Armed CV, Shift held | Enc 5 = Range color; Enc 7 = Transpose color; all others dark |
 | Channel Edit — enc 1 | Brightness = output delay |
 | Channel Edit — enc 2 | Green/Orange/Yellow/Magenta = direction |
 | Channel Edit — enc 5 | Range color (blue→cyan→green→yellow→orange→magenta→white for 1–15V); off for Gate/Trigger |
 | Channel Edit — enc 7 | Transpose color (red/orange/pink = negative, grey = 0V, blue/teal/violet/white = positive); off for Gate/Trigger |
-| Channel Edit — enc 8 | Brightness = random amount |
+| Channel Edit — enc 8 | Deviation amount: grey→blue→white (unipolar +N V); salmon→red→white (bipolar ±N V); off at 0; off for Gate/Trigger |
 | Channel Edit — page buttons | Chaselight for focused channel |
 | Channel Edit, Shift held | Page buttons: current page lit solid (not focused channel) |
 | Global Settings — enc 1 | Red = play/stop reset on, off = off |
@@ -345,7 +382,8 @@ All other settings — steps, channel types, lengths, clock divisions, global se
 | **Hold Page N + turn Encoder M** | Edit channel M's value at step N |
 | Armed CV + **Encoder N** | Edit step N's CV value |
 | Armed CV + **Shift + Enc 5** | Adjust channel range |
-| Armed CV + **Shift + Enc 7** | Adjust quantizer scale |
+| Armed CV + **Shift + Enc 7** | Adjust channel transpose |
+| Armed (any) + **Shift + Glide + Encoder N** | Set per-step randomness amount for step N (0–100) |
 | Armed Gate + **Encoder N** | Adjust gate length for step N |
 | Armed Gate + **Glide held + Encoder N** | Adjust ratchet count for step N (0 = single, 2–8 = subdivide) |
 | Armed Gate/Trig + **tap Page N** | Toggle step N on/off |
