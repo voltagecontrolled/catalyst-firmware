@@ -666,10 +666,14 @@ public:
 				trigger_step_enc_turned_ = 0;
 			} else {
 				p.Toggle();
-				// Play/Stop reset mode: when stopping, also reset all channels to step 1
-				if (!p.IsPlaying() && p.GetData().play_stop_reset)
-					p.Reset();
-				p.shared.do_save_macro = true;
+				if (!p.IsPlaying()) {
+					// Play/Stop reset mode: when stopping, also reset all channels to step 1
+					if (p.GetData().play_stop_reset)
+						p.Reset();
+					// Save on stop only — saving on play blocks the CPU with a synchronous
+					// flash write, consuming step 0's gate duration and making it inaudible.
+					p.shared.do_save_macro = true;
+				}
 			}
 		}
 		if (shift_play_pending_) {
@@ -1394,13 +1398,20 @@ public:
 		const bool armed_gate_trig = armed && (type == ChannelType::Gate || type == ChannelType::Trigger);
 
 		// --- Page button LEDs ---
+		const auto ph_focus = armed ? p.GetPlayhead(ch) : p.GetPlayhead(focused_ch_);
+		const bool on_focus_page = (ph_focus / Model::NumChans == current_page_);
+		const uint8_t chase_btn = on_focus_page ? static_cast<uint8_t>(ph_focus % Model::NumChans) : 0xFF;
+		const bool chase_blink = (Controls::TimeNow() >> 8) & 1u;
+
 		for (auto i = 0u; i < Model::NumChans; i++) {
 			bool lit = false;
 			if (armed_gate_trig) {
-				// x0x on/off pattern for armed Gate/Trigger
-				const auto sv  = p.GetStepValue(ch, GlobalStep(i));
-				const auto val = static_cast<int8_t>(sv & 0xFF);
-				lit = (type == ChannelType::Gate) ? (sv > 0) : (val != 0);
+				// x0x on/off pattern for armed Gate/Trigger, with chaselight
+				const auto sv = p.GetStepValue(ch, GlobalStep(i));
+				lit = (type == ChannelType::Gate) ? (static_cast<uint8_t>(sv >> 8) > 0)
+				                                  : (static_cast<int8_t>(sv & 0xFF) != 0);
+				if (i == chase_btn)
+					lit = chase_blink;
 			} else if (c.button.shift.is_high()) {
 				// Shift held: illuminate only the currently selected page
 				lit = (i == current_page_);
@@ -1490,7 +1501,7 @@ public:
 					if (gs >= p.GetData().channel[i].length) {
 						c.SetEncoderLed(i, Palette::off);
 					} else if (IsStepEmpty(i, gs)) {
-						c.SetEncoderLed(i, Palette::dim_grey);
+						c.SetEncoderLed(i, Palette::very_dim_grey);
 					} else {
 						c.SetEncoderLed(i, StepColorForChannel(i, gs));
 					}

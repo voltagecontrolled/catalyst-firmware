@@ -270,7 +270,6 @@ class Interface {
 	std::array<GateState,    Model::NumChans> gate_state{};
 	std::array<RatchetState, Model::NumChans> ratchet_state{};
 
-
 	// Per-channel wrap flag: set true by AdvanceShadow when a channel's sequence wraps to step 0.
 	// Orbit / beat-repeat state (driven by slider performance page)
 	bool                                      orbit_active_          = false;
@@ -621,20 +620,8 @@ public:
 	void Play() {
 		playing = true;
 		if (!primed[0]) {
-			// Starting from a reset state: fire step 0 immediately and give it a full period
-			// before the first advance. ResetDividers resets sub_counter to 0 so step 0 lasts
-			// one full 16th-note before the clock advances to step 1.
-			primed.fill(true);
-			for (auto ch = 0u; ch < Model::NumChans; ch++) {
-				const auto step = GetOutputStep(ch);
-				if (data.channel[ch].type == ChannelType::Gate)
-					FireGate(ch, step);
-				else if (data.channel[ch].type == ChannelType::Trigger)
-					FireTrigger(ch, step);
-			}
 			clock.ResetDividers();
 		} else {
-			// Resuming from stop (no reset): advance to the next step promptly.
 			clock.SyncStepClock();
 		}
 	}
@@ -659,47 +646,23 @@ public:
 		gate_state    = {};
 		ratchet_state = {};
 		clock.ResetDividers();
-
-		if (playing) {
-			// Reset while playing: fire step 0 immediately and give it a full period.
-			// primed=true so the next clock advances to step 1 rather than priming again.
-			primed.fill(true);
-			for (auto ch = 0u; ch < Model::NumChans; ch++) {
-				const auto step = GetOutputStep(ch);
-				if (data.channel[ch].type == ChannelType::Gate)
-					FireGate(ch, step);
-				else if (data.channel[ch].type == ChannelType::Trigger)
-					FireTrigger(ch, step);
-			}
-		}
-		// If not playing: leave primed=false so Play() fires step 0 when pressed.
+		// primed=false, shadow=0: first clock after Play (or next clock if already playing)
+		// will prime without advancing, then fire step 0.
 	}
 
-	// External reset (reset jack or clock-sync): rewind all playheads to step 0 and fire step 0 immediately.
+	// External reset (reset jack): rewind all playheads to step 0.
+	// primed=false, shadow=0: next clock will prime without advancing, then fire step 0.
 	void ResetExternal() {
 		playhead.fill(0);
 		shadow.fill(0);
 		pingpong_dir.fill(1);
-		primed.fill(true);
-		held_count_           = 0;
+		primed.fill(false);
+		// Preserve held_count_ and held_steps_ — reset jack should not release held steps.
 		arp_index_            = 0;
 
 		gate_state    = {};
 		ratchet_state = {};
 		clock.ResetDividers();
-		clock.SyncStepClock();
-
-		// Fire step 0 immediately — only when playing, so a reset-jack trigger while stopped
-		// repositions the playhead without firing outputs.
-		if (playing) {
-			for (auto ch = 0u; ch < Model::NumChans; ch++) {
-				const auto step = GetOutputStep(ch);
-				if (data.channel[ch].type == ChannelType::Gate)
-					FireGate(ch, step);
-				else if (data.channel[ch].type == ChannelType::Trigger)
-					FireTrigger(ch, step);
-			}
-		}
 	}
 
 	// ---- Step-lock / arpeggiation API (called from UI) ----

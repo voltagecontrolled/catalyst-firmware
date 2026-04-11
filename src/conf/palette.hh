@@ -16,7 +16,7 @@ namespace Catalyst2::Palette
 // Board is Red-Blue-Green (not normal RGB)
 inline constexpr Color off = Color(0, 0, 0);
 inline constexpr Color black = Color(0, 0, 0);
-inline constexpr Color very_dim_grey = Color(3, 3, 3);
+inline constexpr Color very_dim_grey = Color(1, 1, 1);
 inline constexpr Color dim_grey = Color(5, 5, 5);
 inline constexpr Color grey = Color(100, 40, 40);
 
