@@ -81,4 +81,4 @@ The Phase Scrub slider controls an orbit engine that manipulates playback positi
 
 ### Saving
 
-VoltSeq saves automatically when play/stop is toggled or any editor is exited.
+VoltSeq saves automatically on **Stop** and when **Global Settings** or the **Performance Page** are exited. Exiting **Channel Edit** while playing defers the save to the next Stop — power-cycling before stopping will lose any changes made in that session.
