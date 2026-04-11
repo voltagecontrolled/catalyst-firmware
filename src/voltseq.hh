@@ -659,13 +659,23 @@ public:
 		gate_state    = {};
 		ratchet_state = {};
 		clock.ResetDividers();
-		clock.SyncStepClock();
+
+		if (playing) {
+			// Reset while playing: fire step 0 immediately and give it a full period.
+			// primed=true so the next clock advances to step 1 rather than priming again.
+			primed.fill(true);
+			for (auto ch = 0u; ch < Model::NumChans; ch++) {
+				const auto step = GetOutputStep(ch);
+				if (data.channel[ch].type == ChannelType::Gate)
+					FireGate(ch, step);
+				else if (data.channel[ch].type == ChannelType::Trigger)
+					FireTrigger(ch, step);
+			}
+		}
+		// If not playing: leave primed=false so Play() fires step 0 when pressed.
 	}
 
-	// External reset: rewind all playheads to step 0 and fire step 0 immediately.
-	// Unlike Reset() (used for manual play/stop), this sets primed=true so the next
-	// clock tick advances to step 1 — matching CatSeq's behavior where the phaser
-	// always advances on each clock with no "priming" pause.
+	// External reset (reset jack or clock-sync): rewind all playheads to step 0 and fire step 0 immediately.
 	void ResetExternal() {
 		playhead.fill(0);
 		shadow.fill(0);
