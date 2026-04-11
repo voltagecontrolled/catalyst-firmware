@@ -13,6 +13,15 @@ See `docs/planned/VOLTSEQ-ITERATIVE-PROBABILITY.md`.
 
 ## Active / Next Up
 
+### Step-0 skip on reset — alpha46 testing needed
+**Status:** alpha46 removes the fire-and-prime block from `Reset()`, `ResetExternal()`, and `Play()`. All three now rely on the priming path in `OnChannelFired` to fire step 0 on the first clock. **Not yet hardware verified** — alphas 31–45 were never actually compiled due to stale ninja deps (see Build System note below).
+
+**Current approach (alpha46):** `primed=false`, `shadow=0`, `ResetDividers()`. First clock primes without advancing, fires step 0.
+
+**Known trade-off:** Reset-while-playing no longer fires step 0 immediately — there's a gap until the next clock. If this is unacceptable, the PRE_STEP sentinel approach (replace `primed` boolean with a `shadow = 0xFF` pre-position) handles it cleanly. See conversation history for full design.
+
+**If alpha46 doesn't fix it:** The PRE_STEP approach eliminates the `primed` flag entirely, removing the possibility of stale boolean state causing skips.
+
 ### Manual reset punch-in under external clock
 **Observed (hardware verified):** SHIFT+PLAY cannot be punched in time to resync to an external clock. `Reset()` sets `primed=false` so the first post-reset clock primes rather than advances — adds ~1 step of latency that makes beat-accurate manual reset impractical.
 
@@ -180,6 +189,22 @@ The wiki documents "Hold Page + turn Encoder" as working in Perf Page. Either fi
 `current_page_` is a single shared value. Navigating to page 3 in any mode leaves the display on page 3 when entering the next mode. Channel Edit entry now resets it to the focused channel's playhead page (alpha13), but no other mode does. Navigating in Glide Step Editor or Perf Page affects what Normal mode shows on return.
 
 Low-severity in practice (SHIFT+PAGE always lets you recover), but worth being intentional about which mode transitions should and shouldn't reset the page.
+
+---
+
+## Build System
+
+### VoltSeq requires separate cmake configuration
+VoltSeq builds use `-DCATALYST_SECOND_MODE=1` and output to `build_voltseq/`. The default `make all` builds CatSeq/CatCon into `build/`. Always use:
+```bash
+cmake -B build_voltseq -GNinja -DCATALYST_SECOND_MODE=1 .
+cmake --build build_voltseq
+cmake --build build_voltseq --target f401.wav
+```
+WAV is at `build_voltseq/f401/f401.wav`.
+
+### Ninja dep staleness on header-only files
+Ninja's dependency scanner can lose track of header-only files (e.g. `voltseq.hh`, `ui/voltseq.hh`, `palette.hh`). Symptom: `ninja -n` shows `[0/1]` after editing headers. **Alphas 31–45 shipped identical binaries** because of this. Fix: `rm -rf build_voltseq && cmake -B build_voltseq ...` to rebuild the dep graph from scratch. After any header edit, verify ninja plans to recompile before trusting the WAV.
 
 ---
 
