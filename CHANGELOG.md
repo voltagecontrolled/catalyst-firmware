@@ -268,6 +268,7 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 | alpha52 | Orbit activation fix on disarm (force pickup lock to 0 on both disarm paths); Play LED slow-blinks in any modal mode to signal that Play exits the modal rather than toggling play/stop |
 | alpha53–54 | Global settings entry debugging: added diagnostic encoder LED, identified root cause as `MuxedButton` having no debounce — stale falling-edge events on CHAN were firing `just_went_low()` inside the hold-timer block on the very next tick, cancelling the timer before it could reach 1 s. |
 | alpha55 | Fix global settings entry: drain CHAN `just_went_low()` events silently while hold timer is pending; act only on SHIFT release for the short-tap path. Timer now runs to completion regardless of CHAN bounce. Global settings encoder LEDs: unused encoders now dark (were dim-grey). |
+| alpha56 | Per-step probability and CV random deviation. `SHIFT+Glide` in armed mode: enc 0–7 adjust per-step randomness amount (0–100) for the armed channel; LEDs show violet→grey→white ramp. Gate/Trigger: non-zero step_prob suppresses the step's output with that probability. CV: non-zero step_prob triggers a random volt offset (clamped to channel window, quantized/scaled after); deviation range set by Channel Edit enc 7 (`random_amount_v`, ±1V steps, −15..+15V; positive = unipolar, negative = bipolar). `ChannelSettings::random_amount` (float stub) replaced by `int8_t random_amount_v`. `StepFlags::step_prob[64]` added. `current_tag` bumped to 10. |
 
 **Deviations from spec (`docs/planned/VOLTSEQ.md`):**
 - Slider recording uses the channel Range parameter directly; separate `slider_base_v`/`slider_span_v` fields were removed.
@@ -276,7 +277,7 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 - Phase rotate operates only on active steps (0 to length-1); unused steps beyond length are untouched.
 - Disarming requires Chan. + Page button (bare page-button disarm removed to allow all steps to be edited while armed, including step 1 of the armed channel).
 - Only two WAV builds per release (catseq-catcon, catseq-voltseq); the voltseq-catcon variant is deferred.
-- `VoltSeq::Data::current_tag = 9u` (bumped in alpha51; `VoltSeqRange range` + `int8_t transpose` replace `Channel::Cv::Range range` in `ChannelSettings`).
+- `VoltSeq::Data::current_tag = 10u` (bumped in alpha56; `StepFlags::step_prob[64]` added; `ChannelSettings::random_amount` float replaced by `int8_t random_amount_v`).
 
 **Implementation notes:**
 

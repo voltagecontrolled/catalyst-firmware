@@ -33,10 +33,8 @@ See `docs/planned/VOLTSEQ-ITERATIVE-PROBABILITY.md`.
 
 ---
 
-### Step Probability / Random Amount — Needs Investigation
-**Observed:** Random amount (Channel Edit enc 8) has not been confirmed working. Test on CV, Gate, and Trigger channels at various amounts and confirm steps are being skipped/randomized as expected.
-
-**Where to look:** `src/voltseq.hh` — search for `random_amount` to find where it is applied in the engine. Verify the randomization fires on step advance, not on every tick, and that 0% = no randomization, 100% = fully random on every step.
+### Step Probability / Random Deviation — Implemented in alpha56 (Needs Hardware Verification)
+Per-step probability (`StepFlags::step_prob[64]`, 0–100) and CV deviation amount (`ChannelSettings::random_amount_v`, ±15V). Gesture: SHIFT+Glide in armed mode, enc 0–7. Deviation range: Channel Edit enc 7. Needs testing on hardware for all three channel types at low, mid, and max probability values.
 
 ---
 

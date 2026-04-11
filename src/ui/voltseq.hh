@@ -377,6 +377,29 @@ class Main : public Abstract {
 		return Palette::Cv::fromOutput(p.shared.data.palette[ch], out);
 	}
 
+	// LED color for per-step randomness amount (0–100; 0 = no randomness).
+	// Ramp: off → violet → grey → white.
+	static Color StepProbColor(uint8_t prob) {
+		if (prob == 0) return Palette::off;
+		const float t = static_cast<float>(prob) / 100.f;
+		if (t < 0.5f)
+			return Palette::lavender.blend(Palette::grey, t * 2.f);
+		return Palette::grey.blend(Palette::full_white, (t - 0.5f) * 2.f);
+	}
+
+	// LED color for deviation amount (int8_t signed volts; 0 = off).
+	// Unipolar (+N): grey → blue → white. Bipolar (-N): salmon → red → white.
+	static Color RandomAmountColor(int8_t amount_v) {
+		if (amount_v == 0) return Palette::off;
+		const float t = static_cast<float>(std::abs(static_cast<int>(amount_v))) / 15.f;
+		if (amount_v > 0) {
+			if (t < 0.5f) return Palette::grey.blend(Palette::blue, t * 2.f);
+			return Palette::blue.blend(Palette::full_white, (t - 0.5f) * 2.f);
+		}
+		if (t < 0.5f) return Palette::salmon.blend(Palette::bright_red, t * 2.f);
+		return Palette::bright_red.blend(Palette::full_white, (t - 0.5f) * 2.f);
+	}
+
 	// LED color for the Range encoder (enc4) in Channel Edit and Armed (+Shift).
 	// 7 options indexed 0–6 for spans {1,2,3,4,5,10,15}V.
 	static Color RangeColor(const VoltSeqRange &r) {
@@ -924,6 +947,14 @@ private:
 	void UpdateArmedCV(uint8_t ch, bool fine) {
 		auto &cs = p.GetData().channel[ch];
 
+		// SHIFT+Glide: enc 0–7 adjust per-step randomness amount for steps 0–7.
+		if (c.button.shift.is_high() && c.button.morph.is_high()) {
+			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
+				p.AdjustStepProbability(ch, GlobalStep(enc), dir);
+			});
+			return;
+		}
+
 		// Glide held + encoder N: adjust per-step glide amount for step N on this channel.
 		// Fully CCW = 0 = no glide. LED brightness tracks amount.
 		if (c.button.morph.is_high()) {
@@ -963,6 +994,14 @@ private:
 	}
 
 	void UpdateArmedGate(uint8_t ch, bool fine) {
+		// SHIFT+Glide: enc 0–7 adjust per-step randomness amount for steps 0–7.
+		if (c.button.shift.is_high() && c.button.morph.is_high()) {
+			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
+				p.AdjustStepProbability(ch, GlobalStep(enc), dir);
+			});
+			return;
+		}
+
 		// Shift held: page navigation only
 		if (c.button.shift.is_high()) {
 			for (auto [i, btn] : countzip(c.button.scene)) {
@@ -993,6 +1032,14 @@ private:
 	}
 
 	void UpdateArmedTrigger(uint8_t ch, bool /*fine*/) {
+		// SHIFT+Glide: enc 0–7 adjust per-step randomness amount for steps 0–7.
+		if (c.button.shift.is_high() && c.button.morph.is_high()) {
+			ForEachEncoderInc(c, [&](uint8_t enc, int32_t dir) {
+				p.AdjustStepProbability(ch, GlobalStep(enc), dir);
+			});
+			return;
+		}
+
 		// Shift held: page navigation only
 		if (c.button.shift.is_high()) {
 			for (auto [i, btn] : countzip(c.button.scene)) {
@@ -1260,8 +1307,10 @@ private:
 					    static_cast<int8_t>(cs.transpose + static_cast<int8_t>(dir)), -5, max_xpose);
 				}
 				break;
-			case 7: // Random amount (0..1 in 0.05 increments) — no accel: narrow range
-				cs.random_amount = std::clamp(cs.random_amount + dir * 0.05f, 0.f, 1.f);
+			case 7: // Deviation amount (±1V per detent, −15..+15) — CV only; inactive for Gate/Trigger
+				if (cs.type == ChannelType::CV)
+					cs.random_amount_v = static_cast<int8_t>(
+					    std::clamp<int32_t>(cs.random_amount_v + dir, -15, 15));
 				break;
 			}
 			(void)fine;
@@ -1431,7 +1480,7 @@ public:
 					else if (i == 4) col = cv_ch ? RangeColor(cs.range)          : Palette::off;
 					else if (i == 5) col = Palette::Setting::active;
 					else if (i == 6) col = cv_ch ? TransposeColor(cs.transpose)  : Palette::off;
-					else if (i == 7) col = Palette::off.blend(Palette::full_white, cs.random_amount);
+					else if (i == 7) col = cv_ch ? RandomAmountColor(cs.random_amount_v) : Palette::off;
 					c.SetEncoderLed(i, col);
 				}
 			}
@@ -1538,8 +1587,14 @@ public:
 
 		// --- Encoder LEDs ---
 		if (armed_gate_trig) {
-			// Armed Gate + Glide held: show per-step ratchet counts instead of gate state
-			if (type == ChannelType::Gate && c.button.morph.is_high()) {
+			// SHIFT+Glide: show per-step randomness amount ramp (violet→grey→white).
+			if (c.button.shift.is_high() && c.button.morph.is_high()) {
+				for (auto i = 0u; i < Model::NumChans; i++) {
+					const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));
+					c.SetEncoderLed(i, StepProbColor(p.GetData().flags[ch].step_prob[gs]));
+				}
+			} else if (type == ChannelType::Gate && c.button.morph.is_high()) {
+				// Armed Gate + Glide held: show per-step ratchet counts instead of gate state
 				for (auto i = 0u; i < Model::NumChans; i++) {
 					const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));
 					c.SetEncoderLed(i, GateRatchetColor(ch, gs));
@@ -1567,8 +1622,14 @@ public:
 			}
 			}
 		} else if (armed) {
-			// CV armed + Shift held: show only enc4 (Range) and enc6 (Transpose); all others dark.
-			if (c.button.shift.is_high()) {
+			// CV armed + SHIFT+Glide: show per-step randomness amount ramp (violet→grey→white).
+			if (c.button.shift.is_high() && c.button.morph.is_high()) {
+				for (auto i = 0u; i < Model::NumChans; i++) {
+					const uint8_t gs = GlobalStep(static_cast<uint8_t>(i));
+					c.SetEncoderLed(i, StepProbColor(p.GetData().flags[ch].step_prob[gs]));
+				}
+			} else if (c.button.shift.is_high()) {
+				// CV armed + Shift held: show only enc4 (Range) and enc6 (Transpose); all others dark.
 				const auto &cs = p.GetData().channel[ch];
 				for (auto i = 0u; i < Model::NumChans; i++)
 					c.SetEncoderLed(i, Palette::off);

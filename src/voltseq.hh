@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstdlib>
 
 namespace Catalyst2::VoltSeq
 {
@@ -53,7 +54,7 @@ struct ChannelSettings {
 	Direction            direction       = Direction::Forward;
 	uint8_t              pulse_width_ms  = 10;                // trigger pulse width ms (Trigger only)
 	uint8_t              output_delay_ms = 0;                 // output delay ms
-	float                random_amount   = 0.f;               // 0 = deterministic, 1 = fully random (CV only)
+	int8_t               random_amount_v = 0;                 // deviation in whole volts: +N = unipolar [0,N], -N = bipolar [-N,+N], 0 = off (CV only)
 	float                glide_time      = 0.f;               // seconds; 0 = disabled (CV only)
 };
 
@@ -61,12 +62,16 @@ struct StepFlags {
 	// Per-step glide amount: 0 = no glide, 1–255 maps linearly to 0–2 s portamento time.
 	// CV channels only; Gate/Trigger ignore this field.
 	std::array<uint8_t, 64> glide{};
+	// Per-step randomness amount: 0 = no randomness (default for all types).
+	// Gate/Trigger: 0 = always fires; 100 = always suppressed.
+	// CV: 0 = always plays as recorded; 100 = always applies deviation.
+	std::array<uint8_t, 64> step_prob{};
 };
 
 struct Data {
 	// Increment current_tag whenever the struct layout changes (fields added/removed/reordered).
 	// validate() checks this tag so WearLevel rejects stale or incompatible flash data gracefully.
-	static constexpr uint32_t current_tag     = 9u;
+	static constexpr uint32_t current_tag     = 10u;
 	uint32_t                  SettingsVersionTag = current_tag;
 
 	static StepGrid DefaultSteps() {
@@ -287,6 +292,20 @@ class Interface {
 
 	std::array<GateState,    Model::NumChans> gate_state{};
 	std::array<RatchetState, Model::NumChans> ratchet_state{};
+
+	// Per-channel cached CV deviation in volts, rolled once per step advance in OnChannelFired.
+	// Read each tick by App::CvOutput; reset to 0 on Reset/ResetExternal.
+	std::array<float, Model::NumChans> cv_dev_v_{};
+
+	// Returns a random deviation in volts given a signed-volt amount setting.
+	// amt_v > 0: unipolar [0, amt_v); amt_v < 0: bipolar (-amt_v, +amt_v).
+	static float ComputeDeviation(int8_t amt_v) {
+		const float t = std::rand() / (static_cast<float>(RAND_MAX) + 1.f); // [0, 1)
+		if (amt_v > 0)
+			return t * static_cast<float>(amt_v);
+		const float a = static_cast<float>(-amt_v);
+		return t * 2.f * a - a;
+	}
 
 	// Per-channel wrap flag: set true by AdvanceShadow when a channel's sequence wraps to step 0.
 	// Orbit / beat-repeat state (driven by slider performance page)
@@ -608,10 +627,31 @@ class Interface {
 			playhead[ch] = shadow[ch];
 
 		const auto step = GetOutputStep(ch);
-		if (data.channel[ch].type == ChannelType::Gate)
-			FireGate(ch, step);
-		else if (data.channel[ch].type == ChannelType::Trigger)
-			FireTrigger(ch, step);
+		const auto type = data.channel[ch].type;
+
+		if (type == ChannelType::CV) {
+			// Roll and cache deviation once per step advance; App::CvOutput reads it each tick.
+			const uint8_t prob = data.flags[ch].step_prob[step];
+			const int8_t  amt  = data.channel[ch].random_amount_v;
+			cv_dev_v_[ch] = 0.f;
+			if (prob > 0 && amt != 0) {
+				const uint8_t roll = static_cast<uint8_t>(std::rand() % 100);
+				if (roll < prob)
+					cv_dev_v_[ch] = ComputeDeviation(amt);
+			}
+		} else {
+			// Gate/Trigger: suppress this step if the dice roll fires.
+			const uint8_t prob = data.flags[ch].step_prob[step];
+			if (prob > 0) {
+				const uint8_t roll = static_cast<uint8_t>(std::rand() % 100);
+				if (roll < prob)
+					return;
+			}
+			if (type == ChannelType::Gate)
+				FireGate(ch, step);
+			else
+				FireTrigger(ch, step);
+		}
 	}
 
 public:
@@ -663,6 +703,7 @@ public:
 
 		gate_state    = {};
 		ratchet_state = {};
+		cv_dev_v_.fill(0.f);
 		clock.ResetDividers(data.channel);
 		// primed=false, shadow=0: first clock after Play (or next clock if already playing)
 		// will prime without advancing, then fire step 0.
@@ -680,6 +721,7 @@ public:
 
 		gate_state    = {};
 		ratchet_state = {};
+		cv_dev_v_.fill(0.f);
 		clock.ResetDividers(data.channel);
 	}
 
@@ -758,6 +800,15 @@ public:
 		auto &val = data.flags[ch].glide[global_step];
 		val = static_cast<uint8_t>(std::clamp<int32_t>(val + dir, 0, 255));
 	}
+
+	// Adjust per-step randomness amount by dir, clamped to 0–100
+	void AdjustStepProbability(uint8_t ch, uint8_t global_step, int32_t dir) {
+		auto &val = data.flags[ch].step_prob[global_step];
+		val = static_cast<uint8_t>(std::clamp<int32_t>(val + dir, 0, 100));
+	}
+
+	// Cached CV deviation in volts for the current step (rolled in OnChannelFired, read by App::CvOutput).
+	float GetCvDeviation(uint8_t ch) const { return cv_dev_v_[ch]; }
 
 	// Adjust glide amount for all steps within channel length simultaneously
 	void OffsetAllGlideAmounts(uint8_t ch, int32_t dir) {
