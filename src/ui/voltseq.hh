@@ -1283,9 +1283,13 @@ private:
 
 public:
 	void PaintLeds(const Model::Output::Buffer & /*outs*/) override {
-		// Play LED: lit while playing (mirrors CatSeq behavior).
-		// Clear mode overrides this below with a blink pattern.
+		// Play LED: lit while playing. Modal modes override with a slow blink so
+		// the user knows Play will exit the mode rather than play/stop.
+		// Clear mode overrides further below with its own blink pattern.
 		c.SetPlayLed(p.IsPlaying());
+		const bool in_modal = channel_edit_active_ || armed_ch_.has_value() || global_settings_active_ || perf_page_active_;
+		if (in_modal)
+			c.SetPlayLed((Controls::TimeNow() >> 11u) & 0x01u); // ~1.5 Hz slow blink
 
 		// --- Clear mode: all page buttons + play LED slow-blink ---
 		if (clear_mode_active_) {
