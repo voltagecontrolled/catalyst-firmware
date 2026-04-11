@@ -56,7 +56,10 @@ class Main : public Abstract {
 
 	// Deadline (Controls::TimeNow) until the length-feedback display is shown in Channel Edit.
 	// Starts when encoder 2 (Length) is turned; display reverts to normal after ~600 ms.
-	uint32_t     length_display_until_ = 0;
+	uint32_t     length_display_until_   = 0;
+	// Deadline until the clock-division feedback display is shown in Channel Edit.
+	// Starts when encoder 5 (Clock Div) is turned; display reverts to normal after ~600 ms.
+	uint32_t     division_display_until_ = 0;
 
 	// ---- Slider Performance Page state ----
 	bool     perf_page_active_     = false;
@@ -1157,7 +1160,8 @@ private:
 				    std::clamp<int32_t>(cs.length + adelta, 1, 64));
 				current_page_ = static_cast<uint8_t>((cs.length - 1u) / Model::NumChans);
 				// Keep length feedback visible for 600 ms after the last turn.
-				length_display_until_ = Controls::TimeNow() + Clock::MsToTicks(600);
+				length_display_until_   = Controls::TimeNow() + Clock::MsToTicks(600);
+				division_display_until_ = 0;
 				break;
 			}
 			case 3: // Phase rotate — rotates only active steps [0, length-1]
@@ -1170,8 +1174,10 @@ private:
 					cs.pulse_width_ms = static_cast<uint8_t>(
 					    std::clamp<int32_t>(cs.pulse_width_ms + dir, 1, 100));
 				break;
-			case 5: // Clock division — no accel: steps are already coarse
-				cs.division.Inc(dir);
+			case 5: // Clock division — steps through shared musical table (see Clock::DivisionTables)
+				Clock::Divider::Step(cs.division, Clock::DivisionTables::VoltSeq, dir);
+				division_display_until_ = Controls::TimeNow() + Clock::MsToTicks(600);
+				length_display_until_   = 0;
 				break;
 			case 6: // Type selector (unquantized CV → scales → Gate → Trigger, clamped) — no accel
 				CycleTypeSel(edit_ch_, dir);
@@ -1297,10 +1303,20 @@ public:
 					c.SetButtonLed(i, i <= last_page);
 					c.SetEncoderLed(i, i < steps_on_pg ? ChannelTypeColor(edit_ch_) : Palette::dim_grey);
 				}
+			} else if (Controls::TimeNow() <= division_display_until_) {
+				// Clock-div feedback: same LED position as CatSeq for the same musical division.
+				// Index maps enc 0 = quarter note … enc 7 = quadruple whole (see Clock::DivisionTables).
+				// Shown for 600 ms after the last encoder 5 (Clock Div) turn, then reverts.
+				ClearEncoderLeds(c);
+				ClearButtonLeds(c);
+				const auto idx = Clock::Divider::IndexOf(Clock::DivisionTables::VoltSeq,
+				                                         p.GetData().channel[edit_ch_].division.Read());
+				SetLedsClockDiv(c, idx + 1);
 			} else {
 				// Encoder LEDs match panel layout:
 				//   enc 0 (Start/delay): white brightness = delay amount
 				//   enc 1 (Dir):  color = current direction
+				//   enc 5 (Clock Div): blue = divided, dim_grey = 1/1
 				//   enc 6 (Transpose): type/scale color
 				//   enc 7 (Random): white brightness = random amount
 				// Page buttons: focused channel lit solid; current playing step blinks (chaselight).
@@ -1328,6 +1344,7 @@ public:
 					Color col = Palette::dim_grey;
 					if (i == 0) col = Palette::off.blend(Palette::full_white, cs.output_delay_ms / 20.f);
 					else if (i == 1) col = dir_col[static_cast<uint8_t>(cs.direction)];
+					else if (i == 5) col = Palette::Setting::active;
 					else if (i == 6) col = ChannelTypeColor(edit_ch_);
 					else if (i == 7) col = Palette::off.blend(Palette::full_white, cs.random_amount);
 					c.SetEncoderLed(i, col);

@@ -206,6 +206,26 @@ private:
 
 } // namespace Bpm
 
+// Musical division tables for per-channel clock division.
+// Both tables share the same index → same musical speed in each mode.
+// CatSeq divides the quarter-note master clock; VoltSeq divides the 16th-note sub-clock (4× faster),
+// so VoltSeq values are exactly 4× the CatSeq values.
+//
+// Index  CatSeq  VoltSeq  Musical name
+//   0       1       4     quarter note
+//   1       2       8     half note
+//   2       3      12     dotted half
+//   3       4      16     whole note
+//   4       6      24     dotted whole
+//   5       8      32     double whole
+//   6      12      48     dotted double whole
+//   7      16      64     quadruple whole
+namespace DivisionTables
+{
+inline constexpr std::array<uint8_t, 8> CatSeq  = {1,  2,  3,  4,  6,  8,  12, 16};
+inline constexpr std::array<uint8_t, 8> VoltSeq = {4,  8,  12, 16, 24, 32, 48, 64};
+} // namespace DivisionTables
+
 class Divider {
 	uint32_t counter = 0;
 
@@ -219,6 +239,10 @@ public:
 		void Inc(int32_t inc) {
 			v = std::clamp<int32_t>(v + inc, min, max);
 		}
+		// Set to a specific Read() value (e.g. from a division table entry).
+		void Set(uint32_t read_value) {
+			v = static_cast<uint8_t>(std::clamp<uint32_t>(read_value - 1, min, max));
+		}
 		uint32_t Read() const {
 			return v + 1;
 		}
@@ -227,6 +251,23 @@ public:
 			return true;
 		}
 	};
+
+	// Return the index of the first table entry >= read_value (snaps up to valid entry).
+	// Clamps to the last index if read_value exceeds the entire table.
+	template<size_t N>
+	static uint8_t IndexOf(const std::array<uint8_t, N> &table, uint32_t read_value) {
+		for (auto i = 0u; i < N; i++)
+			if (table[i] >= read_value) return static_cast<uint8_t>(i);
+		return static_cast<uint8_t>(N - 1);
+	}
+
+	// Step a divider through a named division table by inc (+1 or -1), clamped at both ends.
+	template<size_t N>
+	static void Step(type &div, const std::array<uint8_t, N> &table, int32_t inc) {
+		const auto idx     = IndexOf(table, div.Read());
+		const auto new_idx = std::clamp<int32_t>(static_cast<int32_t>(idx) + inc, 0, static_cast<int32_t>(N) - 1);
+		div.Set(table[static_cast<size_t>(new_idx)]);
+	}
 	bool Update(type div) {
 		counter += 1;
 		if (counter >= div.Read()) {
