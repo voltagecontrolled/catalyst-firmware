@@ -2,15 +2,16 @@
 
 ---
 
-## VoltSeq Mode (v1.5.0-alpha29)
+## VoltSeq Mode (pre-release / active development)
 
-VoltSeq is a firmware personality for the Catalyst Sequencer panel. It turns the module into an **8-channel voltage recorder and step sequencer**, similar to Voltage Block.
+VoltSeq is a firmware personality for the **Catalyst Sequencer** panel. It turns the module into an **8-channel voltage recorder and step sequencer**, similar to Voltage Block.
 
-**Load:** flash `catalyst-v1.5.0-alpha29-catseq-voltseq.wav` via the audio-cable bootloader.
+Flash the `.wav` file via the audio-cable bootloader.
 
-**Switch between CatSeq and VoltSeq without re-flashing:**
-- CatSeq → VoltSeq: hold **Shift + Tap Tempo + Chan.** for 1 second
-- VoltSeq → CatSeq: hold **Fine + Play/Reset + Glide** for 1 second
+### Switching modes (no re-flash required)
+
+- **CatSeq → VoltSeq:** hold **Shift + Tap Tempo + Chan.** for 1 second
+- **VoltSeq → CatSeq:** hold **Fine + Play/Reset + Glide** for 1 second
 
 Mode is saved to flash. Switching does not erase the other mode's data.
 
@@ -20,66 +21,64 @@ Mode is saved to flash. Switching does not erase the other mode's data.
 
 8 independent channels, each with its own output jack and encoder. Each channel has a **type** (set in Channel Edit, encoder 7):
 
-| Type | Output | Notes |
-|------|--------|-------|
-| **CV** | Stepped or slewed voltage | Configurable range (default ±5V); optional quantizer scale |
-| **Gate** | Gate signal | Variable length per step (0–100%); per-step ratchet subdivisions |
-| **Trigger** | Short pulse | Per-step ratchet (subdivide) or repeat (extend) |
+| Type | Output |
+|------|--------|
+| **CV** | Stepped or slewed voltage; configurable range (default ±5V); optional quantizer scale |
+| **Gate** | Gate signal with variable length per step (0–100%); per-step ratchet subdivisions |
+| **Trigger** | Short trigger pulse; per-step ratchet (subdivide) or repeat (extend) |
 
 ---
 
 ### Clock
 
-- **External clock:** patch into **Clock In** at 1 pulse per 16th note (16 PPQN). VoltSeq locks to it automatically. When the cable is removed, the internal clock resumes at the same tempo.
-- **Internal clock:** tap **Tap Tempo** (3+ taps). Fine-tune in Global Settings (encoder 6).
-- **Reset jack:** resets all channels to step 1 and fires immediately — in sync from the moment the pulse arrives.
+- **External clock:** patch into **Clock In** at 1 pulse per 16th note. VoltSeq locks automatically; removing the cable resumes the internal clock at the same tempo.
+- **Internal clock:** tap **Tap Tempo** (3+ taps to set BPM). Fine-tune in Global Settings (encoder 6).
+- **Reset jack:** resets all channels to step 1 and fires immediately.
 
 ---
 
-### Per-channel settings (Channel Edit — Shift + Chan.)
+### Recording
 
-Press a page button to focus a channel, then use encoders:
-
-| Encoder | Parameter |
-|---------|-----------|
-| 1 — Start | Output delay (0–20 ms) |
-| 2 — Dir. | Direction: Forward / Reverse / Ping-Pong / Random |
-| 3 — Length | Step length (1–64 steps) |
-| 4 — Phase | Phase rotate (destructive) |
-| 5 — Range | Voltage range (CV) or pulse width (Trigger) |
-| 6 — BPM/Clock Div | Per-channel clock division |
-| 7 — Transpose | Channel type and quantizer scale |
-| 8 — Random | Random amount (0–100%) |
+Arm a channel with **Chan. + Page button N**. The Phase Scrub slider records CV in real time on armed CV channels. Encoders edit individual steps while armed on any channel type.
 
 ---
 
-### Global Settings (Shift + Chan. held 2 s)
+### Channel Edit (Shift + Chan. — short tap)
 
-Exit with Play/Reset.
+Focus a channel with a page button, then use encoders:
+
+| Encoder | Panel label | Parameter |
+|---------|-------------|-----------|
+| 1 | Start | Output delay (0–20 ms) |
+| 2 | Dir. | Direction: Forward / Reverse / Ping-Pong / Random |
+| 3 | Length | Step length (1–64 steps) |
+| 4 | Phase | Phase rotate (destructive) |
+| 5 | Range | Voltage range (CV) or pulse width ms (Trigger) |
+| 6 | BPM/Clock Div | Per-channel clock division (enc 0 = quarter note … enc 7 = quadruple whole) |
+| 7 | Transpose | Channel type and quantizer scale |
+| 8 | Random | Random amount (0–100%) |
+
+Exit with **Shift + Chan.** or **Play/Reset**.
+
+---
+
+### Global Settings (Shift + Chan. — hold 2 s)
 
 | Encoder | Parameter |
 |---------|-----------|
 | 1 — Start | Play/Stop reset mode (red = on: Stop also resets all channels to step 1) |
-| 6 — BPM/Clock Div | Internal BPM (color zone: red <50, orange 50–79, yellow 80–99, green 100–119, blue 120–149, teal 150–179, lavender 180+) |
+| 6 — BPM/Clock Div | Internal BPM |
 
-**Page buttons** select a reset leader channel (radio; tap to set, tap again to clear). When the leader channel completes its sequence and wraps, all channels snap to step 1 and fire immediately.
-
----
-
-### Voltage recording
-
-Arm a CV channel with **Chan. + Page button N**. The Phase Scrub slider records voltage in real time:
-- While playing: slider value written to the current step on every clock tick
-- While stopped: slider continuously sets the last-touched step
+Exit with **Play/Reset**.
 
 ---
 
-### Performance Page
+### Performance Page (Fine + Glide — hold 1.5 s)
 
-Hold **Fine + Glide** for 1.5 seconds. The slider controls an orbit engine that manipulates playback positions. Page buttons toggle per-channel orbit follow. Beat repeat available in blue/cyan modes.
+The Phase Scrub slider controls an orbit engine that manipulates playback positions. Page buttons toggle per-channel orbit follow. Beat repeat available in blue/cyan modes. Exit with **Play/Reset**.
 
 ---
 
 ### Saving
 
-VoltSeq saves automatically when Play/Stop is toggled or any editor is exited.
+VoltSeq saves automatically when play/stop is toggled or any editor is exited.
