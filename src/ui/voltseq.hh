@@ -103,10 +103,12 @@ class Main : public Abstract {
 	static constexpr uint32_t kGlobalSettingsHoldTicks = Clock::MsToTicks(1000);
 	static constexpr uint32_t kSaveHoldTicks           = Clock::MsToTicks(800);
 
-	// Clear mode: SHIFT+PLAY held > kClearHoldTicks → enter; tap page N = clear ch N; PLAY = clear all
-	bool     clear_mode_active_   = false;
-	bool     shift_play_pending_  = false;   // armed while we wait for long/short distinction
-	uint32_t shift_play_press_t_  = 0;
+	// Clear mode: FINE+PLAY held ≥kClearHoldTicks → enter; Page N = clear ch N; PLAY = exit
+	bool     clear_mode_active_          = false;
+	bool     clear_mode_fine_suppressed_ = false; // true while Fine remains held from the entry combo
+	bool     clear_mode_play_suppressed_ = false; // true while Play remains held from the entry combo
+	bool     fine_play_pending_  = false;    // armed while counting toward clear-mode threshold
+	uint32_t fine_play_press_t_  = 0;
 	bool     save_hold_pending_   = false;   // armed when CHAN+GLIDE both held (save gesture)
 	uint32_t save_hold_start_     = 0;
 
@@ -161,46 +163,51 @@ class Main : public Abstract {
 		return static_cast<Direction>(std::clamp<int32_t>(v + dir, 0, n - 1));
 	}
 
-	// ---- Clear helper ----
-	// Resets all 64 steps of a channel to the "zero" value for its type:
-	//   CV → 32768 (centre = 0V within the default bipolar range)
-	//   Gate / Trigger → 0 (all off / rest)
-	void ClearChannel(uint8_t ch) {
+	// ---- Clear helpers ----
+	// Page button (no Shift): clears step values and per-step flags; preserves channel settings.
+	//   CV → 32768 (centre = 0V); Gate / Trigger → 0 (all off / rest); glide + probability → 0.
+	void ClearChannelSteps(uint8_t ch) {
 		const StepValue zero = (p.GetData().channel[ch].type == ChannelType::CV) ? 32768u : 0u;
 		for (uint8_t s = 0; s < 64; s++)
 			p.SetStepValue(ch, s, zero);
-		p.shared.blinker.Set(3, 300); // 3-flash confirmation on page buttons
+		p.GetData().flags[ch] = StepFlags{};   // zero per-step glide and probability
+		p.shared.blinker.Set(3, 300);
+	}
+
+	// Shift + Page button: full factory reset — steps, flags, and all channel settings.
+	//   ChannelSettings{} resets type to CV, so step values are always set to 32768.
+	void FullResetChannel(uint8_t ch) {
+		p.GetData().channel[ch] = ChannelSettings{};
+		for (uint8_t s = 0; s < 64; s++)
+			p.SetStepValue(ch, s, 32768u);
+		p.GetData().flags[ch] = StepFlags{};
+		p.shared.blinker.Set(3, 300);
 	}
 
 	// ---- Clear mode ----
-	// Entered via SHIFT+PLAY held ≥600ms. Page button N = clear channel N; PLAY = clear all;
-	// any other button exits. LED: all 8 page buttons + play slow-blink.
+	// Clear mode overlay: FINE+PLAY held ≥kClearHoldTicks enters; PLAY exits.
+	// While active:
+	//   Page button N          → clear steps + flags for channel N (preserve settings)
+	//   Shift + Page button N  → full factory reset for channel N (steps + flags + settings)
+	//   Play/Reset             → exit clear mode (no playback change)
+	// All other inputs fall through to normal Update() handling.
 	void UpdateClearMode() {
-		// Any button other than page buttons and PLAY exits
-		if (c.button.shift.just_went_high() || c.button.fine.just_went_high() ||
-		    c.button.morph.just_went_high() || c.button.bank.just_went_high() ||
-		    c.button.add.just_went_high())
-		{
-			clear_mode_active_ = false;
-			return;
-		}
+		// Release suppression once entry-combo buttons go low
+		if (clear_mode_fine_suppressed_ && !c.button.fine.is_high())
+			clear_mode_fine_suppressed_ = false;
+		if (clear_mode_play_suppressed_ && !c.button.play.is_high())
+			clear_mode_play_suppressed_ = false;
 
-		// Page button N: clear channel N and exit
 		for (auto [i, btn] : countzip(c.button.scene)) {
 			if (btn.just_went_high()) {
-				ClearChannel(static_cast<uint8_t>(i));
-				clear_mode_active_ = false;
-				return;
+				if (shift)
+					FullResetChannel(static_cast<uint8_t>(i));
+				else
+					ClearChannelSteps(static_cast<uint8_t>(i));
+				return; // consume the press so it doesn't also trigger step editing
 			}
 		}
-
-		// PLAY: clear all channels and exit
-		if (c.button.play.just_went_high()) {
-			for (uint8_t ch = 0; ch < Model::NumChans; ch++)
-				ClearChannel(ch);
-			clear_mode_active_ = false;
-			return;
-		}
+		// All other inputs (Play, encoders, Chan, etc.) fall through to normal Update() handling
 	}
 
 	// ---- Type selector helpers ----
@@ -691,7 +698,7 @@ public:
 		// this allows a single continuous hold to go from channel edit straight to global settings.
 		{
 			const bool block_entry = clear_mode_active_ || global_settings_active_ || perf_page_active_;
-			if (shift && bank_jgh && !block_entry) {
+			if (shift && bank_jgh && !block_entry && !shift_chan_hold_pending_) {
 				shift_chan_hold_pending_ = true;
 				shift_chan_hold_start_   = Controls::TimeNow();
 				shift_chan_from_edit_    = channel_edit_active_; // snapshot entry state
@@ -728,16 +735,19 @@ public:
 		}
 
 		// --- Play / Stop / Clear-mode entry ---
-		// SHIFT+PLAY: short release (<600ms) = Reset; held ≥600ms = enter Clear mode.
-		// Plain PLAY while in an edit mode: exit that mode (no playback change).
+		// SHIFT+PLAY:  immediate reset (any press order).
+		// FINE+PLAY:   hold ≥kClearHoldTicks → enter Clear mode.
+		// Plain PLAY while in an edit/modal mode: exit that mode (no playback change).
 		// Plain PLAY while armed: disarm (no playback change).
 		// Plain PLAY otherwise: Toggle play/stop.
 		if (play_jgh) {
-			if (global_settings_active_) {
+			if (clear_mode_active_) {
+				clear_mode_active_ = false;
+			} else if (global_settings_active_) {
 				global_settings_active_ = false;
 			} else if (shift) {
-				shift_play_pending_ = true;
-				shift_play_press_t_ = Controls::TimeNow();
+				// Shift+Play: immediate reset regardless of press order
+				p.Reset();
 			} else if (perf_page_active_) {
 				perf_page_active_     = false;
 				perf_settings_active_ = false;
@@ -751,38 +761,31 @@ public:
 				trigger_step_enc_turned_ = 0;
 				picking_up_              = true;
 				locked_raw_              = 0;
+			} else if (fine && !fine_play_pending_ && !clear_mode_active_) {
+				// Fine+Play: arm to enter clear mode
+				fine_play_pending_ = true;
+				fine_play_press_t_ = Controls::TimeNow();
 			} else {
 				p.Toggle();
 				if (!p.IsPlaying() && p.GetData().play_stop_reset)
 					p.Reset();
 			}
 		}
-		// Reverse-order arm: PLAY already held when SHIFT goes high.
-		// Blocked in global settings (play_jgh exits it instead) and if already pending/active.
-		if (shift_jgh && c.button.play.is_high() &&
-		    !shift_play_pending_ && !clear_mode_active_ && !global_settings_active_)
-		{
-			shift_play_pending_ = true;
-			shift_play_press_t_ = Controls::TimeNow();
+		// Reverse-order Shift+Play reset: Play already held when Shift goes high.
+		if (shift_jgh && c.button.play.is_high() && !global_settings_active_ && !clear_mode_active_) {
+			p.Reset();
 		}
-		if (shift_play_pending_) {
-			if (!c.button.shift.is_high()) {
-				// Shift released before play: cancel (treat as no-op)
-				shift_play_pending_ = false;
-			} else if (c.button.play.just_went_low()) {
-				// Play released while shift still held
-				if (Controls::TimeNow() - shift_play_press_t_ < kClearHoldTicks) {
-					// Short press: reset
-					p.Reset();
-				}
-				// Long press released before threshold: nothing (clear_mode_active_ not set yet)
-				shift_play_pending_ = false;
-			} else if (Controls::TimeNow() - shift_play_press_t_ >= kClearHoldTicks) {
-				// Held long enough: enter clear mode
-				shift_play_pending_ = false;
-				clear_mode_active_  = true;
-				p.shared.blinker.Set(3, 300);
-				// Consume all button edges so nothing fires when we return
+		// Fine+Play clear-mode poll: cancel if either button released; enter on threshold.
+		// Uses level checks (!is_high) to cancel rather than edge checks, avoiding any
+		// just_went_low() timing sensitivity.
+		if (fine_play_pending_) {
+			if (!c.button.fine.is_high() || !c.button.play.is_high()) {
+				fine_play_pending_ = false;
+			} else if (Controls::TimeNow() - fine_play_press_t_ >= kClearHoldTicks) {
+				fine_play_pending_          = false;
+				clear_mode_active_          = true;
+				clear_mode_fine_suppressed_ = true;
+				clear_mode_play_suppressed_ = true;
 				for (auto &b : c.button.scene)
 					b.clear_events();
 				c.button.play.clear_events();
@@ -793,7 +796,7 @@ public:
 		{
 			const bool chan_high  = c.button.bank.is_high();
 			const bool glide_high = c.button.morph.is_high();
-			if (!shift && (bank_jgh && glide_high)) {
+			if (!shift && (bank_jgh && glide_high) && !save_hold_pending_) {
 				save_hold_pending_ = true;
 				save_hold_start_   = Controls::TimeNow();
 			}
@@ -818,16 +821,14 @@ public:
 			clear_mode_active_       = false;
 			global_settings_active_   = false;
 			shift_chan_hold_pending_  = false;
-			shift_play_pending_       = false;
+			fine_play_pending_        = false;
 			SwitchUiMode(main_ui);
 			return;
 		}
 
-		// --- Clear mode ---
-		if (clear_mode_active_) {
+		// --- Clear mode overlay: page buttons clear channels; everything else falls through normally ---
+		if (clear_mode_active_)
 			UpdateClearMode();
-			return;
-		}
 
 		// --- Global Settings modal ---
 		if (global_settings_active_) {
@@ -1371,16 +1372,8 @@ public:
 		if (in_modal)
 			c.SetPlayLed((Controls::TimeNow() >> 11u) & 0x01u); // ~1.5 Hz slow blink
 
-		// --- Clear mode: all page buttons + play LED slow-blink ---
-		if (clear_mode_active_) {
-			for (auto i = 0u; i < Model::NumChans; i++)
-				c.SetEncoderLed(i, Palette::off);
-			const bool blink = (Controls::TimeNow() >> 10u) & 0x01u; // ~3 Hz
-			for (auto i = 0u; i < Model::NumChans; i++)
-				c.SetButtonLed(i, blink);
-			c.SetPlayLed(blink);
-			return;
-		}
+		// Clear mode page-button blink is handled inline in the page LED loop below.
+		// Play LED and encoder LEDs render normally so the user can see playback state.
 
 		// --- Performance Page Settings ---
 		if (perf_page_active_ && perf_settings_active_) {
@@ -1596,7 +1589,10 @@ public:
 
 		for (auto i = 0u; i < Model::NumChans; i++) {
 			bool lit = false;
-			if (armed_gate_trig) {
+			if (clear_mode_active_) {
+				// Clear mode: all page buttons blink to signal the mode is active
+				lit = (Controls::TimeNow() >> 10u) & 0x01u; // ~3 Hz
+			} else if (armed_gate_trig) {
 				// x0x on/off pattern for armed Gate/Trigger, with chaselight
 				const auto sv = p.GetStepValue(ch, GlobalStep(i));
 				lit = (type == ChannelType::Gate) ? (static_cast<uint8_t>(sv >> 8) > 0)
