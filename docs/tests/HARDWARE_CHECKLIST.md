@@ -26,19 +26,20 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
 
 - [ ] **Play/Reset** starts playback; chaselight appears on page buttons
 - [ ] **Play/Reset** again stops playback
-- [ ] Settings saved to flash on stop: power-cycle mid-session and confirm step data survives
 
 ### Reset (while playing)
 
 - [ ] **Shift + Play** (short tap, < 600 ms): all channels snap to step 1 immediately, no stutter
-- [ ] **Shift + Play** (hold ≥ 600 ms): enters Clear mode (page buttons and Play LED slow-blink)
+- [ ] **Shift + Play** reverse order (Play held, then Shift pressed): also resets immediately
 
-### Clear Mode (entry: hold **Shift + Play** ≥ 600 ms)
+### Clear Mode (entry: hold **Fine + Play** ~500 ms)
 
-- [ ] Page buttons slow-blink to confirm Clear mode entry
-- [ ] Tap **Page button N**: clears all 64 steps of channel N; CV → center/0V, Gate/Trigger → all off
-- [ ] **Play/Reset**: clears all 8 channels
-- [ ] Any other button: exits without clearing
+- [ ] Page buttons blink to confirm Clear mode entry
+- [ ] **Tap Page button N**: clears all 64 steps + per-step glide + probability for channel N; CV → center/0V, Gate/Trigger → all off; page buttons continue blinking (mode stays active)
+- [ ] **Shift + Page button N**: full factory reset for channel N — steps, flags, and all channel settings reset to defaults
+- [ ] Multiple channels can be cleared before exiting
+- [ ] **Play/Reset**: exits Clear mode without clearing anything; page buttons stop blinking
+- [ ] Hold **Fine + Play** again (~500 ms): exits Clear mode (same gesture as entry)
 
 ### Page Navigation
 
@@ -77,7 +78,7 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
 - [ ] Correct encoder blinks to confirm arm
 - [ ] **Chan. + same Page button N**: disarms
 - [ ] **Play/Reset** while armed: disarms without stopping playback
-- [ ] **Play/Reset** stops playback, channel remains armed if already armed before stop
+- [ ] **Play/Reset** stops playback; channel remains armed if already armed before stop
 
 ### Armed CV Channel
 
@@ -86,8 +87,9 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
 - [ ] Encoder LEDs show CV step colors for current page
 - [ ] Playing step blinks white (suppressed on held page button)
 - [ ] **Encoder N**: edits step N's CV value; **Fine** = sub-semitone; fast spinning accelerates
-- [ ] **Shift + Enc 5** (Range): adjusts channel voltage range; slider recording window follows
-- [ ] **Shift + Enc 7** (Transpose): adjusts quantizer scale
+- [ ] **Shift held**: all encoder LEDs go dark except Enc 5 and Enc 7
+- [ ] **Shift + Enc 5** (Range): adjusts channel voltage span; slider recording window follows
+- [ ] **Shift + Enc 7** (Transpose): adjusts channel floor voltage; sequence transposes
 - [ ] **Glide held**: all encoder LEDs show glide time as brightness (fully off = 0 s / disabled, full white = 10 s)
 - [ ] **Glide held + any Encoder CW**: increase glide time; LEDs brighten
 - [ ] **Glide held + any Encoder CCW**: decrease glide time; LEDs dim; fully CCW = off (no glide)
@@ -109,6 +111,15 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
 - [ ] **Encoder N CW**: increase ratchet count (subdivide; 1–8)
 - [ ] **Encoder N CCW**: increase repeat count (extend; negative values)
 
+### Per-Step Probability (all channel types, while armed)
+
+- [ ] **Shift + Glide held**: encoder LEDs switch to violet → grey → white ramp (probability per step)
+- [ ] **Shift + Glide + Encoder N CW**: increase probability for step N; LED brightens toward white
+- [ ] **Shift + Glide + Encoder N CCW**: decrease probability; LED dims toward violet; fully CCW = 0 (always fires)
+- [ ] Gate/Trigger at 100%: step never fires
+- [ ] Gate/Trigger at 0%: step always fires
+- [ ] Releasing Shift or Glide reverts encoder LED display
+
 ---
 
 ## GLIDE Modifier (unarmed, entry: hold **Glide**)
@@ -121,7 +132,7 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
 
 ---
 
-## Channel Edit (entry: short tap **Shift + Chan.** — release before 2 s)
+## Channel Edit (entry: short tap **Shift + Chan.** — release before 1 s)
 
 - [ ] Entry confirmed: encoder LEDs change to channel-edit colors
 - [ ] **Press Page button**: focuses that channel
@@ -131,12 +142,12 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
 - [ ] Enc 2 (Dir.): direction cycles Forward / Reverse / Ping-Pong / Random; LED color changes
 - [ ] Enc 3 (Length): step length 1–64; page buttons briefly show page count / step fill on last page
 - [ ] Enc 4 (Phase): phase rotate (destructive); confirm steps shift
-- [ ] Enc 5 (Range): voltage range (CV) or pulse width (Trigger)
+- [ ] Enc 5 (Range): voltage span (CV) or pulse width ms (Trigger); inactive for Gate
 - [ ] Enc 6 (BPM/Clock Div): per-channel clock division
-- [ ] Enc 7 (Transpose): channel type (CV → Gate → Trigger) and quantizer scale; LED = type color
-- [ ] Enc 8 (Random): random amount 0–100%; LED brightness tracks amount
-- [ ] **Shift + Chan.** (short tap): exits and saves
-- [ ] **Play/Reset**: exits and saves; playback continues if was playing
+- [ ] Enc 7 (Transpose): floor voltage (CV only); inactive for Gate/Trigger
+- [ ] Enc 8 (Random): CV deviation amount; CW = unipolar (+N V), CCW = bipolar (±N V), 0 = off; inactive for Gate/Trigger
+- [ ] **Shift + Chan.** (short tap): exits
+- [ ] **Play/Reset**: exits; playback continues if was playing
 
 ---
 
@@ -145,9 +156,10 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
 - [ ] Entry after ~1 s hold; short tap enters Channel Edit instead
 - [ ] If either button released before 1 s, fires as short tap (Channel Edit entry) — not Global Settings
 - [ ] Chaselight visible on page buttons (focused channel playhead blinks)
-- [ ] Reset leader button lights solid (if set)
 - [ ] Enc 1 (Start): Play/Stop reset mode — red = on; off = off
 - [ ] When Play/Stop reset on: pressing Stop also resets all channels to step 1
+- [ ] Enc 3 (Length): master loop length — off = disabled (LED off); orange = active; red = bar-aligned (8/16/32/48/64)
+- [ ] Master loop length non-zero: all channels reset to step 1 together after N 16th-note steps
 - [ ] Enc 6 (BPM/Clock Div): adjusts internal BPM; LED pulses in BPM color zone
   - [ ] Red < 50 BPM
   - [ ] Orange 50–79 BPM
@@ -156,7 +168,7 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
   - [ ] Blue 120–149 BPM
   - [ ] Teal 150–179 BPM
   - [ ] Lavender 180+ BPM
-- [ ] **Play/Reset**: exits and saves
+- [ ] **Play/Reset**: exits
 
 ---
 
@@ -180,6 +192,7 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
 - [ ] Patch trigger into **Reset jack**: all channels snap to step 1 immediately
 - [ ] Step 1 outputs fire on the reset pulse (no extra clock cycle delay)
 - [ ] Sequence is in sync from the moment the reset pulse arrives
+
 ---
 
 ## Performance Page (entry: hold **Fine + Glide** for 1.5 s)
@@ -190,7 +203,6 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
 - [ ] **Page button N**: toggles per-channel orbit follow (lit = follows slider)
 - [ ] **Shift held**: freezes orbit center in beat-repeat mode
 - [ ] **Shift + Page button N**: navigates pages
-- [ ] **Hold Page + turn Encoder**: step editing same as main mode
 
 ### Performance Page Settings (shown on entry)
 
@@ -211,15 +223,18 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
 
 ### Exit
 
-- [ ] **Play/Reset**: exits Performance Page and saves to flash
+- [ ] **Play/Reset**: exits Performance Page; performance settings saved automatically
 
 ---
 
 ## Saving
 
-- [ ] Step data survives power cycle
-- [ ] Channel settings (length, type, direction, range, etc.) survive power cycle
-- [ ] Global settings (BPM, reset mode, reset leader) survive power cycle
-- [ ] Performance page settings survive power cycle
+- [ ] **Save gesture**: hold **Glide**, then press and hold **Chan.** — page buttons fast-blink during hold, then blink 6 times to confirm save
+- [ ] Save gesture requires **Glide pressed first** — pressing Chan. first shows channel type colors instead (no save)
+- [ ] Make changes, do NOT save, power cycle — confirm changes are lost (intentional saving)
+- [ ] Make changes, save via gesture, power cycle — confirm changes survive:
+  - [ ] Step data survives power cycle
+  - [ ] Channel settings (length, type, direction, range, etc.) survive power cycle
+  - [ ] Global settings (BPM, reset mode, master loop length) survive power cycle
+- [ ] Performance page settings survive power cycle (saved automatically on Performance Page exit)
 - [ ] Mode selection (CatSeq/VoltSeq) survives power cycle
-- [ ] Active mode between Channel Edit and Global Settings is correctly saved: exit via Play/Reset, power cycle, confirm
