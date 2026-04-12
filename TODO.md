@@ -1,44 +1,26 @@
 # TODO
 
-Items are grouped by target version where known, then backlog.
-
 ---
 
-## v1.5.0 — VoltSeq (branch: voltseq)
+# Catalyst Sequencer
 
-Full spec: `docs/planned/VOLTSEQ.md`
-
-Implementation phases (see spec for detail):
-
-1. **Foundation** — compile-time build flag, `VoltSeq::Data` struct, tag bump
-2. **Clock engine** — external clock edge detection, internal BPM timer, inter-tick interval measurement, per-channel division counters, Tap Tempo
-3. **Playback** — per-channel playheads + shadow playheads, direction state machines, output calculation (CV/Gate/Trigger), step-lock + arpeggiation, SHIFT+PLAY reset
-4. **Step editing UI** — hold page button, page navigation, channel arm state machine, x0x step editing, slider CV recording
-5. **Channel Edit + Global Settings** — enc 4 mode selector, phase rotate, all per-channel settings, global settings
-6. **Glide / Ratchet editors** — GLIDE modifier, long-press step editors for glide and ratchets
-7. **Slider performance page** — port orbit engine, beat repeat, lock + pickup
-8. **Infrastructure** — 3-button mode switch (replace `modeswitcher` in both modes), save behavior, `release.yml` three-build passes
-
----
-
-## v1.4.7
+## v1.6.0
 
 ### CatSeq step clock resolution — needs verification
 
-**Observed:** VoltSeq (alpha21) now advances steps at 16th-note rate (bpm_in_ticks / 4 per step via sub-clock). CatSeq advances steps at quarter-note rate (`seqclock.Update()` fires every `bpm_in_ticks` ticks, one step per fire). This is a 4× difference in step rate at the same BPM setting.
+**Observed:** VoltSeq advances steps at 16th-note rate (bpm_in_ticks / 4 per step via sub-clock). CatSeq advances steps at quarter-note rate (`seqclock.Update()` fires every `bpm_in_ticks` ticks, one step per fire). This is a 4× difference in step rate at the same BPM setting.
 
 **Status:** Needs hardware verification with a reliable MIDI clock source before changing CatSeq. If CatSeq should also be 16th-note resolution, the fix is similar to VoltSeq: add a 16th-note sub-counter in `Sequencer::Interface::Update()` (`src/sequencer.hh`) that drives `per_chan_step` 4× per beat while keeping `seqclock` at quarter-note rate for phase tracking, beat repeat, and ratchet sub-step detection.
 
-**Caution:** CatSeq is at v1.4.6 (hardware verified). The gate track follow, ratchet sub-step detection, and beat repeat all depend on `seqclock` phase — those must remain on the quarter-note clock. Only `per_chan_step` advancement needs to change.
+**Caution:** CatSeq is at v1.5.0 (hardware verified). The gate track follow, ratchet sub-step detection, and beat repeat all depend on `seqclock` phase — those must remain on the quarter-note clock. Only `per_chan_step` advancement needs to change.
 
 ---
 
 ### Conditional auto-reset on firmware upgrade
 
-
 **Area:** `src/sequencer.hh` `Sequencer::Data::validate()`, `src/f401-drivers/saved_settings.hh`
 
-Currently any `current_tag` mismatch wipes all presets on first boot. This is appropriate when `sizeof(Step)` or struct layout changes, but unnecessary for firmware upgrades that only add new fields with safe defaults (e.g. envelope sources, clock follow mode). A user upgrading within 1.4.x should not lose saved patterns.
+Currently any `current_tag` mismatch wipes all presets on first boot. This is appropriate when `sizeof(Step)` or struct layout changes, but unnecessary for firmware upgrades that only add new fields with safe defaults. A user upgrading within a major version should not lose saved patterns.
 
 **Proposed:** Encode the major/minor version into the tag or add a secondary "layout version" field separate from the feature-additions version. If the flash data's layout version matches the current layout version, migrate forward (fill new fields with defaults) rather than wiping. Only wipe on a layout-breaking change.
 
@@ -46,24 +28,25 @@ May require splitting `current_tag` into two values: `layout_tag` (increment onl
 
 ---
 
----
-
 ## Backlog
 
-### Per-track reset settings (SHIFT+PLAY mode)
+### Per-track reset settings
 
-**Area:** `src/ui/seq.hh`, `src/sequencer.hh`, `src/sequencer_settings.hh` (or `src/sequencer_player.hh`)
+**Area:** `src/ui/seq.hh`, `src/sequencer_player.hh`, `src/sequencer_settings.hh`, Advanced Track Settings
 
-SHIFT+PLAY currently fires an immediate reset and exits. Repurposing it as a **persistent toggle mode** would expose 8 unused step encoders and 8 unused page buttons as a natural per-track reset configuration surface -- without adding a new entry combo.
+SHIFT+PLAY currently fires an immediate reset and exits. Repurposing it as a **persistent toggle mode** would expose 8 unused step encoders and 8 unused page buttons as a natural per-track reset configuration surface — without adding a new entry combo.
 
 **Proposed UX:**
 - First SHIFT+PLAY enters the mode (no immediate reset); second SHIFT+PLAY exits. Play/Reset alone still plays/pauses as normal while inside the mode.
-- **Page buttons (1 per track):** toggle whether that track auto-resets when the sequence is paused. Lit = resets on pause; unlit = holds position. Allows mixing: e.g. tracks 1-4 restart clean, tracks 5-8 continue from where they left off.
-- **Step encoders (1 per track):** configure the reset source/mode for that track (exact values TBD, e.g. master reset, follow track N loop point, never). This maps to the `reset_mode` / `reset_source` fields from the existing "Per-track reset behavior" backlog item below -- these two items should be implemented together.
+- **Page buttons (1 per track):** toggle whether that track auto-resets when the sequence is paused. Lit = resets on pause; unlit = holds position.
+- **Step encoders (1 per track):** configure the reset source/mode for that track:
+  - `always` — resets on Play/Reset (current behavior)
+  - `never` — Play/Reset has no effect; track runs continuously
+  - `follow_chan_N` — resets when track N loops back to step 1, not on the button press itself
 
-**Storage:** `reset_on_pause` bool + `reset_mode` enum per channel in `Settings::Channel`. Requires `current_tag` bump (coordinate with conditional auto-reset TODO in v1.4.6).
+The `follow_chan_N` mode is the most powerful: one track's natural loop point drives reset timing for others, allowing phasing relationships to develop and re-sync organically.
 
-**Note:** This resolves the ergonomic pain of needing two button presses (pause + manual reset) every time the sequence is stopped.
+**Storage:** `reset_on_pause` bool + `reset_mode` enum + optional `reset_source` channel index in `Settings::Channel`. Requires `current_tag` bump (coordinate with conditional auto-reset item above).
 
 ---
 
@@ -77,9 +60,9 @@ Per-step arp on CV tracks. 6 chord types (major 5th, minor 5th, major 7th, minor
 
 On ratcheted/repeated steps the arp walks the chord across sub-steps (strum/roll). On plain steps it advances one note per clock pass.
 
-Full spec: `docs/planned/STEP_ARP.md`
+Full spec: `docs/planned/CATSEQ-STEP-ARP.md`
 
-Requires `current_tag` bump (coordinate with other v1.4.6 tag bumps). Uses bits 0–3 of `sub_step_mask` on CV channels (otherwise unused).
+Requires `current_tag` bump. Uses bits 0–3 of `sub_step_mask` on CV channels (otherwise unused).
 
 ---
 
@@ -87,7 +70,7 @@ Requires `current_tag` bump (coordinate with other v1.4.6 tag bumps). Uses bits 
 
 **Area:** `src/sequencer_step.hh`, `src/sequencer.hh`, `src/ui/seq_morph.hh`
 
-CCW encoder positions in gate probability mode replace random percentage with a deterministic cycle. CW (1--15) = percentage probability (current behavior). CCW (1--14) = iterative: fires p out of every n steps in rotation (1/2, 2/2, 1/3... up to 5/5).
+CCW encoder positions in gate probability mode replace random percentage with a deterministic cycle. CW (1–15) = percentage probability (current behavior). CCW (1–14) = iterative: fires p out of every n steps in rotation (1/2, 2/2, 1/3... up to 5/5).
 
 Requires 1 extra bit in the probability field to represent negative (iterative) values. Candidate: repurpose gate-channel morph bits (morph is unused on gate channels, already partially repurposed for ratchet/repeat display). Player needs a per-channel cycle counter analogous to `repeat_ticks_remaining`.
 
@@ -105,7 +88,7 @@ Extends mask edit mode with a third per-sub-step state: tied. A tied sub-step ho
 
 **Area:** `src/app.hh` `Sequencer::App::Gate()`, `src/sequencer_settings.hh`, `src/ui/seq_envelope_assign.hh` (new)
 
-A west coast-style A/D function generator per gate channel. When any envelope parameter is configured, the gate output becomes a shaped voltage envelope. Full spec: `docs/planned/GATE_ENVELOPE.md`.
+A west coast-style A/D function generator per gate channel. When any envelope parameter is configured, the gate output becomes a shaped voltage envelope. Full spec: `docs/planned/CATSEQ-GATE-ENVELOPE.md`.
 
 Parameters (Follow Assign sub-mode colors):
 - Blue = peak amplitude
@@ -113,13 +96,13 @@ Parameters (Follow Assign sub-mode colors):
 - Yellow = decay time
 - Salmon = curve (shared A+D, log through linear to exponential)
 
-Each parameter independently sourceable: unassigned (fixed default), CV track (page button radio), or gate width (long-press, all buttons lit). Pre-implementation checklist in spec verified -- all 8 gate channels are DAC-driven, envelope state belongs in `App`, `last_cv_stepval[]` is accessible in same class.
+Each parameter independently sourceable: unassigned (fixed default), CV track (page button radio), or gate width (long-press, all buttons lit). Pre-implementation checklist in spec verified — all 8 gate channels are DAC-driven, envelope state belongs in `App`, `last_cv_stepval[]` is accessible in same class.
 
 ---
 
-### Rename Follow Assign to Advanced Track Settings
+### Advanced Track Settings (rename from Follow Assign)
 
-**Area:** `src/ui/seq_follow_assign.hh`, `src/ui/seq_settings.hh`, `src/ui/seq.hh`, `docs/wiki/NEW_FEATURES.md`
+**Area:** `src/ui/seq_follow_assign.hh`, `src/ui/seq_settings.hh`, `src/ui/seq.hh`, `docs/wiki/Catalyst-Sequencer.md`
 
 The Follow Assign menu currently uses 6 of 9 available FINE sub-mode colors for CV tracks (blue = CV add follow, lavender = CV replace, orange/yellow/salmon = gate clock follow ratchets/repeats/both, teal = gate clock step-only). Gate tracks have no advanced settings menu yet. Both channel types have pending features that need per-track configuration pages (gate envelope, step preview, reset behavior).
 
@@ -127,7 +110,7 @@ Rename and expand to a general Advanced Track Settings menu. Entry combo and per
 
 Planned page layout (subject to revision as features are added):
 - CV tracks: blue/lavender = CV follow (existing), orange/yellow/salmon/teal = gate clock follow (existing), remaining colors for new settings
-- Gate tracks: blue/orange/yellow/salmon = envelope assign (per `docs/planned/GATE_ENVELOPE.md`), remaining colors for new settings
+- Gate tracks: blue/orange/yellow/salmon = envelope assign (per `docs/planned/CATSEQ-GATE-ENVELOPE.md`), remaining colors for new settings
 
 ---
 
@@ -149,27 +132,77 @@ While the sequencer is stopped, turning a step encoder on a CV track outputs the
 
 **Entry combo reserved: SHIFT + TAP TEMPO** (gate tracks only)
 
-Per-step clock div/mult allows individual gate steps to fire at a fraction or multiple of
-the global clock rate. Useful for polyrhythmic patterns without requiring separate clock
-sources.
+Per-step clock div/mult allows individual gate steps to fire at a fraction or multiple of the global clock rate. Useful for polyrhythmic patterns without requiring separate clock sources.
 
-Exact UX and storage TBD. Implement after Step Arp (v1.4.6) to avoid `current_tag`
-conflicts. Gate tracks only — CV tracks use SHIFT+TAP TEMPO for a different purpose or
-leave it unassigned.
+Exact UX and storage TBD. Gate tracks only — CV tracks use SHIFT+TAP TEMPO for a different purpose or leave it unassigned.
 
 ---
 
-### Per-track reset behavior
+# Catalyst VoltSeq
 
-**Area:** `src/sequencer_player.hh`, `src/sequencer_settings.hh`, Advanced Track Settings
+## v1.5.x
 
-Customize how each track responds to Play/Reset. Useful for generative patches where you want one primary track to anchor the pattern while others continue freely.
+### Reset punch-in timing (#9)
 
-**Proposed modes (per track):**
-- `always` -- resets on Play/Reset (current behavior for all tracks)
-- `never` -- Play/Reset has no effect; track runs continuously
-- `follow_chan_N` -- resets when track N loops back to step 1, not on the button press itself
+Reset during playback is close but not perfectly in-time. The `primed=false` approach adds ~1-step latency; calling `ResetExternal()` directly from the SHIFT+PLAY handler when playing could eliminate it. Low priority — behavior is usable, not sample-accurate.
 
-The `follow_chan_N` variant is the most powerful: one track's natural loop point drives reset timing for others, allowing phasing relationships to develop and re-sync organically.
+---
 
-Stored as a `reset_mode` field + optional `reset_source` channel index in `Settings::Channel`. Requires `current_tag` bump (coordinate with conditional auto-reset TODO to avoid a wipe).
+### Gate track follow does nothing (#3)
+
+Track follow assign mode allows assignments from gate tracks to other gate tracks, but no functionality is defined. Options: block gate→gate assignments in the UI, or implement a useful behavior (e.g. gate clock follow). No milestone set.
+
+---
+
+### Live encoder recording in normal view
+
+In normal view (unarmed), turning an encoder while NOT holding a page button should live-record a value into the current playing step. Coarse increments (range/32 per detent) unless Fine held. Debounce interaction needs tuning.
+
+---
+
+### Global channel length / clock div sync
+
+A combo in Global Settings that sets ALL channels to the same length and/or clock division simultaneously. UX TBD (enc hold, Shift+enc combo, or "apply to all" page-button gesture in Channel Edit).
+
+---
+
+### Channel length — view without editing
+
+Brief passive display on Channel Edit entry before the first enc detent registers as an edit. Possibly just a minimum 2-detent threshold before first change.
+
+---
+
+### Global BPM — 1 BPM steps + snap points
+
+Store BPM as integer; snap to common tempos (60, 80, 90, 100, 120, 130, 140, 150, 160, 180, 200 BPM) with a 2-detent magnetic pull. Update wiki with snap values.
+
+---
+
+## Known Quirks
+
+- **GLIDE inaccessible while armed Trigger** — pulse width adjustment requires disarming. Document as intentional or add a Glide-held sub-state to `UpdateArmedTrigger`.
+- **Perf Page step-edit block is dead code** — `AnyStepHeld()` is always false in Perf Page; the encoder block never fires. Perf Page is a settings modal, not a step editor — remove the dead block.
+- **`current_page_` bleeds between modes** — navigating in Perf Page or Glide Editor affects what Normal mode shows on return. Low-severity; SHIFT+Page recovers. Fix: reset `current_page_` on mode transitions where it matters.
+- **Wholetone scale and unquantized CV show the same grey** — color collision, needs a distinct color for wholetone.
+- **Phase rotate (Channel Edit enc 4) is destructive with no undo** — consider a "rotate pending" visual before committing.
+- **Trigger pulse width (Channel Edit enc 5) has no display feedback** — consider a brightness ramp.
+
+---
+
+## Backlog
+
+### Clock division redesign — multipliers + triplets
+
+Full design in `docs/planned/VOLTSEQ-CLOCK-DIVISIONS.md`.
+
+---
+
+### Presets / scene save-load
+
+See `docs/planned/VOLTSEQ-PRESETS.md`.
+
+---
+
+### Iterative probability — per-step cycle filter
+
+See `docs/planned/VOLTSEQ-ITERATIVE-PROBABILITY.md`.
