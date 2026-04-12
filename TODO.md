@@ -192,6 +192,16 @@ Brief passive display on Channel Edit entry before the first enc detent register
 
 ---
 
+### CV step fire probability
+
+**Area:** `src/voltseq.hh` `OnChannelFired()`, `src/ui/voltseq.hh` `UpdateArmedCV()`
+
+On CV tracks, `step_prob` currently only gates deviation — it has no effect when `random_amount_v` is 0 and never suppresses the step from outputting. Add step fire probability: SHIFT+GLIDE+ENC CCW on an armed CV track should decrease the probability that the step fires at all (holding the previous CV value instead), consistent with how gate/trigger tracks already treat probability. CW behavior (deviation gating) remains unchanged.
+
+Requires deciding how a single `step_prob` field encodes two distinct behaviors (deviation gate vs. fire suppression), or splitting into two fields. Requires `current_tag` bump if storage changes.
+
+---
+
 ### Global BPM — 1 BPM steps + snap points
 
 Store BPM as integer; snap to common tempos (60, 80, 90, 100, 120, 130, 140, 150, 160, 180, 200 BPM) with a 2-detent magnetic pull. Update wiki with snap values.
