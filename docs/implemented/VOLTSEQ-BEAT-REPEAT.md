@@ -1,4 +1,4 @@
-# VoltSeq — Beat Repeat (Performance Page)
+# Catalyst VoltSeq — Beat Repeat (Performance Page)
 
 Beat repeat mode is partially implemented but non-functional. The UI zone detection, LED display, and debounce machinery are all correct. The engine advance loop does nothing useful.
 
@@ -65,7 +65,7 @@ Keep the granular orbit window concept but advance the window at the beat-repeat
 2. `orbit_should_adv` fires at `safe_period` ticks (derived from the zone's subdivision ratio × master BPM).
 3. Following channels cycle through that window at the metered rate.
 
-This maps naturally onto VoltSeq's step-address model and reuses the existing orbit advance infrastructure. The window loops within the region centered on `orbit_center` (slider position), so moving the slider while in a zone shifts which region loops.
+This maps naturally onto Catalyst VoltSeq's step-address model and reuses the existing orbit advance infrastructure. The window loops within the region centered on `orbit_center` (slider position), so moving the slider while in a zone shifts which region loops.
 
 **Implementation sketch:**
 

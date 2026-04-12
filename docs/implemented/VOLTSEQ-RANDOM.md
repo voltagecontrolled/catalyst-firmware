@@ -1,4 +1,4 @@
-# VoltSeq — Per-Step Probability & Random Deviation
+# Catalyst VoltSeq — Per-Step Probability & Random Deviation
 
 Stochastic playback layer. Two independent mechanisms:
 

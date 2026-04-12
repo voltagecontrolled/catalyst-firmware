@@ -1,4 +1,4 @@
-# VoltSeq — Iterative Probability
+# Catalyst VoltSeq — Iterative Probability
 
 Per-step cycle filter for Gate and Trigger channels. Determines which repetition of the pattern a step fires on. Fully deterministic — same result every pass through the cycle — as opposed to the existing `random_amount` which is probabilistic.
 

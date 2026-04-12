@@ -1,6 +1,6 @@
-# VoltSeq TODO
+# Catalyst VoltSeq — TODO
 
-Backlog for VoltSeq firmware features, known bugs, and porting work.
+Backlog for Catalyst VoltSeq firmware features, known bugs, and porting work.
 
 ---
 

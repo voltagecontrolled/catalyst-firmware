@@ -1,4 +1,4 @@
-# VoltSeq — Clock Division Redesign
+# Catalyst VoltSeq — Clock Division Redesign
 
 Replaces the current integer-only clock divider with a table-indexed system that adds clock multipliers and triplet-friendly divisions.
 

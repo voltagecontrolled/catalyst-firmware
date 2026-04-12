@@ -1,16 +1,16 @@
-# VoltSeq Mode
+# Catalyst VoltSeq
 
-VoltSeq is a second firmware personality for the **Catalyst Sequencer** panel. It turns the module into an **8-channel voltage recorder and step sequencer**, similar to Voltage Block. Each of the 8 outputs is an independent channel with its own step data, type, length, clock division, direction, and more.
+**Catalyst VoltSeq** is a second firmware personality for the **Catalyst Sequencer** panel. It turns the module into an **8-channel voltage recorder and step sequencer**, similar to Voltage Block. Each of the 8 outputs is an independent channel with its own step data, type, length, clock division, direction, and more.
 
-> **Firmware variant:** VoltSeq is a separate build (`catalyst-vX.Y.Z-catseq-voltseq.wav`). Load it via the audio-cable bootloader. The CatSeq+CatCon build is a separate file.
+> **Firmware variant:** Catalyst VoltSeq is a separate build (`catalyst-vX.Y.Z-catseq-voltseq.wav`). Load it via the audio-cable bootloader. The CatSeq+CatCon build is a separate file.
 
 ---
 
 ## Hardware Overview
 
-VoltSeq uses the same physical panel as the Catalyst Sequencer. Panel controls are repurposed in VoltSeq:
+Catalyst VoltSeq uses the same physical panel as the Catalyst Sequencer. Panel controls are repurposed:
 
-| Physical control | VoltSeq function |
+| Physical control | Function |
 |---|---|
 | Encoders 1–8 + jacks | Channel outputs; encoders edit step values |
 | Page buttons 1–8 | Step select / channel arm / page nav (in editors) |
@@ -28,7 +28,7 @@ VoltSeq uses the same physical panel as the Catalyst Sequencer. Panel controls a
 
 ## Switching Modes
 
-VoltSeq and CatSeq share the same panel and can be switched in software:
+Catalyst VoltSeq and CatSeq share the same panel and can be switched in software:
 
 **Sequencer → VoltSeq:** Hold **Shift + Tap Tempo + Chan.** for 1 second. All 8 channel LEDs blink to confirm.
 
@@ -42,7 +42,7 @@ Switching does **not** erase the other mode's data.
 
 ## Channels and Channel Types
 
-VoltSeq has **8 independent channels**, each corresponding to one output jack and encoder knob.
+Catalyst VoltSeq has **8 independent channels**, each corresponding to one output jack and encoder knob.
 
 Each channel has a **type**, set in Channel Edit (encoder 7):
 
@@ -58,7 +58,7 @@ Default range for new channels is **−5V to +5V**. Changing a channel's type do
 
 ## Clock
 
-- **External clock:** patch a signal into **Clock In**. VoltSeq locks to it automatically at 1 pulse per 16th note (16 PPQN). When the cable is removed, the internal clock resumes at the same tempo.
+- **External clock:** patch a signal into **Clock In**. The module locks to it automatically at 1 pulse per 16th note (16 PPQN). When the cable is removed, the internal clock resumes at the same tempo.
 - **Internal clock:** tap **Tap Tempo** to set BPM (first two taps are ignored; BPM updates on the third tap and beyond). Fine-tune BPM in Global Settings (encoder 6).
 - **Reset jack:** a trigger resets all channels to step 1 immediately and fires the first step's output, so the sequence is in sync from the moment the pulse arrives.
 
@@ -66,7 +66,7 @@ Default range for new channels is **−5V to +5V**. Changing a channel's type do
 
 ## Main Mode
 
-The **main mode** is VoltSeq's default state — reached on boot, after disarming, or after exiting any editor. All other modes are entered from here and return here on exit. While in any modal editor (Channel Edit, Global Settings, Performance Page, Clear Mode), the entry combos for other modals are silently ignored — you must exit the current mode first. The only exception is **Channel Edit**, which can also be entered while a channel is armed.
+The **main mode** is Catalyst VoltSeq's default state — reached on boot, after disarming, or after exiting any editor. All other modes are entered from here and return here on exit. While in any modal editor (Channel Edit, Global Settings, Performance Page, Clear Mode), the entry combos for other modals are silently ignored — you must exit the current mode first. The only exception is **Channel Edit**, which can also be entered while a channel is armed.
 
 ---
 
@@ -335,7 +335,7 @@ Lock state persists across power cycles.
 
 ## Saving
 
-VoltSeq uses **intentional saving** — data is only written to flash when you explicitly trigger a save.
+Catalyst VoltSeq uses **intentional saving** — data is only written to flash when you explicitly trigger a save.
 
 **To save:** hold **Glide**, then press and hold **Chan.** Keep both held for ~800 ms. All page buttons fast-blink while the hold is counted, then blink 6 times to confirm the save completed.
 
@@ -412,5 +412,5 @@ All other settings — steps, channel types, lengths, clock divisions, global se
 | **Fine + Glide** (hold 1.5 s) | Enter Performance Page |
 | **Short Fine + Glide** (tap + release) | Toggle Phase Scrub Lock |
 | **Glide + Chan.** (hold ~800 ms) | Save to flash (Glide must be pressed first) |
-| **Shift + Tap + Chan.** (hold 1 s) | Switch to VoltSeq mode |
+| **Shift + Tap + Chan.** (hold 1 s) | Switch to Catalyst VoltSeq mode |
 | **Fine + Play + Glide** (hold 1 s) | Switch to Sequencer mode |

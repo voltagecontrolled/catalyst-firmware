@@ -1,6 +1,6 @@
-# VoltSeq — Presets / Scene Save-Load
+# Catalyst VoltSeq — Presets / Scene Save-Load
 
-No current implementation. Users need a way to save and recall entire VoltSeq states (all 8 channels, steps, settings) as named presets — analogous to the sequencer's slot/scene system.
+No current implementation. Users need a way to save and recall entire Catalyst VoltSeq states (all 8 channels, steps, settings) as named presets — analogous to the sequencer's slot/scene system.
 
 ---
 

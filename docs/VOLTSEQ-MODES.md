@@ -1,6 +1,6 @@
-# VoltSeq Mode Map
+# Catalyst VoltSeq — Mode Map
 
-Reference for the VoltSeq UI state machine. Intended for UX review and bug hunting — maps every modal state to its state variables, entry/exit paths, button handling, and LED display, then lists known collision points and edge cases.
+Reference for the Catalyst VoltSeq UI state machine. Intended for UX review and bug hunting — maps every modal state to its state variables, entry/exit paths, button handling, and LED display, then lists known collision points and edge cases.
 
 All code is in `src/ui/voltseq.hh`. Line numbers are approximate and may drift; search by function name.
 

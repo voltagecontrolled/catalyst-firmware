@@ -1,4 +1,4 @@
-# VoltSeq Hardware Test Checklist
+# Catalyst VoltSeq Hardware Test Checklist
 
 Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each section in order — most sections require only one navigation combo to reach and can be tested before exiting.
 
@@ -170,7 +170,7 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
 
 ### External Clock (16 PPQN — 1 pulse per 16th note)
 
-- [ ] Patch clock into **Clock In**: VoltSeq locks to external clock automatically
+- [ ] Patch clock into **Clock In**: module locks to external clock automatically
 - [ ] Unplug external clock: internal clock resumes at the same BPM (no 4× speed increase)
 - [ ] Playback stays in sync with clock; no stutter between steps
 - [ ] Step 0 fires immediately on first clock pulse (no extra pause)
