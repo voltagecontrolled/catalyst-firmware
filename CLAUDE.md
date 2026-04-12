@@ -20,7 +20,7 @@ Firmware for the Catalyst Sequencer and Catalyst Controller Eurorack modules (4m
 | `docs/wiki/Home.md` | GitHub wiki home page (synced to wiki root) |
 | `docs/wiki/Catalyst-Sequencer.md` | Catalyst Sequencer user-facing wiki |
 | `docs/wiki/Catalyst-VoltSeq.md` | Catalyst VoltSeq user-facing wiki |
-| `docs/VOLTSEQ-MODES.md` | Catalyst VoltSeq UI state machine reference: every mode, state variable, entry/exit path, LED display, and known collision points |
+| `docs/maps/VOLTSEQ-MODES.md` | Catalyst VoltSeq UI state machine reference: every mode, state variable, entry/exit path, LED display, and known collision points |
 | `VOLTSEQ-TODO.md` | Catalyst VoltSeq feature backlog, known bugs, and hardware verification checklist |
 | `docs/release-notes/` | Per-release changelogs for GitHub releases |
 
