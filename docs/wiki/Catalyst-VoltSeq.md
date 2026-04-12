@@ -82,11 +82,34 @@ Each channel has a **type**, set in Channel Edit (encoder 7):
 
 | Type | Output | Encoder LED |
 |---|---|---|
-| **CV** | Stepped or slewed voltage, configurable range | Scale color (grey = unquantized, pink = chromatic, etc.) |
+| **CV** | Stepped or slewed voltage, configurable range | Scale color (see table below) |
 | **Gate** | Gate signal with variable length (0–100%) | Dim green; brightness = gate length |
 | **Trigger** | Short trigger pulse with ratchet/repeat | Green = ratchet, teal = repeat, off = rest |
 
 Default range for new channels is **−5V to +5V**. Changing a channel's type does not erase its step data — the same stored values are simply interpreted differently by each type.
+
+### CV Quantizer Scales
+
+The CV channel encoder LED color indicates the active quantizer scale. Cycle through scales via **Chan. + Encoder N** in main mode.
+
+| LED | Scale | Notes |
+|---|---|---|
+| Dim grey | Unquantized | Continuous voltage, no snapping |
+| Pink | Chromatic | All 12 semitones |
+| Dim red | Major | W W H W W W H |
+| Dim orange | Minor | W H W W H W W |
+| Dim yellow | Harmonic minor | W H W W H A H |
+| Dim teal | Major pentatonic | 5 notes |
+| Dim blue | Minor pentatonic | 5 notes |
+| Grey | Wholetone | 6 equal whole steps |
+| Dim salmon | Lydian dominant | Major with ♯4 and ♭7 |
+| Dim lavender | Bebop | 8 notes |
+| Very dim red | Dorian | Minor with ♮6 |
+| Very dim yellow | Vietnamese | 6-note anhemitonic |
+| Very dim orange | Yo | Japanese 5-note |
+| Very dim blue | Blues | 6 notes with ♭5 |
+| Very dim teal | 21-TET | Microtonal equal temperament |
+| Various | Custom 0–7 | User-recorded scales (CatSeq only) |
 
 ---
 

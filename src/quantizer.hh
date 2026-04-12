@@ -108,12 +108,12 @@ inline constexpr std::array scale = {
 	Scale{12.f, 0.f, 2.f, 4.f, 6.f, 8.f, 10.f},								   // wholetone
 	Scale{12.f, 0.f, 2.f, 4.f, 6.f, 7.f, 9.f, 10.f},						   // acoustic/lydian dom.
 	Scale{12.f, 0.f, 2.f, 4.f, 5.f, 7.f, 9.f, 10.f, 11.f},					   // Beebop
-	Scale{12.f, 0.f, 1.f, 4.f, 6.f, 8.f, 10.f, 11.f},						   // enigmatic
+	Scale{12.f, 0.f, 2.f, 3.f, 5.f, 7.f, 9.f, 10.f},						   // dorian
 	Scale{12.f, 0.f, 2.5f, 3.f, 4.f, 5.f, 7.f},								   // vietnamese
 	Scale{12.f, 0.f, 3.f, 5.f, 7.f, 10.f},									   // Yo scale
 
-	// 16-TET
-	Scale{12.f, 0.f, 0.75f, 1.5f, 2.25f, 3.f, 3.75f, 4.5f, 5.25f, 6.f, 6.75f, 7.5f, 8.25f, 9.f, 9.75f, 10.5f, 11.25f},
+	// blues
+	Scale{12.f, 0.f, 3.f, 5.f, 6.f, 7.f, 10.f},
 
 	// 21-TET
 	Scale{12.f,

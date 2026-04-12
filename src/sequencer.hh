@@ -65,7 +65,7 @@ struct Slot {
 struct Data {
 	// Increment current_tag whenever sizeof(Step) or any other persistent field layout changes.
 	// validate() checks this tag so WearLevel rejects incompatible flash data gracefully.
-	static constexpr uint32_t current_tag = 5u;
+	static constexpr uint32_t current_tag = 6u;
 	uint32_t SettingsVersionTag = 0;
 
 	std::array<Slot, Model::Sequencer::NumSlots> slot;

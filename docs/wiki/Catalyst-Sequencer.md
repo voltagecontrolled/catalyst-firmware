@@ -207,6 +207,12 @@ A CV track can have both a CV follow source (Blue or Lavender) and a gate clock 
 
 ---
 
+## Quantizer Scales
+
+The quantizer scale for each CV channel is selected via the channel mode selector. The available scales are shared across both firmware personalities — see the [Catalyst VoltSeq](Catalyst-VoltSeq#cv-quantizer-scales) page for the full scale reference table.
+
+---
+
 ## Tips
 
 ### Phase Scrub and performance

@@ -107,10 +107,10 @@ inline constexpr std::array color = {
 	grey,					   // wholetone
 	salmon.blend(off, 0.5f),   // lydian dom.
 	lavender.blend(off, 0.5f), // Beebop
-	red.blend(off, 0.9f),	   // enigmatic
+	red.blend(off, 0.9f),	   // dorian
 	yellow.blend(off, 0.9f),   // vietnamese
 	orange.blend(off, 0.9f),   // Yo scale
-	blue.blend(off, 0.95f),	   // 16-TET
+	blue.blend(off, 0.95f),	   // blues
 	teal.blend(off, 0.95f),	   // 21-TET
 
 	red.blend(off, 0.5f),	   // custom 0
