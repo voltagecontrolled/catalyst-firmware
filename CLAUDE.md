@@ -15,7 +15,6 @@ Firmware for the Catalyst Sequencer and Catalyst Controller Eurorack modules (4m
 | `docs/PANELMAP.md` | Full hardware reference: all buttons, jacks, LEDs, and their code names |
 | `docs/CALIBRATION.md` | DAC calibration procedure (boot-only entry, offset/slope per channel) |
 | `docs/PERFORMANCE.md` | Flash layout, SRAM budget, cycle cost estimates per feature |
-| `docs/implemented/CATSEQ-PHASESCRUB-SETTINGS.md` | Post-implementation notes for Phase Scrub Performance Page (v1.4.6); includes the alpha1 calibration corruption bug root cause and fix |
 | `docs/planned/CATSEQ-GATE-ENVELOPE.md` | Gate envelope (A/D function generator) feature spec |
 | `docs/planned/CATSEQ-STEP-ARP.md` | Step arpeggio feature spec |
 | `docs/wiki/Home.md` | GitHub wiki home page (synced to wiki root) |
@@ -178,7 +177,7 @@ When writing bidirectional encoder logic that crosses modes (e.g. ratchet ↔ ne
 
 When writing a local struct to overlay flash data during migration (see `SavedSettings::read()` in `saved_settings.hh`), every `alignas(N)` specifier from the original struct must be reproduced exactly. The most dangerous case is `enum class : uint8_t` members declared `alignas(4)` — the underlying type is 1 byte, so without the explicit specifier the compiler packs the following member 2 bytes earlier than in the real struct, silently corrupting everything after it.
 
-Add a `static_assert(sizeof(OverlayStruct) == ExpectedSize)` (or compare against `sizeof(RealStruct)` if available in scope) in any migration branch that uses a locally-defined overlay type. See `docs/implemented/CATSEQ-PHASESCRUB-SETTINGS.md` (Post-implementation Notes) for the full account of how this bug corrupted DAC calibration in v1.4.6-alpha1 and what the 12-cent/octave drift symptoms looked like.
+Add a `static_assert(sizeof(OverlayStruct) == ExpectedSize)` (or compare against `sizeof(RealStruct)` if available in scope) in any migration branch that uses a locally-defined overlay type. The v1.4.6-alpha1 instance of this bug caused DAC calibration corruption with ~12-cent/octave pitch drift as the symptom.
 
 ---
 
