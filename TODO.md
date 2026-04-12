@@ -198,7 +198,7 @@ Brief passive display on Channel Edit entry before the first enc detent register
 
 On CV tracks, `step_prob` currently only gates deviation — it has no effect when `random_amount_v` is 0 and never suppresses the step from outputting. Add step fire probability: SHIFT+GLIDE+ENC CCW on an armed CV track should decrease the probability that the step fires at all (holding the previous CV value instead), consistent with how gate/trigger tracks already treat probability. CW behavior (deviation gating) remains unchanged.
 
-Requires deciding how a single `step_prob` field encodes two distinct behaviors (deviation gate vs. fire suppression), or splitting into two fields. Requires `current_tag` bump if storage changes.
+**Storage:** reinterpret `step_prob` as `int8_t`: positive values = deviation gate probability (existing behavior, 1–100%), negative values = fire suppression probability (1–100% chance of holding previous value), 0 = always fires with no deviation. Mutually exclusive by sign — the two modes are an either/or choice. No struct layout change; requires `current_tag` bump to invalidate saved data using the old `uint8_t` interpretation.
 
 ---
 
