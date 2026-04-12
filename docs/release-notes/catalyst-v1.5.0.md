@@ -67,6 +67,7 @@ Exit with **Shift + Chan.** or **Play/Reset**.
 | Encoder | Parameter |
 |---------|-----------|
 | 1 — Start | Play/Stop reset mode (red = on: Stop also resets all channels to step 1) |
+| 3 — Length | Master loop length: 0 = off; 1–64 steps before all channels reset to step 1. LED off = disabled, orange = active, red = bar-aligned (8/16/32/48/64) |
 | 6 — BPM/Clock Div | Internal BPM |
 
 Exit with **Play/Reset**.
