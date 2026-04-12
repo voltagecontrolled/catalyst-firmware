@@ -142,19 +142,19 @@ Exact UX and storage TBD. Gate tracks only — CV tracks use SHIFT+TAP TEMPO for
 
 ## v1.5.x
 
-### CV random deviation — refactor to scale-degree model
+### CV random deviation — refactor to semitone model
 
 **Area:** `src/voltseq.hh` `ComputeDeviation()`, `OnChannelFired()`, `src/app.hh` `CvOutput()`, `src/voltseq.hh` `ChannelSettings::random_amount_v`
 
 Currently `random_amount_v` is stored in whole volts and applied as a raw offset *after* quantization, so the result can land between scale degrees. The unit (volts) also means the minimum non-zero setting (+1) is a full octave of possible deviation — far too coarse for musical use.
 
-**Proposed:** express deviation as a number of scale degrees (semitones when unquantized, scale steps when quantized). Apply the offset *before* quantization so the result always snaps to the nearest scale degree.
+**Proposed:** express deviation as a number of semitones and apply the offset *before* quantization. The quantizer then snaps the result to the nearest scale degree. The deviation range is scale-invariant — "±5" always means up to a chromatic 4th regardless of which scale is active — and changing the channel's scale changes only which notes the deviation can land on, not the range.
 
-- **CW from 0 (unipolar):** deviate up by 0–N scale degrees from the recorded value
-- **CCW from 0 (bipolar):** deviate up or down by 0–N scale degrees symmetric around the recorded value
-- Unquantized channels: scale degrees = semitones; deviation is pre-quantize so it still snaps to the nearest semitone (chromatic)
+- **CW from 0 (unipolar):** deviate up by 0–N semitones from the recorded value
+- **CCW from 0 (bipolar):** deviate up or down by 0–N semitones symmetric around the recorded value
+- Range: ±15 semitones max (same `int8_t` storage as current `random_amount_v`)
 
-**Implementation:** in `OnChannelFired`, compute a scale-degree offset, convert to a voltage delta using the current scale's interval table, add to the pre-mapped step value, then pass through `Quantizer::Process()`. `random_amount_v` reinterpreted as scale degrees (±15 max, same storage). Requires `current_tag` bump.
+**Implementation:** in `OnChannelFired`, compute a random semitone offset, convert to a voltage delta (`offset * (1.f / 12.f)`), add to the pre-quantized step value, then pass through `Quantizer::Process()`. `random_amount_v` reinterpreted as semitones (no struct layout change). Requires `current_tag` bump.
 
 **UX improvement:** the Shift-held sub-modal in armed CV mode currently uses only Enc 5 (Range) and Enc 7 (Transpose), leaving Enc 8 dark. Add **Shift + Enc 8** in armed mode to adjust the channel deviation amount directly — consistent with Range and Transpose being accessible from the same gesture, without requiring a trip to Channel Edit. Probability (Shift+Glide) remains separate as it is per-step rather than per-channel.
 
