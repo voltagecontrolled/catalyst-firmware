@@ -86,7 +86,8 @@ struct Data {
 	std::array<ChannelSettings, Model::NumChans>   channel{};
 	std::array<StepFlags, Model::NumChans>         flags{};
 	bool                                           play_stop_reset    = false; // true = Stop also resets all channels to step 1
-	uint8_t                                        _reserved[2]       = {};
+	uint8_t                                        master_loop_length = 0;    // 0 = off; 1–64 = reset all channels every N 16th-note steps
+	uint8_t                                        _reserved[1]       = {};
 	Clock::Bpm::Data                               bpm{};             // internal BPM
 	Macro::Recorder::Data                          recorder{};        // slider sample buffer (reserved)
 
@@ -296,6 +297,13 @@ class Interface {
 	// Per-channel cached CV deviation in volts, rolled once per step advance in OnChannelFired.
 	// Read each tick by App::CvOutput; reset to 0 on Reset/ResetExternal.
 	std::array<float, Model::NumChans> cv_dev_v_{};
+
+	// Master loop counter: counts 16th-note steps since last reset.
+	// When it reaches data.master_loop_length (and that value is non-zero), all channels reset.
+	uint8_t master_loop_counter_  = 0;
+	// Set when the master loop counter expires; cleared the next tick when StepTicked() is true.
+	// Defers the actual reset one tick so step mll-1 plays its full duration before step 0 fires.
+	bool    loop_reset_pending_   = false;
 
 	// Returns a random deviation in volts given a signed-volt amount setting.
 	// amt_v > 0: unipolar [0, amt_v); amt_v < 0: bipolar (-amt_v, +amt_v).
@@ -700,6 +708,8 @@ public:
 		primed.fill(false);
 		held_count_           = 0;
 		arp_index_            = 0;
+		master_loop_counter_  = 0;
+		loop_reset_pending_   = false;
 
 		gate_state    = {};
 		ratchet_state = {};
@@ -709,8 +719,11 @@ public:
 		// will prime without advancing, then fire step 0.
 	}
 
-	// External reset (reset jack): rewind all playheads to step 0.
-	// primed=false, shadow=0: next clock will prime without advancing, then fire step 0.
+	// External reset: rewind all playheads to step 0.
+	// primed=false, shadow=0: next step clock fires step 0.
+	// Does NOT call SyncStepClock — callers that need an immediate fire (reset jack) must call
+	// clock.SyncStepClock() afterwards.  The master loop counter intentionally omits it so the
+	// last step of the loop plays its full duration before step 0 fires at the next natural boundary.
 	void ResetExternal() {
 		playhead.fill(0);
 		shadow.fill(0);
@@ -718,6 +731,8 @@ public:
 		primed.fill(false);
 		// Preserve held_count_ and held_steps_ — reset jack should not release held steps.
 		arp_index_            = 0;
+		master_loop_counter_  = 0;
+		loop_reset_pending_   = false;
 
 		gate_state    = {};
 		ratchet_state = {};
@@ -891,6 +906,21 @@ public:
 		if (clock.StepTicked() && AnyStepHeld())
 			TickArp();
 
+		// Deferred master loop reset: applied at the natural clock boundary one tick after the
+		// counter expired.  channel_fired_ is already set by clock.Update() this tick, so
+		// channels fire step 0 below without any gap or SyncStepClock needed.
+		if (loop_reset_pending_ && clock.StepTicked()) {
+			playhead.fill(0);
+			shadow.fill(0);
+			pingpong_dir.fill(1);
+			primed.fill(false);
+			gate_state    = {};
+			ratchet_state = {};
+			cv_dev_v_.fill(0.f);
+			loop_reset_pending_ = false;
+			// Note: do NOT call ResetDividers — channel_fired_ is already set for this tick.
+		}
+
 		// During beat repeat (perf_mode 2 or 3), orbit-following channels are driven by the
 		// orbit advance timer rather than their own clock dividers.  Suppress OnChannelFired for
 		// those channels here; FireOrbitStep fires them below when the orbit advances.
@@ -912,6 +942,17 @@ public:
 		}
 		UpdateGates();
 		UpdateTriggers();
+
+		// Master loop counter: increments on every 16th-note step while playing.
+		// When it reaches master_loop_length, schedule a deferred reset (fires next StepTick)
+		// so the current step plays its full duration before channels snap back to step 0.
+		if (playing && clock.StepTicked() && data.master_loop_length > 0) {
+			master_loop_counter_++;
+			if (master_loop_counter_ >= data.master_loop_length) {
+				loop_reset_pending_  = true;
+				master_loop_counter_ = 0;
+			}
+		}
 		const bool orbit_advanced = UpdateOrbit(master_ticked);
 		if (playing && orbit_advanced && beat_repeat_active) {
 			for (auto ch = 0u; ch < Model::NumChans; ch++) {

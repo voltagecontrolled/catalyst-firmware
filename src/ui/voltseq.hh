@@ -510,8 +510,10 @@ public:
 	void Common() override {
 		p.clock.bpm.external = c.sense.trig.is_high();
 
-		if (c.jack.reset.just_went_high())
+		if (c.jack.reset.just_went_high()) {
 			p.ResetExternal();
+			p.clock.SyncStepClock(); // fire step 0 within <0.3ms — no audible gap on reset jack
+		}
 		if (c.jack.trig.just_went_high())
 			p.clock.ExternalClockTick();
 		if (c.button.add.just_went_high())
@@ -1323,6 +1325,7 @@ private:
 	// --- Global Settings modal (SHIFT+CHAN held ≥2 s; exits on Play) ---
 	// Panel assignments:
 	//   Panel 1 (Start)       enc 0 — Play/Stop reset mode (clamped off→on; LED red=on, off=off)
+	//   Panel 3 (Length)      enc 2 — Master loop length (0=off, 1–64 steps; LED off=0, orange=other, red=8/16/32/48/64)
 	//   Panel 6 (BPM/Clk Div) enc 5 — Internal BPM
 
 	void UpdateGlobalSettings(bool fine) {
@@ -1336,6 +1339,10 @@ private:
 				d.play_stop_reset = (v == 1);
 				break;
 			}
+			case 2: // Panel 3 (Length): Master loop length — 0=off, 1–64 16th-note steps
+				d.master_loop_length =
+				    static_cast<uint8_t>(std::clamp<int32_t>(d.master_loop_length + dir, 0, 64));
+				break;
 			case 5: // Panel 6 (BPM/Clock Div): Internal BPM
 				p.clock.bpm.Inc(dir, fine);
 				break;
@@ -1494,6 +1501,7 @@ public:
 		// Page buttons: lit = that channel is the reset leader.
 		// Encoder LEDs:
 		//   enc 0 (Panel 1, Start)       = play/stop reset mode → red=on, off=off
+		//   enc 2 (Panel 3, Length)      = master loop length   → off=0, orange=1–64, red=8/16/32/48/64
 		//   enc 5 (Panel 6, BPM/Clk Div) = BPM                 → color zone, pulses with clock phase
 		//   all others: off (unassigned)
 		if (global_settings_active_) {
@@ -1512,6 +1520,16 @@ public:
 				case 0:
 					col = d.play_stop_reset ? Palette::red : Palette::off;
 					break;
+				case 2: {
+					const auto mll = d.master_loop_length;
+					if (mll == 0)
+						col = Palette::off;
+					else if (mll % 8 == 0)
+						col = Palette::red;    // bar-aligned: 8, 16, 32, 48, 64
+					else
+						col = Palette::orange; // non-bar value
+					break;
+				}
 				case 5: {
 					// Pulses with clock phase (PeekPhase advances even when stopped).
 					// Color zone indicates BPM range (ROYGBIV):
