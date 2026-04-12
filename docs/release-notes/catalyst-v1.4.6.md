@@ -1,4 +1,6 @@
-**Note: this is a pre-release firmware, use at your own risk. This is not supported or endorsed by 4ms Company and flashing third party firmware could void your warranty or render your module inoperable. The author assumes no liability for any damage resulting from use of this firmware.**
+**Third-party firmware. Not supported or endorsed by 4ms Company. Flash at your own risk.**
+
+> **Legacy release.** v1.5.0 is the current release and includes everything in v1.4.6 plus the Catalyst VoltSeq personality. This build (Catalyst Sequencer + Catalyst Controller only) is kept available for users who prefer the CatSeq+CatCon combination while v1.5.0 is in RC.
 
 ---
 
