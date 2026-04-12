@@ -48,6 +48,11 @@ public:
 		: Abstract{c, main_ui}
 		, p{p} {
 	}
+
+protected:
+	// Override to return true in modes where COPY+GLIDE should not be intercepted by Common().
+	// Prevents Fine/Glide events from being consumed by the phase scrub arming logic.
+	virtual bool SuppressCopyGlide() const { return false; }
 	void Common() final {
 		p.seqclock.external = c.sense.trig.is_high();
 
@@ -82,10 +87,12 @@ public:
 		// holding both for 1.5s = scrub settings entry. Toggle fires on release so continuing
 		// to hold seamlessly transitions into menu entry with no ambiguous mid-press state.
 		const bool both_held = c.button.fine.is_high() && c.button.morph.is_high();
-		const bool either_just_pressed = c.button.fine.just_went_high() || c.button.morph.just_went_high();
-		if (both_held && either_just_pressed && !p.shared.scrub_hold_pending) {
-			p.shared.scrub_hold_pending = true;
-			p.shared.scrub_hold_start = Controls::TimeNow();
+		if (both_held && !p.shared.scrub_hold_pending && !SuppressCopyGlide()) {
+			const bool either_just_pressed = c.button.fine.just_went_high() || c.button.morph.just_went_high();
+			if (either_just_pressed) {
+				p.shared.scrub_hold_pending = true;
+				p.shared.scrub_hold_start = Controls::TimeNow();
+			}
 		}
 		if (p.shared.scrub_hold_pending) {
 			if (Controls::TimeNow() - p.shared.scrub_hold_start >= scrub_settings_hold_ticks) {

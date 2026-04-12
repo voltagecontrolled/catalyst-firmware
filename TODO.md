@@ -4,6 +4,16 @@
 
 # Catalyst Sequencer
 
+## Backlog
+
+### Play/Reset as universal modal exit
+
+**Area:** `src/ui/seq_settings.hh`, `src/ui/seq_follow_assign.hh`, other modal `Update()` methods
+
+In VoltSeq, Play/Reset exits all modal states — a reliable "get me out of here" gesture. CatSeq is inconsistent: some modes exit on Play/Reset, others require releasing the entry combo. Audit all CatSeq modal `Update()` methods and add `if (c.button.play.just_went_high()) { SwitchUiMode(main_ui); return; }` as a universal exit path where it isn't already present. Play/Reset should also toggle play/stop as normal (or just exit without toggling, matching VoltSeq behavior).
+
+---
+
 ## v1.6.0
 
 ### CatSeq step clock resolution — needs verification

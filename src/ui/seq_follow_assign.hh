@@ -37,6 +37,8 @@ public:
 		: Usual{p, c, main_ui} {
 	}
 
+	bool SuppressCopyGlide() const override { return true; }
+
 	void Init() override {
 		mode = 0;
 		c.button.fine.clear_events();

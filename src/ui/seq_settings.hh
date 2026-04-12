@@ -14,6 +14,7 @@ class Channel : public Usual {
 
 public:
 	using Usual::Usual;
+	bool SuppressCopyGlide() const override { return true; }
 	void set_follow_assign_ui(Abstract &ui) { follow_assign_ui = &ui; }
 	void Init() override {
 		p.shared.hang.Cancel();
