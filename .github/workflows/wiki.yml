@@ -6,9 +6,7 @@ on:
       - main
       - voltseq
     paths:
-      - 'docs/wiki/HOME.md'
-      - 'docs/wiki/CATSEQ.md'
-      - 'docs/wiki/VOLTSEQ.md'
+      - 'docs/wiki/*.md'
 
 permissions:
   contents: write
@@ -24,12 +22,10 @@ jobs:
       - name: Push to wiki
         run: |
           git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki-repo
-          cp docs/wiki/HOME.md wiki-repo/Home.md
-          cp docs/wiki/CATSEQ.md wiki-repo/Catalyst-Sequencer.md
-          cp docs/wiki/VOLTSEQ.md wiki-repo/Catalyst-VoltSeq.md
+          cp docs/wiki/*.md wiki-repo/
           cd wiki-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Home.md Catalyst-Sequencer.md Catalyst-VoltSeq.md
+          git add -A
           git diff --cached --quiet || git commit -m "Sync wiki from docs/wiki"
           git push

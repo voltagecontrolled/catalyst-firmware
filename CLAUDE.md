@@ -18,10 +18,11 @@ Firmware for the Catalyst Sequencer and Catalyst Controller Eurorack modules (4m
 | `docs/implemented/CATSEQ-PHASESCRUB-SETTINGS.md` | Post-implementation notes for Phase Scrub Performance Page (v1.4.6); includes the alpha1 calibration corruption bug root cause and fix |
 | `docs/planned/CATSEQ-GATE-ENVELOPE.md` | Gate envelope (A/D function generator) feature spec |
 | `docs/planned/CATSEQ-STEP-ARP.md` | Step arpeggio feature spec |
-| `docs/wiki/NEW_FEATURES.md` | End-user-facing feature documentation (mirrored to GitHub wiki) |
-| `docs/wiki/VOLTSEQ.md` | VoltSeq user-facing wiki (also mirrored to GitHub wiki) |
-| `docs/VOLTSEQ-MODES.md` | VoltSeq UI state machine reference: every mode, state variable, entry/exit path, LED display, and known collision points |
-| `VOLTSEQ-TODO.md` | VoltSeq feature backlog, known bugs, and hardware verification checklist |
+| `docs/wiki/Home.md` | GitHub wiki home page (synced to wiki root) |
+| `docs/wiki/Catalyst-Sequencer.md` | Catalyst Sequencer user-facing wiki |
+| `docs/wiki/Catalyst-VoltSeq.md` | Catalyst VoltSeq user-facing wiki |
+| `docs/VOLTSEQ-MODES.md` | Catalyst VoltSeq UI state machine reference: every mode, state variable, entry/exit path, LED display, and known collision points |
+| `VOLTSEQ-TODO.md` | Catalyst VoltSeq feature backlog, known bugs, and hardware verification checklist |
 | `docs/release-notes/` | Per-release changelogs for GitHub releases |
 
 ## Build Commands
@@ -52,8 +53,10 @@ The top-level `make all` runs `cmake -B build -GNinja` if needed, then `cmake --
 
 Two workflows run on the `voltagecontrolled/catalyst-firmware` fork:
 
-- **Wiki sync** (`.github/workflows/wiki.yml`): triggers on any push to `main` that touches `docs/wiki/NEW_FEATURES.md`. Copies it to the GitHub wiki as `New-Features.md`.
-- **Release** (`.github/workflows/release.yml`): triggers on a tag matching `catalyst-v*`. Builds firmware and WAV, resolves release notes from `docs/release-notes/<tag-without-prerelease-suffix>.md`, and creates a GitHub release with the WAV attached.
+- **Wiki sync** (`.github/workflows/wiki.yml`): triggers on any push to `main` or `voltseq` that touches `docs/wiki/*.md`. Copies all files in `docs/wiki/` directly to the GitHub wiki repo (`Home.md` serves as the wiki root page). Add a new wiki page by adding a `.md` file to `docs/wiki/` — no CI changes needed.
+- **Release** (`.github/workflows/release.yml`): triggers on a tag matching `catalyst-v*`. Builds both firmware variants (catseq-catcon and catseq-voltseq), creates WAV files, and attaches both to a GitHub release. Release notes are resolved from `docs/release-notes/<tag-without-prerelease-suffix>.md`.
+
+> **Future improvement:** replace the CI sync with a git submodule. The GitHub wiki is a separate git repo (`github.com/voltagecontrolled/catalyst-firmware.wiki.git`). Adding it as a submodule at `wiki/` would let Claude edit wiki pages directly within the main repo's directory tree, with no CI needed and deletions handled naturally. Deferred — current CI approach is functional.
 
 To publish a release: `git tag catalyst-v1.x.y && git push origin catalyst-v1.x.y`. Strip any `-alpha*` or `-rc*` suffix — the workflow does that automatically when looking up the release notes path.
 
