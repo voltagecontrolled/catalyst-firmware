@@ -1,4 +1,5 @@
 build/
+build_voltseq/
 .vscode/
 .DS_Store
 architecture.png
@@ -10,3 +11,4 @@ CLAUDE.md
 *.pdf
 .claude/
 issuequeue.txt
+*.tsv
