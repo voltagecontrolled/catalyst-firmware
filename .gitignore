@@ -11,5 +11,5 @@ CLAUDE.md
 *.pdf
 .claude/
 issuequeue.txt
-*.tsv
-*.txt
+1*.tsv
+1*.txt
