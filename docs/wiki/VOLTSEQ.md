@@ -6,6 +6,40 @@
 
 ---
 
+## Design Philosophy
+
+Catalyst VoltSeq is a **parameter lock style sequencer** — every step stores its own independent value, and every channel can have its own type, length, clock division, and direction. This is closer in spirit to Elektron-style step programming than to a traditional sequencer where all channels share a common clock and length.
+
+The design is an **homage to the Intellijel Voltage Block** workflow: arm a channel, move a fader, and the module captures what you played. Catalyst VoltSeq extends that foundation with **secondary step editing** (per-step encoder editing while armed), **stochastic randomness** (per-step probability that affects whether or how much a step deviates), and **polyrhythmic capabilities** (independent channel lengths, divisions, and directions that let channels drift naturally in and out of phase).
+
+---
+
+## Conventions
+
+### Modals
+
+**Channel Edit, Global Settings, Performance Page, and Clear Mode** are *modals* — editing layers that temporarily take over the UI. While any modal is active:
+
+- Entry combos for other modals are silently ignored — exit the current modal first.
+- **Play/Reset always exits.** Playback state is preserved — playing stays playing; stopped stays stopped.
+- The one exception is **Channel Edit**, which can be entered while a channel is armed without first disarming.
+
+If you are ever unsure what mode you are in, Play/Reset once returns you to the main mode.
+
+### Play/Reset is context-sensitive
+
+| Context | Result |
+|---|---|
+| Main mode, no modal | Toggle play/stop |
+| Any modal active | Exit modal (no playback change) |
+| Channel armed | Disarm (no playback change) |
+
+### Saving
+
+Catalyst VoltSeq uses **intentional saving** — no data is written to flash automatically (except Performance Page settings on exit). This means you can experiment freely: power-cycling without saving discards all changes. See the [Saving](#saving) section for the save gesture.
+
+---
+
 ## Hardware Overview
 
 Catalyst VoltSeq uses the same physical panel as the Catalyst Sequencer. Panel controls are repurposed:
@@ -77,22 +111,22 @@ The **main mode** is Catalyst VoltSeq's default state — reached on boot, after
 | Action | Result |
 |---|---|
 | **Play/Reset** | Toggle play/stop |
-| **Shift + Play** (short, < 600 ms) | Reset all channels to step 1 |
-| **Shift + Play** (hold ≥ 600 ms) | Enter Clear mode |
+| **Shift + Play** (short tap) | Reset all channels to step 1 |
+| **Fine + Play** (hold ~500 ms) | Toggle Clear mode |
 | **Play/Reset** while armed | Disarm channel (playback continues) |
-| **Play/Reset** while in any edit mode | Exit that mode |
-
-Settings are saved to flash whenever play/stop is toggled.
+| **Play/Reset** while in any modal | Exit modal (no playback change) |
 
 ### Clear Mode
 
-From the main mode: hold **Shift + Play/Reset** for 600 ms. All page button LEDs and the Play LED slow-blink to confirm entry.
+From the main mode: hold **Fine + Play/Reset** for ~500 ms. Page button LEDs blink to confirm entry. Hold the same combo again to exit, or press **Play/Reset** alone.
 
 | Action | Result |
 |---|---|
-| Tap **Page button N** | Clear all 64 steps of channel N (CV → center/0V; Gate/Trigger → all off) |
-| Tap **Play/Reset** | Clear all 8 channels |
-| Any other button | Exit without clearing |
+| **Page button N** | Clear steps + per-step glide + probability for channel N (preserves channel settings) |
+| **Shift + Page button N** | Full factory reset for channel N — steps, per-step flags, and all channel settings |
+| **Play/Reset** | Exit Clear mode (no channels affected) |
+
+Multiple channels can be cleared before exiting — tap as many page buttons as needed, then press Play/Reset to return.
 
 ### Page Navigation
 
@@ -233,9 +267,9 @@ Hold **Glide** (unarmed) to access per-channel live parameters.
 
 ## Channel Edit
 
-**Entry:** From the main mode or while armed — press and release **Shift + Chan.** (short tap — release before 2 seconds). A 2-second hold enters Global Settings instead.
+**Entry:** From the main mode or while armed — press and release **Shift + Chan.** (short tap — release before 1 second). A 1-second hold enters Global Settings instead.
 
-Press a **Page button** to focus that channel. Encoders edit per-channel settings for the focused channel. To clear a channel's steps, use **Shift + Play → Clear Mode** (see above).
+Press a **Page button** to focus that channel. Encoders edit per-channel settings for the focused channel. To clear a channel, exit to the main mode and use **Fine + Play → Clear Mode** (see above).
 
 **Page buttons** show a chaselight for the focused channel's current playing position. While **Shift is held**, the page buttons switch to a page indicator (currently selected page lights solid) so you can orient yourself before navigating.
 
@@ -258,7 +292,7 @@ Press a **Page button** to focus that channel. Encoders edit per-channel setting
 
 ## Global Settings
 
-**Entry:** From the main mode — hold **Shift + Chan.** for **2 seconds**. The hold is a two-button combo: press and hold both Shift and Chan. together; if either is released before 2 seconds, it fires as a short tap instead (which enters/exits Channel Edit). Any other button press during the hold cancels it.
+**Entry:** From the main mode — hold **Shift + Chan.** for **1 second**. The hold is a two-button combo: press and hold both Shift and Chan. together; if either is released before 1 second, it fires as a short tap instead (which enters/exits Channel Edit). Any other button press during the hold cancels it.
 
 **Exit:** **Play/Reset** — saves and returns.
 
@@ -384,10 +418,10 @@ All other settings — steps, channel types, lengths, clock divisions, global se
 | Combo | Action |
 |---|---|
 | **Play/Reset** | Toggle play/stop |
-| **Shift + Play** (short) | Reset all channels to step 1 |
-| **Shift + Play** (hold 600 ms) | Enter Clear mode |
+| **Shift + Play** (short tap) | Reset all channels to step 1 |
+| **Fine + Play** (hold ~500 ms) | Toggle Clear mode |
 | **Shift + Chan.** (short tap) | Enter/exit Channel Edit |
-| **Shift + Chan.** (hold 2 s) | Enter Global Settings |
+| **Shift + Chan.** (hold 1 s) | Enter Global Settings |
 | **Chan. + Page N** | Arm channel N |
 | **Chan. + same Page N** | Disarm channel N |
 | **Play/Reset** while armed | Disarm (playback continues) |
@@ -404,7 +438,8 @@ All other settings — steps, channel types, lengths, clock divisions, global se
 | Armed Gate/Trig + **tap Page N** | Toggle step N on/off |
 | Armed Trigger + **Encoder N** | Adjust ratchet/repeat count for step N |
 | **Hold Glide + step Page N + Encoder M** | Adjust Gate channel M ratchet at step N (unarmed) |
-| Channel Edit + **long-press Page N** | Clear all steps for channel N |
+| Clear mode + **Page N** | Clear steps + flags for channel N |
+| Clear mode + **Shift + Page N** | Full factory reset for channel N |
 | Channel Edit + **Shift + Page N** | Navigate to page N |
 | **Hold Glide + Encoder N** | Glide time / gate offset / pulse width for channel N |
 | **Hold Shift + Glide + Encoder N** | Offset all ratchet counts for Trigger channel N |
