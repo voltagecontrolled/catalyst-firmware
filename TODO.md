@@ -158,6 +158,8 @@ Currently `random_amount_v` is stored in whole volts and applied as a raw offset
 
 **UX improvement:** the Shift-held sub-modal in armed CV mode currently uses only Enc 5 (Range) and Enc 7 (Transpose), leaving Enc 8 dark. Add **Shift + Enc 8** in armed mode to adjust the channel deviation amount directly — consistent with Range and Transpose being accessible from the same gesture, without requiring a trip to Channel Edit. Probability (Shift+Glide) remains separate as it is per-step rather than per-channel.
 
+**Display:** consider marking octave boundaries (every 12 semitones) in the `RandomAmountColor` ramp with a contrasting color so the user has a tactile landmark for ±1 and ±2 octave deviation.
+
 ---
 
 ### Reset punch-in timing (#9)
