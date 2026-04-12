@@ -10,7 +10,7 @@ All changes relative to upstream 4ms-company/catalyst-firmware v1.3.
 | v1.4.4 | Linked Tracks: CV transpose follow + gate track clock follow | Hardware verified |
 | v1.4.5 | Gate clock step-only mode, CV replace follow, bugfixes | Hardware verified |
 | v1.4.6 | Phase Scrub Performance Page: granular sequencing, beat repeat, lock persistence, sub-step page nav | Released |
-| v1.5.0 | Catalyst VoltSeq: 8-channel voltage recorder/sequencer as second firmware personality; two build variants (CatSeq+CatCon, CatSeq+VoltSeq) | Alpha68 — branch: voltseq |
+| v1.5.0 | Catalyst VoltSeq: 8-channel voltage recorder/sequencer as second firmware personality; two build variants (CatSeq+CatCon, CatSeq+VoltSeq) | RC1 — branch: voltseq |
 
 **Note on preset compatibility:** v1.4.2 expanded `sizeof(Step)` from 4 to 8 bytes. Presets saved under v1.3 are not compatible and are discarded on first boot. The firmware detects the mismatch via a version tag and resets to defaults automatically -- no manual factory reset needed.
 
@@ -195,7 +195,7 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 - Chan. + Page button N arms that channel; encoder LEDs show each step's CV color plus a white chaselight on the playing step.
 - Encoder N directly edits step N's value on the current page. Fine = sub-semitone; acceleration applies.
 - Slider records into the channel in real time (motion-gated). Slider maps to the channel's configured Range.
-- Shift + Enc 5 (Range) adjusts the channel voltage range (also sets the slider recording window). Shift + Enc 7 (Transpose) cycles the quantizer scale.
+- Shift + Enc 5 (Range) adjusts the channel voltage span. Shift + Enc 7 (Transpose) adjusts the channel floor voltage; the sequence transposes.
 
 **Armed Gate channel:**
 - Encoder LEDs show step gate state (brightness = length) + white chaselight on playing step.
@@ -209,7 +209,7 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 
 **Glide Step Editor:** Hold Glide, long-press a Page button (600ms) on a CV or Gate channel. Encoder N toggles the per-step glide flag (CV) or adjusts gate length (Gate). Shift + Page navigates pages. Exit with Glide or Play/Reset.
 
-**Channel Edit (Shift + Chan.):** Per-channel settings; encoders aligned to panel silkscreen labels. Press a Page button to focus a channel. Long-press a Page button (600ms) to clear all steps for that channel. Exit with Chan. or Play.
+**Channel Edit (Shift + Chan., short tap — release before 1 s):** Per-channel settings; encoders aligned to panel silkscreen labels. Press a Page button to focus a channel. Exit with Shift+Chan. or Play/Reset.
 
 | Encoder | Panel label | Parameter |
 |---|---|---|
@@ -222,11 +222,11 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 | 7 | Transpose | Channel type / quantizer scale (CV scales → Gate → Trigger, clamped) |
 | 8 | Random | Random amount (0–100%) |
 
-**Global Settings (Shift+Chan. held 2 s):** Exit via Play/Reset. Enc 1 (Start) = play/stop reset mode; Enc 6 (BPM) = internal BPM with ROYGBIV color zone. Page buttons select reset leader channel (radio; tap to set, tap again to clear). When the leader channel wraps, all channels snap to step 1 and fire immediately.
+**Global Settings (Shift+Chan. held 1 s):** Exit via Play/Reset. Enc 1 (Start) = play/stop reset mode (Stop also resets all channels to step 1). Enc 3 (Length) = master loop length: all channels reset to step 1 together after N 16th-note steps (off = disabled; red at bar-aligned values 8/16/32/48/64, orange otherwise). Enc 6 (BPM) = internal BPM with ROYGBIV color zone (red &lt; 50, orange 50–79, yellow 80–99, green 100–119, blue 120–149, teal 150–179, lavender 180+).
 
 **Performance Page (Fine + Glide held 1.5s):** Phase Scrub orbit engine ported from CatSeq. Slider controls orbit center; Page buttons toggle per-channel orbit follow. Settings sub-page (Fine + Glide held 1.5s again) exposes mode, width/debounce, direction, and Phase Scrub Lock — same as CatSeq scrub settings.
 
-**Save behavior:** Saves automatically on play/stop toggle, Channel Edit exit, Glide/Ratchet editor exit, and Performance Page settings exit.
+**Save behavior:** Intentional only — hold Glide then press and hold Chan.; page buttons fast-blink during hold, then blink 6 times to confirm. Performance Page settings are saved automatically on Performance Page exit (shared data path). No other action triggers a save.
 
 **Alpha build history:**
 
@@ -268,16 +268,21 @@ A second firmware personality for the Catalyst Sequencer panel. Replaces Macro m
 | alpha52 | Orbit activation fix on disarm (force pickup lock to 0 on both disarm paths); Play LED slow-blinks in any modal mode to signal that Play exits the modal rather than toggling play/stop |
 | alpha53–54 | Global settings entry debugging: added diagnostic encoder LED, identified root cause as `MuxedButton` having no debounce — stale falling-edge events on CHAN were firing `just_went_low()` inside the hold-timer block on the very next tick, cancelling the timer before it could reach 1 s. |
 | alpha55 | Fix global settings entry: drain CHAN `just_went_low()` events silently while hold timer is pending; act only on SHIFT release for the short-tap path. Timer now runs to completion regardless of CHAN bounce. Global settings encoder LEDs: unused encoders now dark (were dim-grey). |
-| alpha56 | Per-step probability and CV random deviation. `SHIFT+Glide` in armed mode: enc 0–7 adjust per-step randomness amount (0–100) for the armed channel; LEDs show violet→grey→white ramp. Gate/Trigger: non-zero step_prob suppresses the step's output with that probability. CV: non-zero step_prob triggers a random volt offset (clamped to channel window, quantized/scaled after); deviation range set by Channel Edit enc 7 (`random_amount_v`, ±1V steps, −15..+15V; positive = unipolar, negative = bipolar). `ChannelSettings::random_amount` (float stub) replaced by `int8_t random_amount_v`. `StepFlags::step_prob[64]` added. `current_tag` bumped to 10. |
+| alpha56 | Per-step probability and CV random deviation. `SHIFT+Glide` in armed mode: enc 0–7 adjust per-step randomness amount (0–100) for the armed channel; LEDs show violet→grey→white ramp. Gate/Trigger: non-zero step_prob suppresses the step's output with that probability. CV: non-zero step_prob triggers a random volt offset (clamped to channel window, quantized/scaled after); deviation range set by Channel Edit enc 8 (`random_amount_v`, ±1V steps, −15..+15V; positive = unipolar, negative = bipolar). `ChannelSettings::random_amount` (float stub) replaced by `int8_t random_amount_v`. `StepFlags::step_prob[64]` added. `current_tag` bumped to 10. |
+| alpha57 | Fix CV random deviation octave bias — offset was applied before voltage-window normalization, shifting all randomized steps up by the floor voltage; fixed by centering the offset at 0V before adding. Dim chaselight and probability LEDs to reduce eye fatigue. |
+| alpha58 | Master loop length in Global Settings (enc 3 / Length): setting a non-zero value resets all channels to step 1 together after every N 16th-note steps. LED off = disabled; orange = active; red at bar-aligned values (8, 16, 32, 48, 64). Replaces the removed master reset; no reset leader required. |
+| alpha59–67 | Hardware verification phase. Minor LED and timing fixes; no struct layout changes. Included: fix SHIFT+PLAY clear mode gesture to be order-independent when PLAY is pressed before SHIFT (original fix for #10 — superseded by the full redesign in alpha68). |
+| alpha68 | Clear mode redesign: entry changed from SHIFT+PLAY hold to Fine+Play hold (≥500 ms); mode is now a persistent overlay (not an early-return modal) so page navigation and armed state remain active while clearing. Two-tier clear: Page button N = clear steps + glide + probability for channel N (preserves channel settings); Shift+Page button N = full factory reset for channel N (steps + flags + channel settings). Play/Reset exits clear mode (consistent with all other modals). Fine+Play no longer toggles exit. |
 
-**Deviations from spec (`docs/planned/VOLTSEQ.md`):**
+**Deviations from original spec:**
 - Slider recording uses the channel Range parameter directly; separate `slider_base_v`/`slider_span_v` fields were removed.
 - Armed Gate/Trigger: encoder N edits step N directly (no hold-page-button required). The old hold+page+encoder mechanism was replaced.
 - Channel Edit encoder order matches physical panel labels, not EncoderAlts enum order.
 - Phase rotate operates only on active steps (0 to length-1); unused steps beyond length are untouched.
 - Disarming requires Chan. + Page button (bare page-button disarm removed to allow all steps to be edited while armed, including step 1 of the armed channel).
 - Only two WAV builds per release (catseq-catcon, catseq-voltseq); the voltseq-catcon variant is deferred.
-- `VoltSeq::Data::current_tag = 10u` (bumped in alpha56; `StepFlags::step_prob[64]` added; `ChannelSettings::random_amount` float replaced by `int8_t random_amount_v`).
+- Clear mode entry uses Fine+Play (not Shift+Play); two-tier clear (Page = steps+flags only; Shift+Page = full factory reset including channel settings).
+- `VoltSeq::Data::current_tag = 10u` (last bumped in alpha56).
 
 **Implementation notes:**
 
