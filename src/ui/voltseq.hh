@@ -14,6 +14,7 @@ namespace Catalyst2::Ui::VoltSeq
 using Catalyst2::VoltSeq::ChannelSettings;
 using Catalyst2::VoltSeq::ChannelType;
 using Catalyst2::VoltSeq::Direction;
+using Catalyst2::VoltSeq::StepFlags;
 using Catalyst2::VoltSeq::StepValue;
 using Catalyst2::VoltSeq::VoltSeqRange;
 
@@ -200,7 +201,7 @@ class Main : public Abstract {
 
 		for (auto [i, btn] : countzip(c.button.scene)) {
 			if (btn.just_went_high()) {
-				if (shift)
+				if (c.button.shift.is_high())
 					FullResetChannel(static_cast<uint8_t>(i));
 				else
 					ClearChannelSteps(static_cast<uint8_t>(i));
