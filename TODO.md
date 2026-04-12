@@ -110,13 +110,31 @@ Each parameter independently sourceable: unassigned (fixed default), CV track (p
 
 ---
 
-### Advanced Track Settings (rename from Follow Assign)
+### Mod Matrix (expand and rename from Follow Assign)
 
-**Area:** `src/ui/seq_follow_assign.hh`, `src/ui/seq_settings.hh`, `src/ui/seq.hh`, `docs/wiki/Catalyst-Sequencer.md`
+**Area:** `src/ui/seq_follow_assign.hh`, `src/sequencer.hh` `Settings::Channel`, `src/sequencer_player.hh`, `docs/wiki/Catalyst-Sequencer.md`
 
-The Follow Assign menu currently uses 6 of 9 available FINE sub-mode colors for CV tracks (blue = CV add follow, lavender = CV replace, orange/yellow/salmon = gate clock follow ratchets/repeats/both, teal = gate clock step-only). Gate tracks have no advanced settings menu yet. Both channel types have pending features that need per-track configuration pages (gate envelope, step preview, reset behavior).
+Expand Follow Assign into a full per-track modulation matrix. The existing routing infrastructure (CV add/replace follow, gate clock follow with 4 modes) becomes the first two destination groups; new sources and destinations are added around them.
 
-Rename and expand to a general Advanced Track Settings menu. Entry combo and persistent-mode behavior unchanged. FINE still cycles sub-modes; with 9 colors available there is room to add pages for both CV and gate tracks without navigation changes.
+**Sources:**
+- Another CV track (existing — pitch offset or replace)
+- Another gate track (existing — clock follow with 4 modes)
+- Random amount (new — a random value scaled to the source track's random setting fires each step)
+- Gate length (new — source gate track's current gate width, normalized, drives destination)
+
+**Destinations (per target track):**
+- This track's pitch — CV add or CV replace (existing blue/lavender)
+- This track's clock — gate clock follow with 4 sub-modes (existing orange/yellow/salmon/teal)
+- This track's randomness amount — modulates `random_amount_v` per step
+- This track's envelope — amplitude, decay, curve (once gate envelope is implemented)
+- This track's length — vary pattern length per step or per cycle (advanced/speculative)
+- This track's ratchet/repeat count — modulate subdivision from a source (advanced/speculative)
+
+**UX:** FINE cycles destination groups; page buttons assign the source within the active group (radio toggle, same as current). The entry combo and persistent-mode behavior are unchanged.
+
+**Storage:** Current `transpose_source` / `clock_source` fields extended or joined by additional per-destination source fields in `Settings::Channel`. Requires `current_tag` bump.
+
+The random amount and gate length as sources enable stochastic depth: a CV track with randomness could have its deviation amount itself modulated by another track's random source, producing second-order unpredictability. Gate length as a source routes rhythmic dynamics (wide vs. narrow gates) into pitch or clock destinations, connecting the gate track's expressive range to CV behavior.
 
 Planned page layout (subject to revision as features are added):
 - CV tracks: blue/lavender = CV follow (existing), orange/yellow/salmon/teal = gate clock follow (existing), remaining colors for new settings
