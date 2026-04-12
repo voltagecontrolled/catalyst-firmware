@@ -1,114 +1,58 @@
-**Note: this is a pre-release firmware. Not supported or endorsed by 4ms Company. Flashing third-party firmware could void your warranty or render your module inoperable. The author assumes no liability for any damage resulting from use of this firmware.**
+**Third-party firmware. Not supported or endorsed by 4ms Company. Flash at your own risk.**
 
 ---
 
-## VoltSeq Mode (pre-release / active development)
+## Catalyst VoltSeq — v1.5.0
 
-VoltSeq is a firmware personality for the **Catalyst Sequencer** panel. It turns the module into an **8-channel voltage recorder and step sequencer**, similar to Voltage Block.
+VoltSeq is a second firmware personality for the **Catalyst Sequencer** panel. It turns the module into an **8-channel voltage recorder and step sequencer** in the style of the Malekko Voltage Block — parameter lock, polyrhythmic, recordable with the Phase Scrub slider.
 
-Flash the `.wav` file via the audio-cable bootloader.
+This release ships as a second WAV alongside the standard Catalyst Sequencer build. Both personalities live in the same firmware image; no reflashing is needed to switch between them.
 
-### Switching modes (no re-flash required)
+See the [wiki](https://github.com/voltagecontrolled/catalyst-firmware/wiki) for full documentation.
 
-- **CatSeq → VoltSeq:** hold **Shift + Tap Tempo + Chan.** for 1 second
-- **VoltSeq → CatSeq:** hold **Fine + Play/Reset + Glide** for 1 second
+---
+
+### What's in this release
+
+- **8 independent channels** — each with its own type (CV / Gate / Trigger), step length (1–64), clock division, and playback direction
+- **CV channels** — stepped or slewed voltage, configurable voltage window (range + floor), optional quantizer scales, slider recording in real time
+- **Gate channels** — variable gate length per step, per-step ratchet subdivisions, x0x-style step toggling
+- **Trigger channels** — short pulse with configurable width, per-step ratchet (subdivide) or repeat (extend)
+- **Per-step probability** — stochastic gate suppression (Gate/Trigger) or CV deviation (CV); edited per-step while armed
+- **Phase Scrub Performance Page** — orbit engine and beat repeat ported from Catalyst Sequencer; per-channel follow toggle
+- **External clock** — 1 pulse per 16th note at Clock In; resumes internal clock on removal
+- **Intentional save** — all data written to flash only on explicit gesture (see below)
+
+---
+
+### Switching personalities
+
+No reflashing needed. Both builds (CatSeq+CatCon and CatSeq+VoltSeq) ship in this release.
+
+Within the CatSeq+VoltSeq build:
+
+- **CatSeq → VoltSeq:** hold **Shift + Tap Tempo + Chan.** for 1 second — all 8 channel LEDs blink to confirm
+- **VoltSeq → CatSeq:** hold **Fine + Play/Reset + Glide** for 1 second — all 8 channel LEDs blink to confirm
 
 Mode is saved to flash. Switching does not erase the other mode's data.
 
 ---
 
-### Channels
-
-8 independent channels, each with its own output jack and encoder. Each channel has a **type** (set in Channel Edit, encoder 7):
-
-| Type | Output |
-|------|--------|
-| **CV** | Stepped or slewed voltage; configurable range (default ±5V); optional quantizer scale |
-| **Gate** | Gate signal with variable length per step (0–100%); per-step ratchet subdivisions |
-| **Trigger** | Short trigger pulse; per-step ratchet (subdivide) or repeat (extend) |
-
----
-
-### Clock
-
-- **External clock:** patch into **Clock In** at 1 pulse per 16th note. VoltSeq locks automatically; removing the cable resumes the internal clock at the same tempo.
-- **Internal clock:** tap **Tap Tempo** (3+ taps to set BPM). Fine-tune in Global Settings (encoder 6).
-- **Reset jack:** resets all channels to step 1 and fires immediately.
-
----
-
-### Recording
-
-Arm a channel with **Chan. + Page button N**. The Phase Scrub slider records CV in real time on armed CV channels. Encoders edit individual steps while armed on any channel type.
-
----
-
-### Channel Edit (Shift + Chan. — short tap)
-
-Focus a channel with a page button, then use encoders:
-
-| Encoder | Panel label | Parameter |
-|---------|-------------|-----------|
-| 1 | Start | Output delay (0–20 ms) |
-| 2 | Dir. | Direction: Forward / Reverse / Ping-Pong / Random |
-| 3 | Length | Step length (1–64 steps) |
-| 4 | Phase | Phase rotate (destructive) |
-| 5 | Range | Voltage range (CV) or pulse width ms (Trigger) |
-| 6 | BPM/Clock Div | Per-channel clock division; turning shows selection on encoder LEDs (enc 0 = ÷1 … enc 7 = ÷16) |
-| 7 | Transpose | Channel type and quantizer scale |
-| 8 | Random | CV deviation amount (CV channels only): CW = unipolar (+N V upward), CCW = bipolar (±N V), 0 = off |
-
-Exit with **Shift + Chan.** or **Play/Reset**.
-
----
-
-### Global Settings (Shift + Chan. — hold 2 s)
-
-| Encoder | Parameter |
-|---------|-----------|
-| 1 — Start | Play/Stop reset mode (red = on: Stop also resets all channels to step 1) |
-| 3 — Length | Master loop length: 0 = off; 1–64 steps before all channels reset to step 1. LED off = disabled, orange = active, red = bar-aligned (8/16/32/48/64) |
-| 6 — BPM/Clock Div | Internal BPM |
-
-Exit with **Play/Reset**.
-
----
-
-### Performance Page (Fine + Glide — hold 1.5 s)
-
-The Phase Scrub slider controls an orbit engine that manipulates playback positions. Page buttons toggle per-channel orbit follow. Beat repeat available in blue/cyan modes. Exit with **Play/Reset** (saves performance settings).
-
----
-
-### Per-Step Probability
-
-Each step on each channel has an independent randomness amount (0–100), edited in **armed mode** via **Shift + Glide + Encoder N**.
-
-While Shift + Glide are held, all 8 encoder LEDs show a **violet → grey → white** ramp indicating the probability value for each step.
-
-What the randomness amount does depends on channel type:
-
-| Type | At 0 | At 100 |
-|------|------|--------|
-| **Gate / Trigger** | Step always fires | Step never fires (50% suppression at 50) |
-| **CV** | No deviation from recorded value | Always applies a random voltage offset |
-
-For CV channels, the size and polarity of the deviation is set separately in **Channel Edit, encoder 8**:
-- **CW from 0 (unipolar):** deviation is a random offset in the range [0, +N V] upward from the recorded pitch
-- **CCW from 0 (bipolar):** deviation is a random offset in the range [−N V, +N V] centered on the recorded pitch
-
-Probability suppression on Gate/Trigger applies to the entire step, including all ratchets and repeats.
-
----
-
 ### Saving
 
-VoltSeq uses **intentional saving** — data is only written to flash when you explicitly trigger it.
+VoltSeq uses **intentional saving** — nothing is written to flash automatically (except Performance Page settings, which save on Performance Page exit).
 
-**To save:** press and hold **Glide**, then press and hold **Chan.** Keep both held for ~800 ms. All page buttons fast-blink while the hold is counted, then blink 6 times to confirm.
+**To save:** hold **Glide**, then press and hold **Chan.** Page buttons fast-blink during the hold, then blink 6 times to confirm. Glide must be pressed first — pressing Chan. first shows channel type colors instead and does not trigger a save.
 
-> **Order matters:** press **Glide first**, then **Chan.** Pressing Chan. first will not activate the gesture — the module will show channel type colors on the encoder LEDs instead.
+Power-cycling without saving will lose unsaved changes.
 
-**Performance Page** settings (orbit, lock state) are saved automatically on Performance Page exit.
+---
 
-All other data (steps, channel types, lengths, clock divisions, global settings) must be saved manually. Power-cycling without saving will lose any unsaved changes.
+### Build files
+
+| File | Contents |
+|---|---|
+| `catalyst-v1.5.0-catseq-catcon.wav` | Catalyst Sequencer + Catalyst Controller |
+| `catalyst-v1.5.0-catseq-voltseq.wav` | Catalyst Sequencer + Catalyst VoltSeq |
+
+See the [wiki](https://github.com/voltagecontrolled/catalyst-firmware/wiki) for flashing instructions.

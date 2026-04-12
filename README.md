@@ -29,15 +29,7 @@ Pre-built `.wav` files for the audio-cable bootloader are attached to each [rele
 | `catalyst-vX.Y.Z-catseq-catcon.wav` | Catalyst Sequencer + Catalyst Controller |
 | `catalyst-vX.Y.Z-catseq-voltseq.wav` | Catalyst Sequencer + Catalyst VoltSeq |
 
-### Flashing
-
-1. **Download** the `.wav` for the build you want from the [Releases page](https://github.com/voltagecontrolled/catalyst-firmware/releases).
-2. **Enter bootloader:** power off, then hold **Shift + Fine** while powering on. Keep both held until the LEDs animate.
-3. **Connect** a 3.5mm cable from your computer's headphone output to the module's **Clock In** jack.
-4. **Play** the `.wav` at full volume with no EQ or compression. LEDs animate during receive.
-5. On success the LEDs show a success animation. Press **Play/Reset** to reboot. If it fails, replay from the beginning.
-
-> Use a direct cable. Bluetooth and USB audio add latency that corrupts the signal.
+See the [wiki](https://github.com/voltagecontrolled/catalyst-firmware/wiki) for flashing instructions.
 
 ---
 
