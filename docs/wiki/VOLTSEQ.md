@@ -10,7 +10,7 @@
 
 Catalyst VoltSeq is a **parameter lock style sequencer** — every step stores its own independent value, and every channel can have its own type, length, clock division, and direction. This is closer in spirit to Elektron-style step programming than to a traditional sequencer where all channels share a common clock and length.
 
-The design is an **homage to the Intellijel Voltage Block** workflow: arm a channel, move a fader, and the module captures what you played. Catalyst VoltSeq extends that foundation with **secondary step editing** (per-step encoder editing while armed), **stochastic randomness** (per-step probability that affects whether or how much a step deviates), and **polyrhythmic capabilities** (independent channel lengths, divisions, and directions that let channels drift naturally in and out of phase).
+The design is an **homage to the Malekko Voltage Block** workflow: arm a channel, move a fader, and the module captures what you played. Catalyst VoltSeq extends that foundation with **secondary step editing** (per-step encoder editing while armed), **stochastic randomness** (per-step probability that affects whether or how much a step deviates), and **polyrhythmic capabilities** (independent channel lengths, divisions, and directions that let channels drift naturally in and out of phase).
 
 ---
 
