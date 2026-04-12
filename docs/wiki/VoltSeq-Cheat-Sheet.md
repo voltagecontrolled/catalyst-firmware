@@ -6,7 +6,7 @@ Quick reference for Catalyst VoltSeq. See [Catalyst VoltSeq](Catalyst-VoltSeq) f
 
 ## Main Mode
 
-*Default state on boot and after exiting any modal.*
+*Default state on boot and after exiting any modal. Play, navigate pages, and edit steps directly.*
 
 | Action | Result |
 |---|---|
@@ -25,6 +25,8 @@ Quick reference for Catalyst VoltSeq. See [Catalyst VoltSeq](Catalyst-VoltSeq) f
 ---
 
 ## Channel Edit
+
+*Per-channel settings: type, length, direction, clock division, voltage range, and more.*
 
 *Entry: **Shift + Chan.** (short tap — release before 1 s)*  
 *Exit: **Shift + Chan.** or **Play/Reset***
@@ -47,6 +49,8 @@ Press a **Page button** to focus a channel. Chaselight shows that channel's play
 ---
 
 ## Armed Mode
+
+*Focus on a single channel for detailed step editing and real-time slider recording.*
 
 *Entry: **Chan. + Page N***  
 *Exit: **Chan. + Page N** again, or **Play/Reset***
@@ -80,7 +84,9 @@ Press a **Page button** to focus a channel. Chaselight shows that channel's play
 
 ## GLIDE Modifier
 
-*Hold **Glide** (unarmed or armed)*
+*Adjust glide time, gate lengths, pulse width, and per-step ratchets. Works in both main and armed mode.*
+
+*Hold **Glide***
 
 **Unarmed — channel-level adjustments**
 
@@ -109,6 +115,8 @@ Press a **Page button** to focus a channel. Chaselight shows that channel's play
 
 ## Probability / Random
 
+*Per-step probability of a step firing, and random CV deviation amount. Active while armed.*
+
 *Hold **Shift + Glide** while armed*
 
 Encoder LEDs show a **violet → grey → white** ramp — violet = 0% (always fires), white = 100%.
@@ -124,6 +132,8 @@ Encoder LEDs show a **violet → grey → white** ramp — violet = 0% (always f
 ---
 
 ## Performance Page
+
+*Phase Scrub orbit engine for live performance — granular looping and beat repeat.*
 
 *Entry: hold **Fine + Glide** for 1.5 s*  
 *Exit: **Play/Reset** (saves performance settings automatically)*
@@ -151,6 +161,8 @@ Settings shown on entry (encoder LEDs):
 
 ## Clear & Save
 
+*Clear step data from individual channels, or commit all changes to flash.*
+
 ### Clear Mode
 
 *Entry: hold **Fine + Play** for ~500 ms — page buttons fast-blink to confirm*  
@@ -175,6 +187,8 @@ Multiple channels can be cleared before exiting.
 
 ## Global Settings
 
+*System-wide settings: play/stop reset behavior, master loop length, and internal BPM.*
+
 *Entry: hold **Shift + Chan.** for 1 s*  
 *Exit: **Play/Reset***
 
@@ -187,6 +201,8 @@ Multiple channels can be cleared before exiting.
 ---
 
 ## Mode Switch
+
+*Switch between Catalyst Sequencer and Catalyst VoltSeq without reflashing.*
 
 | Combo | Result |
 |---|---|
