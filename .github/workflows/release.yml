@@ -23,6 +23,19 @@ jobs:
       - name: Run tests
         run: make -f tests/Makefile
 
+      # ── Build: CatSeq + CatCon (default) ─────────────────────────────────
+      - name: Configure (catseq-catcon)
+        run: cmake -B build_catcon -GNinja
+
+      - name: Build firmware (catseq-catcon)
+        run: cmake --build build_catcon
+
+      - name: Build WAV (catseq-catcon)
+        run: cmake --build build_catcon --target f401.wav
+
+      - name: Rename WAV (catseq-catcon)
+        run: cp build_catcon/f401/f401.wav ${{ github.ref_name }}-catseq-catcon.wav
+
       # ── Build: CatSeq + VoltSeq (CATALYST_SECOND_MODE=1) ─────────────────
       - name: Configure (catseq-voltseq)
         run: cmake -B build_voltseq -GNinja -DCATALYST_SECOND_MODE=1
@@ -47,6 +60,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            ${{ github.ref_name }}-catseq-catcon.wav
             ${{ github.ref_name }}-catseq-voltseq.wav
           fail_on_unmatched_files: true
           body_path: ${{ steps.notes.outputs.path }}
