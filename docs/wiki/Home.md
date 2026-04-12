@@ -45,10 +45,10 @@ Both personalities ship as `.wav` files in each [release](https://github.com/vol
 ### How to flash
 
 1. **Download** the `.wav` for the build you want from the [Releases page](https://github.com/voltagecontrolled/catalyst-firmware/releases).
-2. **Enter bootloader mode:** power off the module, then hold **Shift + Fine** while powering on. Keep both held until the LEDs animate to confirm bootloader mode is active.
+2. **Enter bootloader mode:** power off the module, then hold **Shift + Copy** while powering on. Once you release the buttons, **Play/Reset** should be flashing, indicating the boot loader mode is active.
 3. **Connect** a 3.5mm audio cable from your computer or phone headphone output to the module's **Clock In** jack.
 4. **Play** the `.wav` at full volume with no EQ or compression. The module's LEDs animate during receive.
-5. **Confirm:** on success, the LEDs show a success animation. Press **Play/Reset** to reboot into the new firmware. If the flash fails, the error animation plays — replay the file from the beginning.
+5. **Confirm:** on success, the LEDs will display a chase animation. Press **Play/Reset** to reboot into the new firmware. If the flash fails, the top 4 page buttons will flash to indicate an error — press **Play/Reset** to start over and replay the file from the beginning.
 
 > Use a direct cable connection. Bluetooth and USB audio add latency and compression that corrupt the signal.
 
