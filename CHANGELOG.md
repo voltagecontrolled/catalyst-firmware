@@ -10,7 +10,7 @@ All changes relative to upstream 4ms-company/catalyst-firmware v1.3.
 | v1.4.4 | Linked Tracks: CV transpose follow + gate track clock follow | Hardware verified |
 | v1.4.5 | Gate clock step-only mode, CV replace follow, bugfixes | Hardware verified |
 | v1.4.6 | Phase Scrub Performance Page: granular sequencing, beat repeat, lock persistence, sub-step page nav | Released |
-| v1.5.0 | Catalyst VoltSeq: 8-channel voltage recorder/sequencer as second firmware personality; two build variants (CatSeq+CatCon, CatSeq+VoltSeq) | RC1 |
+| v1.5.0 | Catalyst VoltSeq: 8-channel voltage recorder/sequencer as second firmware personality; two build variants (CatSeq+CatCon, CatSeq+VoltSeq) | RC2 |
 
 **Note on preset compatibility:** v1.4.2 expanded `sizeof(Step)` from 4 to 8 bytes. Presets saved under v1.3 are not compatible and are discarded on first boot. The firmware detects the mismatch via a version tag and resets to defaults automatically -- no manual factory reset needed.
 
