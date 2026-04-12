@@ -16,7 +16,7 @@ Flash `catalyst-vX.Y.Z-catseq-voltseq.wav` before running. Work through each sec
 
 - [ ] **CatSeq → VoltSeq:** hold **Shift + Tap Tempo + Chan.** for 1 second — all 8 channel LEDs blink to confirm
 - [ ] **VoltSeq → CatSeq:** hold **Fine + Play/Reset + Glide** for 1 second — all 8 channel LEDs blink to confirm
-- [ ] Mode is saved: power cycle and confirm the same mode is active
+- [ ] Mode does **not** auto-restore on reboot: power cycle and confirm the module boots into whichever mode was set at startup (hold mode-switch combo on boot to set startup mode)
 
 ---
 

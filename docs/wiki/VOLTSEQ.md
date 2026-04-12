@@ -34,7 +34,9 @@ VoltSeq and CatSeq share the same panel and can be switched in software:
 
 **VoltSeq → Sequencer:** Hold **Fine + Play/Reset + Glide** for 1 second. All 8 channel LEDs blink to confirm.
 
-The active mode is saved to flash and recalled on boot. Switching does **not** erase the other mode's data.
+Switching does **not** erase the other mode's data.
+
+**Startup mode:** The module does not automatically restore the last-used mode on reboot. To set which mode boots by default, power on while holding the mode-switch combo for that mode (hold until the LEDs blink to confirm).
 
 ---
 
