@@ -56,7 +56,7 @@ Focus a channel with a page button, then use encoders:
 | 5 | Range | Voltage range (CV) or pulse width ms (Trigger) |
 | 6 | BPM/Clock Div | Per-channel clock division; turning shows selection on encoder LEDs (enc 0 = ÷1 … enc 7 = ÷16) |
 | 7 | Transpose | Channel type and quantizer scale |
-| 8 | Random | Random amount (0–100%) |
+| 8 | Random | CV deviation amount (CV channels only): CW = unipolar (+N V upward), CCW = bipolar (±N V), 0 = off |
 
 Exit with **Shift + Chan.** or **Play/Reset**.
 
@@ -76,6 +76,27 @@ Exit with **Play/Reset**.
 ### Performance Page (Fine + Glide — hold 1.5 s)
 
 The Phase Scrub slider controls an orbit engine that manipulates playback positions. Page buttons toggle per-channel orbit follow. Beat repeat available in blue/cyan modes. Exit with **Play/Reset** (saves performance settings).
+
+---
+
+### Per-Step Probability
+
+Each step on each channel has an independent randomness amount (0–100), edited in **armed mode** via **Shift + Glide + Encoder N**.
+
+While Shift + Glide are held, all 8 encoder LEDs show a **violet → grey → white** ramp indicating the probability value for each step.
+
+What the randomness amount does depends on channel type:
+
+| Type | At 0 | At 100 |
+|------|------|--------|
+| **Gate / Trigger** | Step always fires | Step never fires (50% suppression at 50) |
+| **CV** | No deviation from recorded value | Always applies a random voltage offset |
+
+For CV channels, the size and polarity of the deviation is set separately in **Channel Edit, encoder 8**:
+- **CW from 0 (unipolar):** deviation is a random offset in the range [0, +N V] upward from the recorded pitch
+- **CCW from 0 (bipolar):** deviation is a random offset in the range [−N V, +N V] centered on the recorded pitch
+
+Probability suppression on Gate/Trigger applies to the entire step, including all ratchets and repeats.
 
 ---
 
