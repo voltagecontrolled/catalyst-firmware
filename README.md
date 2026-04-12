@@ -22,7 +22,7 @@ Switch between personalities without reflashing. See the [wiki](https://github.c
 
 ## Releases
 
-Pre-built `.wav` files for the audio-cable bootloader are attached to each [release](https://github.com/voltagecontrolled/catalyst-firmware/releases):
+Pre-built `.wav` files are attached to each [release](https://github.com/voltagecontrolled/catalyst-firmware/releases):
 
 | File | Contents |
 |---|---|
@@ -35,44 +35,21 @@ See the [wiki](https://github.com/voltagecontrolled/catalyst-firmware/wiki) for 
 
 ## Building from source
 
-Requirements: `arm-none-eabi-gcc` v12.3, `ninja`
+Requirements: `arm-none-eabi-gcc` v12.3, `ninja`. See [CLAUDE.md](CLAUDE.md) for full build and development notes.
 
 ```bash
 git clone https://github.com/voltagecontrolled/catalyst-firmware.git
 cd catalyst-firmware
 git submodule update --init --recursive
-
-# Catalyst Sequencer + Catalyst Controller (default)
-make all
-make wav   # outputs build/f401/f401.wav
-
-# Catalyst Sequencer + Catalyst VoltSeq
-cmake -B build_voltseq -GNinja -DCATALYST_SECOND_MODE=CATALYST_MODE_VOLTSEQ .
-cmake --build build_voltseq
-cmake --build build_voltseq --target f401.wav  # outputs build_voltseq/f401/f401.wav
-
-# Unit tests
+make all    # CatSeq + CatCon; WAV at build/f401/f401.wav
 make test
-
-# Flash via JLink
-make jflash-app
 ```
 
+The VoltSeq build requires a separate cmake invocation with `-DCATALYST_SECOND_MODE=1`. See [CLAUDE.md](CLAUDE.md) for details.
+
 ---
 
-## Documentation
-
-- [Wiki](https://github.com/voltagecontrolled/catalyst-firmware/wiki) — user-facing guides for both personalities
+- [Wiki](https://github.com/voltagecontrolled/catalyst-firmware/wiki) — user guides for both personalities
 - [CHANGELOG.md](CHANGELOG.md) — full feature history with implementation notes
-- [TODO.md](TODO.md) — backlog for both modes
 - [Releases](https://github.com/voltagecontrolled/catalyst-firmware/releases)
-
----
-
-## Preset compatibility
-
-`sizeof(Step)` was expanded from 4 to 8 bytes in v1.4.2. Presets saved under upstream v1.3 are not compatible and will be discarded on first boot. The firmware detects the mismatch via a version tag and resets to defaults automatically — no manual factory reset needed.
-
----
-
-Upstream project: [4ms-company/catalyst-firmware](https://github.com/4ms/catalyst-firmware)
+- Upstream: [4ms-company/catalyst-firmware](https://github.com/4ms/catalyst-firmware)
