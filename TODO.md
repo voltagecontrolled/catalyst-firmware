@@ -142,6 +142,24 @@ Exact UX and storage TBD. Gate tracks only — CV tracks use SHIFT+TAP TEMPO for
 
 ## v1.5.x
 
+### CV random deviation — refactor to scale-degree model
+
+**Area:** `src/voltseq.hh` `ComputeDeviation()`, `OnChannelFired()`, `src/app.hh` `CvOutput()`, `src/voltseq.hh` `ChannelSettings::random_amount_v`
+
+Currently `random_amount_v` is stored in whole volts and applied as a raw offset *after* quantization, so the result can land between scale degrees. The unit (volts) also means the minimum non-zero setting (+1) is a full octave of possible deviation — far too coarse for musical use.
+
+**Proposed:** express deviation as a number of scale degrees (semitones when unquantized, scale steps when quantized). Apply the offset *before* quantization so the result always snaps to the nearest scale degree.
+
+- **CW from 0 (unipolar):** deviate up by 0–N scale degrees from the recorded value
+- **CCW from 0 (bipolar):** deviate up or down by 0–N scale degrees symmetric around the recorded value
+- Unquantized channels: scale degrees = semitones; deviation is pre-quantize so it still snaps to the nearest semitone (chromatic)
+
+**Implementation:** in `OnChannelFired`, compute a scale-degree offset, convert to a voltage delta using the current scale's interval table, add to the pre-mapped step value, then pass through `Quantizer::Process()`. `random_amount_v` reinterpreted as scale degrees (±15 max, same storage). Requires `current_tag` bump.
+
+**UX improvement:** the Shift-held sub-modal in armed CV mode currently uses only Enc 5 (Range) and Enc 7 (Transpose), leaving Enc 8 dark. Add **Shift + Enc 8** in armed mode to adjust the channel deviation amount directly — consistent with Range and Transpose being accessible from the same gesture, without requiring a trip to Channel Edit. Probability (Shift+Glide) remains separate as it is per-step rather than per-channel.
+
+---
+
 ### Reset punch-in timing (#9)
 
 Reset during playback is close but not perfectly in-time. The `primed=false` approach adds ~1-step latency; calling `ResetExternal()` directly from the SHIFT+PLAY handler when playing could eliminate it. Low priority — behavior is usable, not sample-accurate.
