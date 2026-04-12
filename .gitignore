@@ -12,3 +12,4 @@ CLAUDE.md
 .claude/
 issuequeue.txt
 *.tsv
+*.txt
