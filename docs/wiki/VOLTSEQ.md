@@ -265,11 +265,23 @@ Press a **Page button** to focus that channel. Encoders edit per-channel setting
 | Encoder | Panel label | Parameter | LED |
 |---|---|---|---|
 | 1 | Start | Play/Stop reset mode | Red = on (Stop also resets to step 1), off = off |
-| 6 | BPM/Clock Div | Internal BPM | Yellow pulse = current phase; **white** pulse at 80/100/120/140 BPM |
+| 3 | Length | Master loop length | Off = disabled; orange = active (non-bar value); red = bar-aligned (8 / 16 / 32 / 48 / 64 steps) |
+| 6 | BPM/Clock Div | Internal BPM | Color zone pulse (red <50, orange 50–79, yellow 80–99, green 100–119, blue 120–149, teal 150–179, lavender 180+) |
 
 ### Play/Stop Reset Mode
 
 When **on** (encoder 1 red): pressing Stop resets all channels to step 1 in addition to stopping playback. Useful for performance situations where you always want sequences to restart from the top.
+
+### Master Loop Length
+
+**Encoder 3 (Length):** sets a global loop length in 16th-note steps. When non-zero, all channels reset to step 1 simultaneously after the set number of steps have elapsed — regardless of their individual lengths or directions.
+
+- **0 (off):** channels loop independently at their own lengths (default).
+- **1–64:** all channels snap back to step 1 every N steps, counted from the last reset (manual, external jack, or previous loop boundary).
+
+The LED snaps to **red** at bar-aligned values (8, 16, 32, 48, 64 steps = 1–8 bars at 16th-note resolution) so you can dial in bar-length loops without counting. Any other non-zero value shows **orange**.
+
+The loop boundary is seamless — the last step of the loop plays its full duration, then all channels fire step 1 together on the next natural clock pulse. A manual **Shift + Play** reset or an external reset jack pulse restarts the loop counter from zero.
 
 ---
 
@@ -356,6 +368,7 @@ All other settings — steps, channel types, lengths, clock divisions, global se
 | Channel Edit — page buttons | Chaselight for focused channel |
 | Channel Edit, Shift held | Page buttons: current page lit solid (not focused channel) |
 | Global Settings — enc 1 | Red = play/stop reset on, off = off |
+| Global Settings — enc 3 | Off = loop disabled; orange = active (non-bar value); red = bar-aligned (8/16/32/48/64) |
 | Global Settings — enc 6 | BPM color zone pulse (red <50, orange 50–79, yellow 80–99, green 100–119, blue 120–149, teal 150–179, lavender 180+) |
 | GLIDE+CHAN save (in progress) | All page buttons fast-blink (~12 Hz) |
 | GLIDE+CHAN save (confirmed) | All page buttons blink 6 times |
