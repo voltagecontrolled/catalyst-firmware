@@ -679,6 +679,7 @@ public:
 		// got_rising_edge_ set, causing spurious triggers on the next button press).
 		const bool bank_jgh  = c.button.bank.just_went_high();
 		const bool play_jgh  = c.button.play.just_went_high();
+		const bool shift_jgh = c.button.shift.just_went_high();
 		// Note: c.button.morph.just_went_high() is consumed in Common() (perf page entry check)
 		// and always reads false here — do not pre-read it.
 
@@ -755,6 +756,14 @@ public:
 				if (!p.IsPlaying() && p.GetData().play_stop_reset)
 					p.Reset();
 			}
+		}
+		// Reverse-order arm: PLAY already held when SHIFT goes high.
+		// Blocked in global settings (play_jgh exits it instead) and if already pending/active.
+		if (shift_jgh && c.button.play.is_high() &&
+		    !shift_play_pending_ && !clear_mode_active_ && !global_settings_active_)
+		{
+			shift_play_pending_ = true;
+			shift_play_press_t_ = Controls::TimeNow();
 		}
 		if (shift_play_pending_) {
 			if (!c.button.shift.is_high()) {
