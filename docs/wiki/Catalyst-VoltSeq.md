@@ -86,7 +86,7 @@ Each channel has a **type**, set in Channel Edit (encoder 7):
 | **Gate** | Gate signal with variable length (0–100%) | Dim green; brightness = gate length |
 | **Trigger** | Short trigger pulse with ratchet/repeat | Green = ratchet, teal = repeat, off = rest |
 
-Default range for new channels is **−5V to +5V**. Changing a channel's type does not erase its step data — the same stored values are simply interpreted differently by each type.
+Default range for new channels is **0V to +5V** (5V span, 0V transpose). Changing a channel's type does not erase its step data — the same stored values are simply interpreted differently by each type.
 
 ### CV Quantizer Scales
 
@@ -145,8 +145,8 @@ From the main mode: hold **Fine + Play/Reset** for ~500 ms. Page button LEDs bli
 
 | Action | Result |
 |---|---|
-| **Page button N** | Clear steps + per-step glide + probability for channel N (preserves channel settings) |
-| **Shift + Page button N** | Full factory reset for channel N — steps, per-step flags, and all channel settings |
+| **Page button N** | Clear steps + per-step glide + probability for channel N (preserves channel settings); CV steps → 0V, Gate/Trigger steps → off |
+| **Shift + Page button N** | Full factory reset for channel N — steps, per-step flags, and all channel settings; all steps → 0V / off |
 | **Play/Reset** | Exit Clear mode (no channels affected) |
 
 Multiple channels can be cleared before exiting — tap as many page buttons as needed, then press Play/Reset to return.
@@ -213,7 +213,7 @@ The window is **[Transpose, Transpose + Range]**. All recorded steps and all con
 
 | Encoder | Panel label | Parameter |
 |---|---|---|
-| 5 | Range | Voltage span: 1 / 2 / 3 / 4 / 5 / 10 / 15V — clamped; shifts sequence when changed |
+| 5 | Range | Voltage span: 2 / 5 / 10 / 15V — clamped; shifts sequence when changed |
 | 7 | Transpose | Floor voltage ±1V per detent, clamped to keep window within hardware limits |
 
 **Shift + Glide held while armed:** encoder LEDs switch to a **violet → grey → white** ramp showing the per-step randomness amount. Turn encoder N to set the probability of random deviation for step N (0 = never deviates, 100 = always deviates). See [Per-Step Probability](#per-step-probability) below.
@@ -262,11 +262,13 @@ For CV channels, the deviation amount and type are set in **Channel Edit, encode
 
 | Value | Type | Deviation range |
 |---|---|---|
-| CW from 0 (+N) | **Unipolar** | Random offset in [0, +N] V upward from the recorded value |
+| CW from 0 (+N semitones) | **Unipolar** | Random offset in [0, +N/12] V upward from the recorded value |
 | 0 | Off | No deviation regardless of step probability |
-| CCW from 0 (−N) | **Bipolar** | Random offset in [−N, +N] V symmetric around the recorded value |
+| CCW from 0 (−N semitones) | **Bipolar** | Random offset in [−N/12, +N/12] V symmetric around the recorded value |
 
-Range: ±1V per detent, ±15V maximum. The deviated value is clamped to the hardware output range, then quantized/scaled the same as the recorded step. LED: grey → blue → white (unipolar); salmon → red → white (bipolar).
+Steps in semitones (±1 per detent), ±36 semitones (±3 octaves) maximum. The deviated value is clamped to the hardware output range, then quantized/scaled the same as the recorded step.
+
+**LED:** light grey gradient (unipolar, non-octave); blue at octave values (12 / 24 / 36 semitones); salmon gradient (bipolar, non-octave); red at octave values (−12 / −24 / −36 semitones).
 
 ---
 
@@ -300,12 +302,12 @@ Press a **Page button** to focus that channel. Encoders edit per-channel setting
 |---|---|---|---|
 | 1 | Start | Output delay | 0–20 ms; LED brightness = amount |
 | 2 | Dir. | Direction | Forward / Reverse / Ping-Pong / Random — clamped; LED color = direction |
-| 3 | Length | Step length | 1–64 steps |
+| 3 | Length | Step length | 1–64 steps; **first turn peeks** (shows current length without changing); second turn within 900 ms edits |
 | 4 | Phase | Phase rotate | Destructive; rotates active steps only |
-| 5 | Range | Voltage span (CV only) | 1 / 2 / 3 / 4 / 5 / 10 / 15V — clamped; LED color = span; inactive for Gate/Trigger |
-| 6 | BPM/Clock Div | Per-channel clock division | Turning shows division selection on encoder LEDs (enc 0 = ÷1, enc 7 = ÷16) |
-| 7 | Transpose | Floor voltage (CV only) | ±1V per detent, clamped to keep window within hardware limits; LED color = floor; inactive for Gate/Trigger |
-| 8 | Random | CV deviation amount (CV only) | CW = unipolar (+N V upward); CCW = bipolar (±N V); 0 = off; LED: grey→blue→white (unipolar), salmon→red→white (bipolar); inactive for Gate/Trigger |
+| 5 | Range | Voltage span (CV only) | 2 / 5 / 10 / 15V — LED: orange / yellow / green / blue; inactive for Gate/Trigger |
+| 6 | BPM/Clock Div | Per-channel clock division | **First turn peeks** (shows current division without changing); second turn within 900 ms edits; LED shows division position on encoder LEDs |
+| 7 | Transpose | Floor voltage (CV only) | ±1V per detent, clamped to keep window within hardware limits; LED: red (negative) ↔ grey (0V) ↔ blue (positive); inactive for Gate/Trigger |
+| 8 | Random | CV deviation amount (CV only) | ±1 semitone per detent, ±36 st (±3 oct) max; CW = unipolar; CCW = bipolar; 0 = off; LED: grey (non-oct) / blue (oct) CW; salmon (non-oct) / red (oct) CCW; inactive for Gate/Trigger |
 
 **Exit:** **Shift + Chan.** (short tap) or **Play/Reset** — saves and returns.
 
@@ -421,9 +423,9 @@ All other settings — steps, channel types, lengths, clock divisions, global se
 | Armed CV, Shift held | Enc 5 = Range color; Enc 7 = Transpose color; all others dark |
 | Channel Edit — enc 1 | Brightness = output delay |
 | Channel Edit — enc 2 | Green/Orange/Yellow/Magenta = direction |
-| Channel Edit — enc 5 | Range color (blue→cyan→green→yellow→orange→magenta→white for 1–15V); off for Gate/Trigger |
-| Channel Edit — enc 7 | Transpose color (red/orange/pink = negative, grey = 0V, blue/teal/violet/white = positive); off for Gate/Trigger |
-| Channel Edit — enc 8 | Deviation amount: grey→blue→white (unipolar +N V); salmon→red→white (bipolar ±N V); off at 0; off for Gate/Trigger |
+| Channel Edit — enc 5 | Range: orange (2V) / yellow (5V) / green (10V) / blue (15V); off for Gate/Trigger |
+| Channel Edit — enc 7 | Transpose: dim→bright red (negative), grey (0V), dim→bright blue (positive); off for Gate/Trigger |
+| Channel Edit — enc 8 | Deviation: light grey (unipolar non-oct), blue (unipolar octave); salmon (bipolar non-oct), red (bipolar octave); off at 0; off for Gate/Trigger |
 | Channel Edit — page buttons | Chaselight for focused channel |
 | Channel Edit, Shift held | Page buttons: current page lit solid (not focused channel) |
 | Global Settings — enc 1 | Red = play/stop reset on, off = off |

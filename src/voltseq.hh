@@ -33,9 +33,9 @@ enum class ChannelType : uint8_t { CV, Gate, Trigger };
 // Voltage span for CV channels: 7 options from 1V to the full 15V hardware range.
 // Used with transpose (int8_t, whole volts) to define the control window [transpose, transpose+Span()].
 class VoltSeqRange {
-	static constexpr std::array<uint8_t, 7> spans = {1, 2, 3, 4, 5, 10, 15};
-	static constexpr uint8_t count                = 7;
-	uint8_t                  val                  = 4; // default index 4 = 5V span
+	static constexpr std::array<uint8_t, 4> spans = {2, 5, 10, 15};
+	static constexpr uint8_t count                = 4;
+	uint8_t                  val                  = 1; // default index 1 = 5V span
 
 public:
 	void          Inc(int32_t inc) { val = static_cast<uint8_t>(std::clamp<int32_t>(val + inc, 0, count - 1)); }
@@ -54,7 +54,7 @@ struct ChannelSettings {
 	Direction            direction       = Direction::Forward;
 	uint8_t              pulse_width_ms  = 10;                // trigger pulse width ms (Trigger only)
 	uint8_t              output_delay_ms = 0;                 // output delay ms
-	int8_t               random_amount_v = 0;                 // deviation in whole volts: +N = unipolar [0,N], -N = bipolar [-N,+N], 0 = off (CV only)
+	int8_t               random_amount_st = 0;                // deviation in semitones: +N = unipolar [0, N/12]V, -N = bipolar [−N/12, +N/12]V, 0 = off (CV only)
 	float                glide_time      = 0.f;               // seconds; 0 = disabled (CV only)
 };
 
@@ -71,14 +71,14 @@ struct StepFlags {
 struct Data {
 	// Increment current_tag whenever the struct layout changes (fields added/removed/reordered).
 	// validate() checks this tag so WearLevel rejects stale or incompatible flash data gracefully.
-	static constexpr uint32_t current_tag     = 11u;
+	static constexpr uint32_t current_tag     = 12u;
 	uint32_t                  SettingsVersionTag = current_tag;
 
 	static StepGrid DefaultSteps() {
 		StepGrid g{};
 		for (auto &page : g)
 			for (auto &row : page)
-				row.fill(32768); // midpoint of default 5V span (0V–5V) = 2.5V
+				row.fill(0); // bottom of default window = 0V
 		return g;
 	}
 
@@ -87,7 +87,7 @@ struct Data {
 	std::array<StepFlags, Model::NumChans>         flags{};
 	bool                                           play_stop_reset    = false; // true = Stop also resets all channels to step 1
 	uint8_t                                        master_loop_length = 0;    // 0 = off; 1–64 = reset all channels every N 16th-note steps
-	uint8_t                                        _reserved[1]       = {};
+	uint8_t                                        mute_mask          = 0;   // bitmask: bit N = channel N muted
 	Clock::Bpm::Data                               bpm{};             // internal BPM
 	Macro::Recorder::Data                          recorder{};        // slider sample buffer (reserved)
 
@@ -305,13 +305,13 @@ class Interface {
 	// Defers the actual reset one tick so step mll-1 plays its full duration before step 0 fires.
 	bool    loop_reset_pending_   = false;
 
-	// Returns a random deviation in volts given a signed-volt amount setting.
-	// amt_v > 0: unipolar [0, amt_v); amt_v < 0: bipolar (-amt_v, +amt_v).
-	static float ComputeDeviation(int8_t amt_v) {
+	// Returns a random deviation in volts given a signed-semitone amount setting.
+	// amt_st > 0: unipolar [0, amt_st/12)V; amt_st < 0: bipolar (amt_st/12, -amt_st/12)V.
+	static float ComputeDeviation(int8_t amt_st) {
 		const float t = std::rand() / (static_cast<float>(RAND_MAX) + 1.f); // [0, 1)
-		if (amt_v > 0)
-			return t * static_cast<float>(amt_v);
-		const float a = static_cast<float>(-amt_v);
+		if (amt_st > 0)
+			return t * static_cast<float>(amt_st) / 12.f;
+		const float a = static_cast<float>(-amt_st) / 12.f;
 		return t * 2.f * a - a;
 	}
 
@@ -640,7 +640,7 @@ class Interface {
 		if (type == ChannelType::CV) {
 			// Roll and cache deviation once per step advance; App::CvOutput reads it each tick.
 			const uint8_t prob = data.flags[ch].step_prob[step];
-			const int8_t  amt  = data.channel[ch].random_amount_v;
+			const int8_t  amt  = data.channel[ch].random_amount_st;
 			cv_dev_v_[ch] = 0.f;
 			if (prob > 0 && amt != 0) {
 				const uint8_t roll = static_cast<uint8_t>(std::rand() % 100);
@@ -675,6 +675,9 @@ public:
 
 	Data       &GetData()       { return data; }
 	const Data &GetData() const { return data; }
+
+	bool IsMuted(uint8_t ch) const { return (data.mute_mask >> ch) & 1u; }
+	void ToggleMute(uint8_t ch)    { data.mute_mask ^= (1u << ch); }
 
 	// Returns true if orbit is active and channel ch follows it (bit set in scrub_ignore_mask).
 	bool OrbitActiveForChannel(uint8_t ch) const {

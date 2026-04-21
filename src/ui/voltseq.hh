@@ -115,6 +115,9 @@ class Main : public Abstract {
 
 	// Global settings modal: SHIFT+CHAN held ≥1 s → enter; short SHIFT+CHAN → toggle Channel Edit; Play exits.
 	bool     global_settings_active_  = false;
+
+	// Mute mode: CHAN+Tap Tempo toggles; page button N mutes/unmutes channel N; Play exits.
+	bool     mute_mode_active_        = false;
 	bool     shift_chan_hold_pending_  = false;
 	bool     shift_chan_from_edit_     = false; // snapshot: were we in channel edit when hold started?
 	uint32_t shift_chan_hold_start_    = 0;
@@ -166,9 +169,9 @@ class Main : public Abstract {
 
 	// ---- Clear helpers ----
 	// Page button (no Shift): clears step values and per-step flags; preserves channel settings.
-	//   CV → 32768 (centre = 0V); Gate / Trigger → 0 (all off / rest); glide + probability → 0.
+	//   CV → 0 (0V at default transpose); Gate / Trigger → 0 (all off / rest); glide + probability → 0.
 	void ClearChannelSteps(uint8_t ch) {
-		const StepValue zero = (p.GetData().channel[ch].type == ChannelType::CV) ? 32768u : 0u;
+		const StepValue zero = 0u;
 		for (uint8_t s = 0; s < 64; s++)
 			p.SetStepValue(ch, s, zero);
 		p.GetData().flags[ch] = StepFlags{};   // zero per-step glide and probability
@@ -176,11 +179,11 @@ class Main : public Abstract {
 	}
 
 	// Shift + Page button: full factory reset — steps, flags, and all channel settings.
-	//   ChannelSettings{} resets type to CV, so step values are always set to 32768.
+	//   ChannelSettings{} resets type to CV; all steps set to 0 (0V at default transpose).
 	void FullResetChannel(uint8_t ch) {
 		p.GetData().channel[ch] = ChannelSettings{};
 		for (uint8_t s = 0; s < 64; s++)
-			p.SetStepValue(ch, s, 32768u);
+			p.SetStepValue(ch, s, 0u);
 		p.GetData().flags[ch] = StepFlags{};
 		p.shared.blinker.Set(3, 300);
 	}
@@ -400,56 +403,39 @@ class Main : public Abstract {
 
 	// LED color for deviation amount (int8_t signed volts; 0 = off).
 	// Unipolar (+N): grey → blue → white. Bipolar (-N): salmon → red → white.
-	static Color RandomAmountColor(int8_t amount_v) {
-		if (amount_v == 0) return Palette::off;
-		const float t = static_cast<float>(std::abs(static_cast<int>(amount_v))) / 15.f;
-		if (amount_v > 0) {
-			if (t < 0.5f) return Palette::grey.blend(Palette::blue, t * 2.f);
-			return Palette::blue.blend(ProbMaxWhite, (t - 0.5f) * 2.f);
-		}
-		if (t < 0.5f) return Palette::salmon.blend(Palette::bright_red, t * 2.f);
-		return Palette::bright_red.blend(ProbMaxWhite, (t - 0.5f) * 2.f);
+	static Color RandomAmountColor(int8_t amount_st) {
+		if (amount_st == 0) return Palette::off;
+		const int abs_st = std::abs(static_cast<int>(amount_st));
+		const bool is_octave = (abs_st % 12 == 0);
+		// Brightness ramps within each octave (0..11 semitones), then snaps to octave marker color.
+		const float t = static_cast<float>(abs_st % 12) / 12.f;
+		if (amount_st > 0)
+			return is_octave ? Palette::blue : Palette::very_dim_grey.blend(Palette::grey, t);
+		return is_octave ? Palette::bright_red : Palette::very_dim_grey.blend(Palette::salmon, t);
 	}
 
 	// LED color for the Range encoder (enc4) in Channel Edit and Armed (+Shift).
-	// 7 options indexed 0–6 for spans {1,2,3,4,5,10,15}V.
+	// 4 options indexed 0–3 for spans {2,5,10,15}V.
 	static Color RangeColor(const VoltSeqRange &r) {
-		static constexpr std::array<Color, 7> colors = {
-			Palette::Range::Positive[0], // 1V  — blue
-			Palette::Range::Positive[1], // 2V  — cyan
-			Palette::Range::Positive[2], // 3V  — green
-			Palette::Range::Positive[3], // 4V  — yellow
-			Palette::Range::Positive[4], // 5V  — orange
-			Palette::Range::Positive[5], // 10V — magenta
-			Palette::full_white,         // 15V — white (full hardware range)
+		static constexpr std::array<Color, 4> colors = {
+			Palette::orange, // 2V
+			Palette::yellow, // 5V  (default)
+			Palette::green,  // 10V
+			Palette::blue,   // 15V
 		};
 		return colors[r.Index()];
 	}
 
 	// LED color for the Transpose encoder (enc6) in Channel Edit and Armed (+Shift).
-	// Negative = warm (red/orange/pink), zero = grey, positive = cool (blue/violet/white).
+	// Negative = red (dim at −1V, bright at −5V), zero = grey, positive = blue (dim at +1V, bright at max).
 	static Color TransposeColor(int8_t t) {
+		if (t == 0) return Palette::grey;
 		if (t < 0) {
-			static constexpr std::array<Color, 5> neg = {
-				Palette::red,        // −5V
-				Palette::bright_red, // −4V
-				Palette::orange,     // −3V
-				Palette::salmon,     // −2V
-				Palette::pink,       // −1V
-			};
-			return neg[std::clamp<int>(t + 5, 0, 4)];
+			const float f = static_cast<float>(-t) / 5.f;
+			return Palette::off.blend(Palette::bright_red, 0.25f + 0.75f * f);
 		}
-		if (t == 0)
-			return Palette::grey;
-		static constexpr std::array<Color, 6> pos = {
-			Palette::blue,      // +1V
-			Palette::cyan,      // +2V
-			Palette::teal,      // +3V
-			Palette::lavender,  // +4V
-			Palette::magenta,   // +5V
-			Palette::full_white // +6V and above
-		};
-		return pos[std::clamp<int>(t - 1, 0, 5)];
+		const float f = static_cast<float>(t) / 8.f; // max transpose is 8V (2V span)
+		return Palette::off.blend(Palette::blue, 0.25f + 0.75f * std::min(f, 1.f));
 	}
 
 	// Color representing a gate step's gate length (high byte: 0=off, 1–255=dim→bright green).
@@ -524,7 +510,7 @@ public:
 		}
 		if (c.jack.trig.just_went_high())
 			p.clock.ExternalClockTick();
-		if (c.button.add.just_went_high())
+		if (c.button.add.just_went_high() && !c.button.bank.is_high())
 			p.clock.TapTempo();
 
 		const bool ticked = p.UpdateClock();
@@ -746,6 +732,8 @@ public:
 				clear_mode_active_ = false;
 			} else if (global_settings_active_) {
 				global_settings_active_ = false;
+			} else if (mute_mode_active_) {
+				mute_mode_active_ = false;
 			} else if (shift) {
 				// Shift+Play: immediate reset regardless of press order
 				p.Reset();
@@ -820,7 +808,8 @@ public:
 			perf_settings_active_    = false;
 			channel_edit_active_     = false;
 			clear_mode_active_       = false;
-			global_settings_active_   = false;
+			global_settings_active_  = false;
+			mute_mode_active_        = false;
 			shift_chan_hold_pending_  = false;
 			fine_play_pending_        = false;
 			SwitchUiMode(main_ui);
@@ -834,6 +823,18 @@ public:
 		// --- Global Settings modal ---
 		if (global_settings_active_) {
 			UpdateGlobalSettings(fine);
+			return;
+		}
+
+		// --- Mute mode: CHAN+Tap Tempo toggles entry; page buttons toggle per-channel mute ---
+		if (chan && c.button.add.just_went_high() && !clear_mode_active_ && !perf_page_active_) {
+			mute_mode_active_ = !mute_mode_active_;
+			armed_ch_                = std::nullopt; // exit armed if active
+			trigger_step_enc_turned_ = 0;
+			return;
+		}
+		if (mute_mode_active_) {
+			ForEachSceneButtonJustReleased(c, [this](uint8_t btn) { p.ToggleMute(btn); });
 			return;
 		}
 
@@ -1266,13 +1267,14 @@ private:
 			return;
 		}
 
-		// Page button: tap = focus channel and show length passively for 600 ms.
+		// Page button: tap = focus channel. First enc2 (Length) or enc5 (Clock Div) turn will peek.
 		// Channel clearing is done via SHIFT+PLAY → Clear Mode (not here).
 		for (auto [i, btn] : countzip(c.button.scene)) {
 			if (btn.just_went_high()) {
 				edit_ch_               = static_cast<uint8_t>(i);
-				channel_edit_last_enc_ = 2; // pre-select length encoder for passive display
-				length_display_until_  = Controls::TimeNow() + Clock::MsToTicks(600);
+				channel_edit_last_enc_ = 2; // pre-select length encoder for display
+				length_display_until_   = 0;
+				division_display_until_ = 0;
 				return;
 			}
 		}
@@ -1290,13 +1292,13 @@ private:
 			case 1: // Direction (Forward / Reverse / Ping-Pong / Random) — no accel: 4 values
 				cs.direction = CycleDirection(cs.direction, dir);
 				break;
-			case 2: { // Length (1–64)
-				const int32_t adelta = dir;
-				cs.length = static_cast<uint8_t>(
-				    std::clamp<int32_t>(cs.length + adelta, 1, 64));
-				current_page_ = static_cast<uint8_t>((cs.length - 1u) / Model::NumChans);
-				// Keep length feedback visible for 600 ms after the last turn.
-				length_display_until_   = Controls::TimeNow() + Clock::MsToTicks(600);
+			case 2: { // Length (1–64) — first turn peeks (shows current value, no change); subsequent turns within the display window edit.
+				if (Controls::TimeNow() <= length_display_until_) {
+					cs.length = static_cast<uint8_t>(
+					    std::clamp<int32_t>(cs.length + dir, 1, 64));
+					current_page_ = static_cast<uint8_t>((cs.length - 1u) / Model::NumChans);
+				}
+				length_display_until_   = Controls::TimeNow() + Clock::MsToTicks(900);
 				division_display_until_ = 0;
 				break;
 			}
@@ -1311,9 +1313,10 @@ private:
 					cs.transpose = std::clamp<int8_t>(cs.transpose, -5, max_xpose);
 				}
 				break;
-			case 5: // Clock division — steps through shared musical table (see Clock::DivisionTables)
-				Clock::Divider::Step(cs.division, Clock::DivisionTables::VoltSeq, dir);
-				division_display_until_ = Controls::TimeNow() + Clock::MsToTicks(600);
+			case 5: // Clock division — first turn peeks (shows current value, no change); subsequent turns within the display window edit.
+				if (Controls::TimeNow() <= division_display_until_)
+					Clock::Divider::Step(cs.division, Clock::DivisionTables::VoltSeq, dir);
+				division_display_until_ = Controls::TimeNow() + Clock::MsToTicks(900);
 				length_display_until_   = 0;
 				break;
 			case 6: // Transpose (±1V per detent, whole volts) — CV only; inactive for Gate/Trigger
@@ -1323,10 +1326,10 @@ private:
 					    static_cast<int8_t>(cs.transpose + static_cast<int8_t>(dir)), -5, max_xpose);
 				}
 				break;
-			case 7: // Deviation amount (±1V per detent, −15..+15) — CV only; inactive for Gate/Trigger
+			case 7: // Deviation amount (±1 semitone per detent, −36..+36) — CV only; inactive for Gate/Trigger
 				if (cs.type == ChannelType::CV)
-					cs.random_amount_v = static_cast<int8_t>(
-					    std::clamp<int32_t>(cs.random_amount_v + dir, -15, 15));
+					cs.random_amount_st = static_cast<int8_t>(
+					    std::clamp<int32_t>(cs.random_amount_st + dir, -36, 36));
 				break;
 			}
 			(void)fine;
@@ -1493,7 +1496,7 @@ public:
 					else if (i == 4) col = cv_ch ? RangeColor(cs.range)          : Palette::off;
 					else if (i == 5) col = Palette::Setting::active;
 					else if (i == 6) col = cv_ch ? TransposeColor(cs.transpose)  : Palette::off;
-					else if (i == 7) col = cv_ch ? RandomAmountColor(cs.random_amount_v) : Palette::off;
+					else if (i == 7) col = cv_ch ? RandomAmountColor(cs.random_amount_st) : Palette::off;
 					c.SetEncoderLed(i, col);
 				}
 			}
@@ -1507,6 +1510,15 @@ public:
 		//   enc 2 (Panel 3, Length)      = master loop length   → off=0, orange=1–64, red=8/16/32/48/64
 		//   enc 5 (Panel 6, BPM/Clk Div) = BPM                 → color zone, pulses with clock phase
 		//   all others: off (unassigned)
+		// --- Mute mode: encoder LEDs = channel type colors; page buttons lit = muted ---
+		if (mute_mode_active_) {
+			for (auto i = 0u; i < Model::NumChans; i++)
+				c.SetEncoderLed(i, ChannelTypeColor(i));
+			for (auto i = 0u; i < Model::NumChans; i++)
+				c.SetButtonLed(i, p.IsMuted(i) ? 1.0f : 0.0f);
+			return;
+		}
+
 		if (global_settings_active_) {
 			const auto &d       = p.GetData();
 			const auto  ph_foc  = p.GetPlayhead(focused_ch_);

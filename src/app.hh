@@ -369,6 +369,8 @@ class App {
 
 	// Per-channel slew state: current output value in Channel::Cv::type units (0..Cv::max)
 	std::array<Channel::Cv::type, Model::NumChans> slew_val{};
+	// Last computed DAC output per CV channel; held when channel is muted.
+	std::array<Model::Output::type, Model::NumChans> mute_hold_cv{};
 
 	const Quantizer::Scale &GetScale(uint8_t ch) const {
 		const auto &mode = p.GetData().channel[ch].scale;
@@ -448,9 +450,18 @@ public:
 	Model::Output::Buffer Update() {
 		Model::Output::Buffer buf{};
 		for (auto ch = 0u; ch < Model::NumChans; ch++) {
+			if (p.IsMuted(ch)) {
+				// CV: hold last computed output so connected VCOs don't jump.
+				// Gate/Trigger: silence.
+				buf[ch] = (p.GetData().channel[ch].type == ChannelType::CV)
+				              ? mute_hold_cv[ch]
+				              : Channel::Output::gate_off;
+				continue;
+			}
 			switch (p.GetData().channel[ch].type) {
 			case ChannelType::CV:
 				buf[ch] = CvOutput(ch);
+				mute_hold_cv[ch] = buf[ch];
 				break;
 			case ChannelType::Gate:
 				buf[ch] = p.IsGateHigh(ch) ? Channel::Output::gate_high : Channel::Output::gate_off;
