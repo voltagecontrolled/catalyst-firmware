@@ -53,10 +53,12 @@ Catalyst VoltSeq uses the same physical panel as the Catalyst Sequencer. Panel c
 | Tap Tempo | Tap tempo |
 | Glide | GLIDE modifier (hold for glide time / gate offset / pulse width) |
 | Chan. | Channel arm / Channel Edit |
-| Shift | Modifier; Shift+Chan. (hold 2 s) = Global Settings |
+| Shift | Modifier; Shift+Chan. (hold 1 s) = Global Settings |
 | Fine | Fine-adjust modifier; Fine+Glide = Performance page / lock |
 | Clock In | External clock input |
 | Reset jack | Hardware reset trigger |
+
+> The silkscreen **Copy** label (under Fine) is unused in VoltSeq. Copy is a Catalyst Sequencer feature only.
 
 ---
 
@@ -90,7 +92,7 @@ Default range for new channels is **0V to +5V** (5V span, 0V transpose). Changin
 
 ### CV Quantizer Scales
 
-The CV channel encoder LED color indicates the active quantizer scale. Cycle through scales via **Chan. + Encoder N** in main mode.
+The CV channel encoder LED color indicates the active quantizer scale. **Chan. + Encoder N** in main mode cycles channel N through its type and (for CV channels) scale.
 
 | LED | Scale | Notes |
 |---|---|---|
@@ -362,7 +364,6 @@ The Performance Page puts the Phase Scrub slider in control of an **orbit engine
 | Page buttons | Toggle per-channel orbit follow (lit = channel follows slider) |
 | Shift (held) | Freeze orbit center in beat-repeat mode |
 | Shift + Page button | Navigate pages |
-| Hold Page + turn Encoder | Step editing (same as main mode) |
 
 ### Settings
 
